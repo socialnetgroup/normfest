@@ -37,6 +37,10 @@ yarn-error.log*
 # vercel
 .vercel
 
+# local handover data (VIS list, catalog PDF, KB folder — real customer/business
+# data, never goes into git history)
+/input/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
