@@ -424,7 +424,13 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      product_categories: {
+        Row: {
+          category_code: string | null
+          category_name: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       fn_company_visible: { Args: { p_gebiet: string }; Returns: boolean }

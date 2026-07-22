@@ -440,16 +440,16 @@ explicitly labeled "laut Agent-Feedback", or says no data).
    needed at M5, not before.
 4. VIS list + catalog PDF + KB folder handover — needed at M1/M3/M6 respectively.
 5. brand_consumption_profiles workshop (1–2h, Anis+Sanin+top agent) — needed before M4.
-6. **Team Dashboard data source (added 2026-07-23):** currently a manually-maintained
-   monthly Excel file, re-uploaded and re-imported by hand each month. Anis wants to
-   remove the manual Excel step — path depends on where the numbers originate before
-   they land in the sheet: if hand-typed from watching the dialer/CRM → build a small
-   in-app daily-entry form (2-tap, same philosophy as §7 feedback capture), kills Excel
-   without adding integration work; if the dialer/CRM can export the numbers →
-   scheduled pg_cron pull is the real automation (no human step at all). Open question
-   for Anis: which is it? Google Sheets live-sync is a middle option (keeps the current
-   human habit, adds an external API dependency) — only worth it if neither of the above
-   fits.
+6. **Team Dashboard data source — RESOLVED 2026-07-23:** confirmed manual (agents
+   type in each sale as it happens), so the Excel hand-off is now replaced by the
+   in-app `fn_log_sale` entry (§4.11) — no dialer/CRM export integration needed.
+7. **Katalog / Team Dashboard drill-down UI (added 2026-07-23, backlog — not started):**
+   (a) per-agent profile page showing their own monthly history (not just the
+   team-wide leaderboard already on the Dashboard); (b) a retroactive daily
+   view/pivot — all the data already exists in `agent_daily_performance`, this is
+   purely a display/reshaping task (group by agent, list by day instead of only
+   monthly aggregates). Anis explicitly deferred this ("to necu sad") — do not
+   build until asked.
 
 ---
 

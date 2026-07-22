@@ -11,6 +11,7 @@ import { logout } from "./actions";
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard" },
   { href: "/firmen", label: "Firmen" },
+  { href: "/katalog", label: "Katalog" },
 ];
 
 const ADMIN_NAV_ITEMS = [{ href: "/admin/team", label: "Team" }];
