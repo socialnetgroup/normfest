@@ -39,6 +39,80 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_daily_performance: {
+        Row: {
+          agent_id: string
+          calls_count: number | null
+          conversion_rate: number | null
+          created_at: string
+          date: string
+          id: string
+          revenue: number
+          sales_count: number
+          source_file: string | null
+          updated_at: string
+        }
+        Insert: {
+          agent_id: string
+          calls_count?: number | null
+          conversion_rate?: number | null
+          created_at?: string
+          date: string
+          id?: string
+          revenue?: number
+          sales_count?: number
+          source_file?: string | null
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string
+          calls_count?: number | null
+          conversion_rate?: number | null
+          created_at?: string
+          date?: string
+          id?: string
+          revenue?: number
+          sales_count?: number
+          source_file?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_daily_performance_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agents: {
+        Row: {
+          active: boolean
+          created_at: string
+          full_name: string
+          gebiet: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          full_name: string
+          gebiet: string
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          full_name?: string
+          gebiet?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       companies: {
         Row: {
           active: boolean
@@ -217,6 +291,60 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      products: {
+        Row: {
+          active: boolean
+          category_code: string | null
+          category_name: string | null
+          created_at: string
+          description: string | null
+          extraction_confidence: number | null
+          id: string
+          name: string
+          pack_content: string | null
+          pack_qty: number | null
+          sku: string
+          source_page: number | null
+          subcategory: string | null
+          tech_specs: Json
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          category_code?: string | null
+          category_name?: string | null
+          created_at?: string
+          description?: string | null
+          extraction_confidence?: number | null
+          id?: string
+          name: string
+          pack_content?: string | null
+          pack_qty?: number | null
+          sku: string
+          source_page?: number | null
+          subcategory?: string | null
+          tech_specs?: Json
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          category_code?: string | null
+          category_name?: string | null
+          created_at?: string
+          description?: string | null
+          extraction_confidence?: number | null
+          id?: string
+          name?: string
+          pack_content?: string | null
+          pack_qty?: number | null
+          sku?: string
+          source_page?: number | null
+          subcategory?: string | null
+          tech_specs?: Json
+          updated_at?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {

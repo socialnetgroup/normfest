@@ -197,3 +197,39 @@ describe("fn_is_admin / fn_company_visible RPCs", () => {
     expect(data).toBe(true);
   });
 });
+
+describe("agents / agent_daily_performance RLS (admin-only)", () => {
+  it("a non-admin agent cannot read the agents table", async () => {
+    const client = anonClient();
+    await client.auth.signInWithPassword({ email: agentEmail, password });
+
+    const { data, error } = await client.from("agents").select("id");
+    expect(error).toBeNull();
+    expect(data).toEqual([]);
+  });
+
+  it("a non-admin agent cannot read agent_daily_performance", async () => {
+    const client = anonClient();
+    await client.auth.signInWithPassword({ email: agentEmail, password });
+
+    const { data, error } = await client.from("agent_daily_performance").select("id");
+    expect(error).toBeNull();
+    expect(data).toEqual([]);
+  });
+
+  it("an admin can read both agents and agent_daily_performance", async () => {
+    const client = anonClient();
+    await client.auth.signInWithPassword({ email: adminEmail, password });
+
+    const { data: agentsData, error: agentsErr } = await client.from("agents").select("id");
+    expect(agentsErr).toBeNull();
+    expect(agentsData!.length).toBeGreaterThan(0);
+
+    const { data: perfData, error: perfErr } = await client
+      .from("agent_daily_performance")
+      .select("id")
+      .limit(1);
+    expect(perfErr).toBeNull();
+    expect(perfData!.length).toBeGreaterThan(0);
+  });
+});

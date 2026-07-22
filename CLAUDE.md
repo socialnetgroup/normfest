@@ -226,6 +226,30 @@ create or replace view feedback_sales as
 ### 4.8 KB & script / 4.9 chat, imports, audit / 4.10 RLS — as v2.2. Focus-list draft
 approval: **admin (Anis)**.
 
+### 4.11 Agents & performance (added 2026-07-23, out-of-sequence addition —
+Anis wants individual agent sales signals ahead of schedule)
+```sql
+-- reference dimension (name <-> Gebiet code), not login accounts; seeded
+-- from companies.gebiet_agent_name. profiles will get its own per-agent
+-- rows at M2+; agents may fold into profiles then.
+create table agents (id uuid pk, full_name text, gebiet text unique, active boolean);
+
+-- one row per agent per day, imported from the monthly "Team Dashboard"
+-- Excel trackers (input/Team Dashboard/*.xlsx — recurring, new file each
+-- month) via scripts/import-team-dashboard.mjs.
+create table agent_daily_performance (
+  id uuid pk, agent_id uuid references agents,
+  date date, revenue numeric, sales_count int, calls_count int,
+  conversion_rate numeric, source_file text,
+  unique (agent_id, date)
+);
+```
+Admin-only RLS (`fn_is_admin()`) on both — this is HR-adjacent performance
+data, not for agents to see each other's numbers. Surfaced at §5 "Team"
+admin screen. Intended future use: per-agent signal weighting (who's
+converting well on what) once the signal engine (M4) exists — not wired up
+yet, this milestone is just capture + a read-only dashboard.
+
 ---
 
 ## 5. Screens — as v2.2 (menu: Dashboard · Firmen · Katalog · Fokus · Wissen · Skript ·
@@ -234,6 +258,8 @@ Assistent · Admin), with:
 - Admin adds: catalog ingest panel (upload PDF, batch progress, QA queue §11.1).
 - Dashboard adds a small "Flywheel" widget: team feedback count this week (adoption
   visibility — social proof).
+- **Team** (admin-only, §4.11): per-agent daily/monthly Umsatz, Sales, Anrufe, CR —
+  ranked by revenue, one card per imported month.
 
 ---
 
@@ -414,6 +440,16 @@ explicitly labeled "laut Agent-Feedback", or says no data).
    needed at M5, not before.
 4. VIS list + catalog PDF + KB folder handover — needed at M1/M3/M6 respectively.
 5. brand_consumption_profiles workshop (1–2h, Anis+Sanin+top agent) — needed before M4.
+6. **Team Dashboard data source (added 2026-07-23):** currently a manually-maintained
+   monthly Excel file, re-uploaded and re-imported by hand each month. Anis wants to
+   remove the manual Excel step — path depends on where the numbers originate before
+   they land in the sheet: if hand-typed from watching the dialer/CRM → build a small
+   in-app daily-entry form (2-tap, same philosophy as §7 feedback capture), kills Excel
+   without adding integration work; if the dialer/CRM can export the numbers →
+   scheduled pg_cron pull is the real automation (no human step at all). Open question
+   for Anis: which is it? Google Sheets live-sync is a middle option (keeps the current
+   human habit, adds an external API dependency) — only worth it if neither of the above
+   fits.
 
 ---
 

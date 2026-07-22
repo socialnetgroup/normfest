@@ -13,6 +13,8 @@ const NAV_ITEMS = [
   { href: "/firmen", label: "Firmen" },
 ];
 
+const ADMIN_NAV_ITEMS = [{ href: "/admin/team", label: "Team" }];
+
 export default async function AppLayout({
   children,
 }: {
@@ -29,9 +31,11 @@ export default async function AppLayout({
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name, email")
+    .select("full_name, email, role")
     .eq("id", user.id)
     .single();
+
+  const navItems = profile?.role === "admin" ? [...NAV_ITEMS, ...ADMIN_NAV_ITEMS] : NAV_ITEMS;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -44,7 +48,7 @@ export default async function AppLayout({
             </span>
           </Link>
           <nav className="flex items-center gap-1">
-            {NAV_ITEMS.map((item) => (
+            {navItems.map((item) => (
               <NavLink key={item.href} href={item.href}>
                 {item.label}
               </NavLink>

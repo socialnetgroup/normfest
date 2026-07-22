@@ -41,6 +41,9 @@ yarn-error.log*
 # data, never goes into git history)
 /input/
 
+# scratch/debug script output — regenerable, not source
+/scripts/_*
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
