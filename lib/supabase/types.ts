@@ -93,6 +93,7 @@ export type Database = {
           full_name: string
           gebiet: string
           id: string
+          profile_id: string | null
           updated_at: string
         }
         Insert: {
@@ -101,6 +102,7 @@ export type Database = {
           full_name: string
           gebiet: string
           id?: string
+          profile_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -109,9 +111,18 @@ export type Database = {
           full_name?: string
           gebiet?: string
           id?: string
+          profile_id?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "agents_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       companies: {
         Row: {
@@ -415,6 +426,27 @@ export type Database = {
     Functions: {
       fn_company_visible: { Args: { p_gebiet: string }; Returns: boolean }
       fn_is_admin: { Args: never; Returns: boolean }
+      fn_log_sale: {
+        Args: { p_amount: number }
+        Returns: {
+          agent_id: string
+          calls_count: number | null
+          conversion_rate: number | null
+          created_at: string
+          date: string
+          id: string
+          revenue: number
+          sales_count: number
+          source_file: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agent_daily_performance"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
     }
     Enums: {
       [_ in never]: never

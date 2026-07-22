@@ -198,23 +198,23 @@ describe("fn_is_admin / fn_company_visible RPCs", () => {
   });
 });
 
-describe("agents / agent_daily_performance RLS (admin-only)", () => {
-  it("a non-admin agent cannot read the agents table", async () => {
+describe("agents / agent_daily_performance RLS (leaderboard — readable by everyone)", () => {
+  it("a non-admin agent can read the agents table (leaderboard is team-visible)", async () => {
     const client = anonClient();
     await client.auth.signInWithPassword({ email: agentEmail, password });
 
     const { data, error } = await client.from("agents").select("id");
     expect(error).toBeNull();
-    expect(data).toEqual([]);
+    expect(data!.length).toBeGreaterThan(0);
   });
 
-  it("a non-admin agent cannot read agent_daily_performance", async () => {
+  it("a non-admin agent can read agent_daily_performance (leaderboard is team-visible)", async () => {
     const client = anonClient();
     await client.auth.signInWithPassword({ email: agentEmail, password });
 
-    const { data, error } = await client.from("agent_daily_performance").select("id");
+    const { data, error } = await client.from("agent_daily_performance").select("id").limit(1);
     expect(error).toBeNull();
-    expect(data).toEqual([]);
+    expect(data!.length).toBeGreaterThan(0);
   });
 
   it("an admin can read both agents and agent_daily_performance", async () => {
@@ -231,5 +231,55 @@ describe("agents / agent_daily_performance RLS (admin-only)", () => {
       .limit(1);
     expect(perfErr).toBeNull();
     expect(perfData!.length).toBeGreaterThan(0);
+  });
+});
+
+describe("fn_log_sale", () => {
+  let testAgentId = "";
+  const today = new Date().toISOString().slice(0, 10);
+
+  beforeAll(async () => {
+    const { data, error } = await admin
+      .from("agents")
+      .insert({ full_name: `RLS Test Agent ${stamp}`, gebiet: `test-${stamp}`, profile_id: agentId })
+      .select("id")
+      .single();
+    if (error) throw error;
+    testAgentId = data.id;
+  });
+
+  afterAll(async () => {
+    if (testAgentId) {
+      await admin.from("agent_daily_performance").delete().eq("agent_id", testAgentId);
+      await admin.from("agents").delete().eq("id", testAgentId);
+    }
+  });
+
+  it("logs a sale into today's row and accumulates on a second call", async () => {
+    const client = anonClient();
+    await client.auth.signInWithPassword({ email: agentEmail, password });
+
+    const { error: firstErr } = await client.rpc("fn_log_sale", { p_amount: 150 });
+    expect(firstErr).toBeNull();
+
+    const { error: secondErr } = await client.rpc("fn_log_sale", { p_amount: 50 });
+    expect(secondErr).toBeNull();
+
+    const { data: row } = await admin
+      .from("agent_daily_performance")
+      .select("revenue, sales_count")
+      .eq("agent_id", testAgentId)
+      .eq("date", today)
+      .single();
+    expect(row?.revenue).toBe(200);
+    expect(row?.sales_count).toBe(2);
+  });
+
+  it("rejects a non-positive amount", async () => {
+    const client = anonClient();
+    await client.auth.signInWithPassword({ email: agentEmail, password });
+
+    const { error } = await client.rpc("fn_log_sale", { p_amount: 0 });
+    expect(error).not.toBeNull();
   });
 });
