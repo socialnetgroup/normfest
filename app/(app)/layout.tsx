@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -37,8 +38,7 @@ export default async function AppLayout({
       <header className="sticky top-0 z-10 flex items-center justify-between gap-6 border-b bg-background/95 px-6 py-3 backdrop-blur">
         <div className="flex items-center gap-6">
           <Link href="/" className="flex items-center gap-2.5">
-            {/* eslint-disable-next-line @next/next/no-img-element -- static local SVG, next/image needs dangerouslyAllowSVG config for no benefit here */}
-            <img src="/logo.svg" alt="Social Net" width={32} height={32} className="rounded-lg" />
+            <Image src="/logo.png" alt="Social Net" width={30} height={30} priority />
             <span className="font-heading text-[15px] font-semibold tracking-tight">
               Normfest
             </span>
