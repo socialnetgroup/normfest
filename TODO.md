@@ -10,7 +10,8 @@ ostatak iza njega.
 
 **Nalozi / pristupi:**
 - [ ] GitHub repo `normfest-assistant` (private) — ubaci CLAUDE.md u root
-- [ ] Supabase: dva projekta, **EU regija** — `normfest-staging`, `normfest-prod`
+- [x] Supabase: **jedan** projekat, EU regija (`normfest`, ref `ethykzocikyirmoztrtq`) —
+      odluka 2026-07-22: bez staging/prod splita dok je solo build; split razmotriti pred M8
 - [ ] Vercel account + projekat povezan na repo
 - [ ] DNS: pristup social-net.ba zoni → CNAME `normfest` → Vercel (može i kasnije, M0)
 - [ ] Anthropic API key (server env)

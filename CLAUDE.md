@@ -109,7 +109,9 @@ UI German labels; assistant mirrors DE/BS.
    agent-verified). Enrichment never overwrites imported master data (fills empty fields
    only, logged, revertible).
 7. Provenance everywhere (IDs internally; quotes+URLs externally).
-8. Migrations through code; staging separate from prod.
+8. Migrations through code. **Single Supabase project for now** (decision, 2026-07-22):
+   no separate staging/prod split during solo build — one project (`ethykzocikyirmoztrtq`)
+   serves both; re-split into staging+prod is a pre-go-live (M8) decision, not an M0 one.
 9. **Cost discipline for AI calls:** every LLM-using feature declares its model tier in
    code (via the provider adapter, never hardcoded model strings in features); bulk jobs
    use the cheapest passing model; per-task token caps; usage counters in admin. New AI
