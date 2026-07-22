@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { NavLink } from "@/components/nav-link";
 import { createClient } from "@/lib/supabase/server";
 
 import { logout } from "./actions";
@@ -33,23 +34,27 @@ export default async function AppLayout({
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="flex items-center justify-between border-b px-6 py-4">
+      <header className="sticky top-0 z-10 flex items-center justify-between gap-6 border-b bg-background/95 px-6 py-3 backdrop-blur">
         <div className="flex items-center gap-6">
-          <span className="font-semibold">Normfest</span>
-          <nav className="flex items-center gap-4 text-sm">
+          <Link href="/" className="flex items-center gap-2.5">
+            {/* eslint-disable-next-line @next/next/no-img-element -- static local SVG, next/image needs dangerouslyAllowSVG config for no benefit here */}
+            <img src="/logo.svg" alt="Social Net" width={32} height={32} className="rounded-lg" />
+            <span className="font-heading text-[15px] font-semibold tracking-tight">
+              Normfest
+            </span>
+          </Link>
+          <nav className="flex items-center gap-1">
             {NAV_ITEMS.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="text-muted-foreground hover:text-foreground"
-              >
+              <NavLink key={item.href} href={item.href}>
                 {item.label}
-              </Link>
+              </NavLink>
             ))}
           </nav>
         </div>
-        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-          <span>{profile?.full_name ?? profile?.email ?? user.email}</span>
+        <div className="flex items-center gap-3 text-sm">
+          <span className="text-muted-foreground">
+            {profile?.full_name ?? profile?.email ?? user.email}
+          </span>
           <form action={logout}>
             <Button type="submit" variant="outline" size="sm">
               Abmelden
@@ -57,7 +62,7 @@ export default async function AppLayout({
           </form>
         </div>
       </header>
-      <main className="flex-1 p-6">{children}</main>
+      <main className="mx-auto w-full max-w-6xl flex-1 p-6">{children}</main>
     </div>
   );
 }

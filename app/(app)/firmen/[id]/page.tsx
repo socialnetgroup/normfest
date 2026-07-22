@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -23,7 +24,7 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
       <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="text-sm">{value ?? "—"}</dd>
+      <dd className="text-sm font-medium">{value ?? "—"}</dd>
     </div>
   );
 }
@@ -48,22 +49,19 @@ export default async function CompanyProfilePage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold">
-          {company.name}
+      <div className="flex flex-col gap-3 rounded-xl border bg-card p-5">
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="font-heading text-2xl font-semibold tracking-tight">
+            {company.name}
+          </h1>
           {company.call_priority ? (
-            <span className="ml-3 align-middle text-sm font-normal text-destructive">
-              zuerst anrufen
-            </span>
+            <Badge variant="warning">Zuerst anrufen</Badge>
           ) : null}
-          {company.do_not_contact ? (
-            <span className="ml-3 align-middle text-sm font-normal text-muted-foreground">
-              gesperrt
-            </span>
-          ) : null}
-        </h1>
-        <p className="mt-1 text-muted-foreground">
-          {company.kundennummer} · {company.branche_name} · Gebiet {company.gebiet}
+          {company.do_not_contact ? <Badge variant="muted">Gesperrt</Badge> : null}
+        </div>
+        <p className="text-sm text-muted-foreground">
+          {company.kundennummer} · {company.branche_name} ·{" "}
+          {company.plz} {company.ort}
         </p>
       </div>
 
@@ -81,7 +79,19 @@ export default async function CompanyProfilePage({
               <Field label="Land" value={company.land} />
               <Field label="Telefon" value={company.telefon} />
               <Field label="E-Mail" value={company.email} />
-              <Field label="Gebiet" value={company.gebiet} />
+              <Field
+                label="Gebiet"
+                value={
+                  <>
+                    {company.gebiet}
+                    {company.gebiet_agent_name ? (
+                      <span className="ml-1.5 font-normal text-muted-foreground">
+                        ({company.gebiet_agent_name})
+                      </span>
+                    ) : null}
+                  </>
+                }
+              />
               <Field label="Altes Gebiet" value={company.legacy_gebiet} />
             </dl>
           </CardContent>

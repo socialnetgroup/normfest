@@ -52,6 +52,7 @@ export type Database = {
           dunning_level: number | null
           email: string | null
           gebiet: string
+          gebiet_agent_name: string | null
           gruppe: string | null
           id: string
           kundennummer: string
@@ -94,6 +95,7 @@ export type Database = {
           dunning_level?: number | null
           email?: string | null
           gebiet: string
+          gebiet_agent_name?: string | null
           gruppe?: string | null
           id?: string
           kundennummer: string
@@ -136,6 +138,7 @@ export type Database = {
           dunning_level?: number | null
           email?: string | null
           gebiet?: string
+          gebiet_agent_name?: string | null
           gruppe?: string | null
           id?: string
           kundennummer?: string

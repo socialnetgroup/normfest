@@ -23,6 +23,7 @@ const admin = createClient(url, serviceKey, {
 
 const COL = {
   gebiet: 0,
+  gebiet_agent_name: 1,
   kundennummer: 2,
   name: 3,
   name_2: 4,
@@ -90,6 +91,7 @@ const companySchema = z.object({
   name: z.string().min(1),
   name_2: z.string().nullable(),
   gebiet: z.string().min(1),
+  gebiet_agent_name: z.string().nullable(),
   legacy_gebiet: z.string().nullable(),
   land: z.string().min(1),
   plz: z.string().nullable(),
@@ -137,6 +139,7 @@ function mapRow(row, rowNumber) {
     name,
     name_2: nullIfBlank(row[COL.name_2]),
     gebiet,
+    gebiet_agent_name: nullIfBlank(row[COL.gebiet_agent_name]),
     legacy_gebiet: nullIfBlank(row[COL.legacy_gebiet]),
     land: nullIfBlank(row[COL.land]) ?? "DEU",
     plz: nullIfBlank(row[COL.plz]),

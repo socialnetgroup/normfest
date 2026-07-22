@@ -1,5 +1,7 @@
+import { Search } from "lucide-react";
 import Link from "next/link";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/server";
@@ -31,21 +33,27 @@ export default async function FirmenPage({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold">Firmen</h1>
-        <p className="mt-1 text-muted-foreground">
+        <h1 className="font-heading text-2xl font-semibold tracking-tight">Firmen</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Suche nach Name, Kundennummer, Ort oder PLZ.
         </p>
       </div>
 
       <form action="/firmen" className="flex gap-2">
-        <Input
-          type="search"
-          name="q"
-          defaultValue={query}
-          placeholder="z.B. Autohaus Müller, 314587, Dresden..."
-          autoFocus
-        />
-        <Button type="submit">Suchen</Button>
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="search"
+            name="q"
+            defaultValue={query}
+            placeholder="z.B. Autohaus Müller, 314587, Dresden..."
+            autoFocus
+            className="h-10 pl-8 text-base"
+          />
+        </div>
+        <Button type="submit" size="lg" className="h-10">
+          Suchen
+        </Button>
       </form>
 
       {query.length > 0 && query.length < 2 ? (
@@ -62,38 +70,36 @@ export default async function FirmenPage({
 
       {results?.data ? (
         results.data.length > 0 ? (
-          <ul className="flex flex-col divide-y rounded-lg border">
-            {results.data.map((company) => (
-              <li key={company.id}>
-                <Link
-                  href={`/firmen/${company.id}`}
-                  className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-muted/50"
-                >
-                  <div>
-                    <div className="font-medium">
-                      {company.name}
-                      {company.call_priority ? (
-                        <span className="ml-2 text-xs text-destructive">
-                          zuerst anrufen
-                        </span>
-                      ) : null}
-                      {company.do_not_contact ? (
-                        <span className="ml-2 text-xs text-muted-foreground">
-                          gesperrt
-                        </span>
-                      ) : null}
+          <div className="overflow-hidden rounded-xl border">
+            <ul className="divide-y">
+              {results.data.map((company) => (
+                <li key={company.id}>
+                  <Link
+                    href={`/firmen/${company.id}`}
+                    className="flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-accent"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate font-medium">{company.name}</span>
+                        {company.call_priority ? (
+                          <Badge variant="warning">Zuerst anrufen</Badge>
+                        ) : null}
+                        {company.do_not_contact ? (
+                          <Badge variant="muted">Gesperrt</Badge>
+                        ) : null}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {company.kundennummer} · {company.plz} {company.ort}
+                      </div>
                     </div>
-                    <div className="text-sm text-muted-foreground">
-                      {company.kundennummer} · {company.plz} {company.ort}
-                    </div>
-                  </div>
-                  <span className="text-sm text-muted-foreground">
-                    {company.gebiet}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
+                    <Badge variant="secondary" className="shrink-0">
+                      {company.gebiet}
+                    </Badge>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
         ) : (
           <p className="text-sm text-muted-foreground">
             Keine Firmen gefunden für &ldquo;{query}&rdquo;.
