@@ -46,6 +46,7 @@ export type Database = {
           conversion_rate: number | null
           created_at: string
           date: string
+          day_off: boolean
           id: string
           revenue: number
           sales_count: number
@@ -58,6 +59,7 @@ export type Database = {
           conversion_rate?: number | null
           created_at?: string
           date: string
+          day_off?: boolean
           id?: string
           revenue?: number
           sales_count?: number
@@ -70,6 +72,7 @@ export type Database = {
           conversion_rate?: number | null
           created_at?: string
           date?: string
+          day_off?: boolean
           id?: string
           revenue?: number
           sales_count?: number
@@ -434,6 +437,29 @@ export type Database = {
           conversion_rate: number | null
           created_at: string
           date: string
+          day_off: boolean
+          id: string
+          revenue: number
+          sales_count: number
+          source_file: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agent_daily_performance"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      fn_set_day_off: {
+        Args: { p_agent_id: string; p_date: string; p_off: boolean }
+        Returns: {
+          agent_id: string
+          calls_count: number | null
+          conversion_rate: number | null
+          created_at: string
+          date: string
+          day_off: boolean
           id: string
           revenue: number
           sales_count: number

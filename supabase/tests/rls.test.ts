@@ -283,3 +283,57 @@ describe("fn_log_sale", () => {
     expect(error).not.toBeNull();
   });
 });
+
+describe("fn_set_day_off (admin-only)", () => {
+  let testAgentId = "";
+  const today = new Date().toISOString().slice(0, 10);
+
+  beforeAll(async () => {
+    const { data, error } = await admin
+      .from("agents")
+      .insert({ full_name: `RLS Day-off Agent ${stamp}`, gebiet: `test-dayoff-${stamp}` })
+      .select("id")
+      .single();
+    if (error) throw error;
+    testAgentId = data.id;
+  });
+
+  afterAll(async () => {
+    if (testAgentId) {
+      await admin.from("agent_daily_performance").delete().eq("agent_id", testAgentId);
+      await admin.from("agents").delete().eq("id", testAgentId);
+    }
+  });
+
+  it("a non-admin agent cannot mark someone as off", async () => {
+    const client = anonClient();
+    await client.auth.signInWithPassword({ email: agentEmail, password });
+
+    const { error } = await client.rpc("fn_set_day_off", {
+      p_agent_id: testAgentId,
+      p_date: today,
+      p_off: true,
+    });
+    expect(error).not.toBeNull();
+  });
+
+  it("an admin can mark someone as off", async () => {
+    const client = anonClient();
+    await client.auth.signInWithPassword({ email: adminEmail, password });
+
+    const { error } = await client.rpc("fn_set_day_off", {
+      p_agent_id: testAgentId,
+      p_date: today,
+      p_off: true,
+    });
+    expect(error).toBeNull();
+
+    const { data: row } = await admin
+      .from("agent_daily_performance")
+      .select("day_off")
+      .eq("agent_id", testAgentId)
+      .eq("date", today)
+      .single();
+    expect(row?.day_off).toBe(true);
+  });
+});
