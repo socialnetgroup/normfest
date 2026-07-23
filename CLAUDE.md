@@ -515,16 +515,37 @@ explicitly labeled "laut Agent-Feedback", or says no data).
    compact calendar control on the overview that doesn't take much space, which
    expands into a full list of the month's days on click/drill-in — Anis
    referenced Genesys's depth-of-view pattern as the interaction model to copy.
-8. **M3 QA gate never actually closed (found 2026-07-23):** `products.extraction_confidence`
-   is null for all 4,011 committed rows — `scripts/extract-catalog.mjs` never computed or
-   wrote it, so the §11.1-step-5 QA queue has no signal to filter on and was never built as
-   a screen. No spot-check of extracted records against real PDF pages has been done either
-   (only row counts were reviewed). 41% of rows have no `description`, 29% no
-   `pack_content` — plausibly just catalog reality, unconfirmed. Not blocking M4 (the
-   signal engine doesn't depend on confidence scores), but flagged as real debt rather than
-   treated as done — revisit with a retroactive confidence-scoring + spot-check pass
-   whenever catalog data quality actually matters (KB citations in M6 are the likely
-   forcing function).
+8. **M3 QA gate — retroactive scoring + spot-check done (2026-07-23), gate now partially
+   closed:** `extraction_confidence` was null for all 4,011 rows (never computed at ingest
+   time). Rather than re-running the LLM extraction (real cost, no new data),
+   `scripts/score-catalog-confidence.mjs` computes a deterministic 0–1 completeness/sanity
+   score from already-committed fields (SKU shape 0.35, name sanity 0.35, description 0.15,
+   pack_content 0.15) and has been run against all 4,011 products. Distribution: 1694 at
+   1.0, 1795 at 0.85, 509 at 0.7, **13 at 0.5** (the low bucket — SKU doesn't match the
+   catalog's real Art.-Nr. shape).
+   **Spot-check result (30 samples: all 13 low-confidence rows + 1 random high-confidence
+   row per category, verified against actual PDF pages via `pdftotext`):**
+   - All 13 low-confidence rows are genuinely defective, confirming the heuristic works —
+     two distinct root causes: (a) 2 rows (page 220/221, Verglasung — "Cuttermesser schmal
+     aus Stahlblech" / "Sicherheitsmesser Martor-Qualität") have no printed Art.-Nr. in the
+     extractable text at all; the LLM fell back to the item's list position number ("06"/
+     "07") as a placeholder. (b) 11 rows (page 758, DIN- & Normteile nut/washer family)
+     have an Art.-Nr. that's a **parametric base number** needing a Gewinde-Ø/Steigung
+     suffix to be a real orderable SKU (confirmed NOT a category-wide problem — page 753's
+     Gewindestift table, by contrast, fully enumerates real complete per-variant SKUs).
+     Anis should decide what to do with these 11: exclude from agent-facing views, or
+     leave as reference-only family entries — not decided yet.
+   - All 17 random high-confidence samples check out correctly on name/category/
+     pack_content/description. 2 of 17 (~12%) have `source_page` off by exactly one page
+     (SKU 3502-14: DB says 349, real page is 350; SKU 7713-000: DB says 641, real page is
+     642) — likely from wide multi-column tables spanning a page boundary. Doesn't affect
+     name/pack/description accuracy, but matters for the PDF-citation link (Katalog page,
+     future KB citations in M6) landing one page early.
+   Still open: no QA queue admin screen exists (spot-check was done manually via script,
+   not through a UI) — build one if/when this becomes a recurring need rather than a
+   one-off pass. 41% of rows have no `description`, 29% no `pack_content` — spot-check
+   suggests this is genuine catalog reality (many product cards simply don't have prose
+   description text), not an extraction failure.
 9. **Standalone VIS-list upload CMS (added 2026-07-23, backlog — not started):** Anis
    currently needs Claude Code to re-run `scripts/import-vis.mjs` for every VIS-list
    refresh. Wants a self-serve admin screen instead — upload the new weekly Excel file
