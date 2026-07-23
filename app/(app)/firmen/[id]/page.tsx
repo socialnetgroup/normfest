@@ -196,11 +196,24 @@ export default async function CompanyProfilePage({
                       category: string;
                       reason: string;
                       quote: string;
+                      evidence_source?: "review" | "website" | "name_branche";
                       matched_products?: { id: string; sku: string; name: string }[];
                     }[]
                   ).map((o, i) => (
                     <li key={i}>
-                      <span className="font-medium">{o.category}</span> — {o.reason}
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-medium">{o.category}</span>
+                        {o.evidence_source ? (
+                          <Badge variant={o.evidence_source === "name_branche" ? "muted" : "secondary"}>
+                            {o.evidence_source === "name_branche"
+                              ? "laut Firmenname/Branche"
+                              : o.evidence_source === "website"
+                                ? "laut Website"
+                                : "laut Bewertung"}
+                          </Badge>
+                        ) : null}
+                      </div>
+                      {o.reason}
                       <p className="mt-0.5 text-xs text-muted-foreground italic">&ldquo;{o.quote}&rdquo;</p>
                       {o.matched_products && o.matched_products.length > 0 ? (
                         <div className="mt-1.5 flex flex-wrap gap-1.5">
