@@ -8,6 +8,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { FeedbackForm } from "@/components/feedback-form";
+import { signalTypeLabel } from "@/lib/signals";
 import { createClient } from "@/lib/supabase/server";
 
 const eur = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
@@ -46,16 +47,22 @@ export default async function CompanyProfilePage({
   const { id } = await params;
   const supabase = await createClient();
 
-  const [{ data: company, error }, { data: userData }, { data: feedbackHistory }] = await Promise.all([
-    supabase.from("companies").select("*").eq("id", id).single(),
-    supabase.auth.getUser(),
-    supabase
-      .from("sales_feedback")
-      .select("id, outcome, qty, value_net, objection, comment, created_at, products(name), profiles(full_name)")
-      .eq("company_id", id)
-      .order("created_at", { ascending: false })
-      .limit(10),
-  ]);
+  const [{ data: company, error }, { data: userData }, { data: feedbackHistory }, { data: signals }] =
+    await Promise.all([
+      supabase.from("companies").select("*").eq("id", id).single(),
+      supabase.auth.getUser(),
+      supabase
+        .from("sales_feedback")
+        .select("id, outcome, qty, value_net, objection, comment, created_at, products(name), profiles(full_name)")
+        .eq("company_id", id)
+        .order("created_at", { ascending: false })
+        .limit(10),
+      supabase
+        .from("signals")
+        .select("id, type, score, reason, tier, origin, products(name)")
+        .eq("company_id", id)
+        .order("score", { ascending: false }),
+    ]);
 
   if (error || !company) {
     notFound();
@@ -80,6 +87,34 @@ export default async function CompanyProfilePage({
           {company.plz} {company.ort}
         </p>
       </div>
+
+      {signals && signals.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Empfehlungen</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="flex flex-col divide-y">
+              {signals.map((s) => (
+                <li key={s.id} className="flex items-start justify-between gap-3 py-2.5 text-sm">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary">{signalTypeLabel(s.type)}</Badge>
+                      {(s.products as { name: string } | null)?.name ? (
+                        <span className="font-medium">{(s.products as { name: string }).name}</span>
+                      ) : null}
+                    </div>
+                    <p className="mt-1 text-muted-foreground">{s.reason}</p>
+                  </div>
+                  <Badge variant={s.tier === 1 ? "muted" : "secondary"} className="shrink-0">
+                    Tier {s.tier}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid gap-6 md:grid-cols-2">
         <Card>

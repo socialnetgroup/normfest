@@ -1,11 +1,16 @@
+import Link from "next/link";
+
 import { LogSaleForm } from "@/components/log-sale-form";
 import { ProgressBar } from "@/components/progress-bar";
+import { RefreshSignalsButton } from "@/components/refresh-signals-button";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { signalTypeLabel } from "@/lib/signals";
 import { createClient } from "@/lib/supabase/server";
 
 const eur = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
@@ -18,7 +23,7 @@ export default async function DashboardPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [{ data: myAgent }, { data: settingsRows }] = await Promise.all([
+  const [{ data: myAgent }, { data: settingsRows }, { data: profile }] = await Promise.all([
     user
       ? supabase.from("agents").select("id, full_name").eq("profile_id", user.id).maybeSingle()
       : Promise.resolve({ data: null }),
@@ -32,7 +37,9 @@ export default async function DashboardPage() {
         "team_monthly_goal_stretch",
         "team_leader_bonus_threshold",
       ]),
+    user ? supabase.from("profiles").select("role").eq("id", user.id).single() : Promise.resolve({ data: null }),
   ]);
+  const isAdmin = profile?.role === "admin";
 
   const goals: SettingsMap = {};
   for (const row of settingsRows ?? []) {
@@ -47,7 +54,7 @@ export default async function DashboardPage() {
   weekStart.setDate(now.getDate() - dayOfWeek);
   weekStart.setHours(0, 0, 0, 0);
 
-  const [{ data: monthRows }, { count: feedbackCountThisWeek }] = await Promise.all([
+  const [{ data: monthRows }, { count: feedbackCountThisWeek }, { data: topSignals }] = await Promise.all([
     supabase
       .from("agent_daily_performance")
       .select("agent_id, revenue, agents(full_name)")
@@ -56,6 +63,11 @@ export default async function DashboardPage() {
       .from("sales_feedback")
       .select("id", { count: "exact", head: true })
       .gte("created_at", weekStart.toISOString()),
+    supabase
+      .from("signals")
+      .select("id, type, score, reason, company_id, companies(name)")
+      .order("score", { ascending: false })
+      .limit(8),
   ]);
 
   const byAgent = new Map<string, { name: string; revenue: number }>();
@@ -131,6 +143,41 @@ export default async function DashboardPage() {
                 { position: goals.team_leader_bonus_threshold, label: "TL-Bonus" },
               ]}
             />
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {(topSignals && topSignals.length > 0) || isAdmin ? (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Top-Empfehlungen</CardTitle>
+            {isAdmin ? <RefreshSignalsButton /> : null}
+          </CardHeader>
+          <CardContent>
+            {!topSignals || topSignals.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Noch keine Empfehlungen berechnet.</p>
+            ) : (
+            <ul className="flex flex-col divide-y">
+              {topSignals.map((s) => (
+                <li key={s.id} className="py-2.5 text-sm">
+                  <Link
+                    href={`/firmen/${s.company_id}`}
+                    className="flex items-start justify-between gap-3 hover:underline"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary">{signalTypeLabel(s.type)}</Badge>
+                        <span className="font-medium">
+                          {(s.companies as { name: string } | null)?.name}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-muted-foreground">{s.reason}</p>
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            )}
           </CardContent>
         </Card>
       ) : null}

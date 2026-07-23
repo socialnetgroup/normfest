@@ -406,7 +406,7 @@ describe("focus_lists / focus_list_items RLS", () => {
 
     const { data: list, error: listErr } = await client
       .from("focus_lists")
-      .insert({ name: `RLS test list ${stamp}`, active: true })
+      .insert({ name: `RLS test list ${stamp}`, active: false })
       .select("id")
       .single();
     expect(listErr).toBeNull();
@@ -419,7 +419,7 @@ describe("focus_lists / focus_list_items RLS", () => {
     expect(itemErr).toBeNull();
   });
 
-  it("any authenticated user can read the active focus list", async () => {
+  it("any authenticated user can read a focus list by id (active or not)", async () => {
     const client = anonClient();
     await client.auth.signInWithPassword({ email: agentEmail, password });
 
@@ -433,5 +433,125 @@ describe("focus_lists / focus_list_items RLS", () => {
       .eq("focus_list_id", listId);
     expect(itemsErr).toBeNull();
     expect(items!.length).toBe(1);
+  });
+
+  it("the DB rejects a second simultaneously-active list", async () => {
+    const { error } = await admin
+      .from("focus_lists")
+      .insert({ name: `RLS test list 2 ${stamp}`, active: true });
+    expect(error).not.toBeNull();
+  });
+});
+
+describe("signals RLS + fn_refresh_signals", () => {
+  it("a non-admin cannot write to signals directly", async () => {
+    const client = anonClient();
+    await client.auth.signInWithPassword({ email: agentEmail, password });
+
+    const { data: company } = await admin.from("companies").select("id").limit(1).single();
+    const { error } = await client.from("signals").insert({
+      company_id: company!.id,
+      type: "focus_list_push",
+      tier: 1,
+      score: 1,
+      reason: "test",
+    });
+    expect(error).not.toBeNull();
+  });
+
+  it("a non-admin cannot call fn_refresh_signals", async () => {
+    const client = anonClient();
+    await client.auth.signInWithPassword({ email: agentEmail, password });
+
+    const { error } = await client.rpc("fn_refresh_signals");
+    expect(error).not.toBeNull();
+  });
+
+  it("an admin can call fn_refresh_signals and any authenticated user can read signals", async () => {
+    const adminClient = anonClient();
+    await adminClient.auth.signInWithPassword({ email: adminEmail, password });
+
+    const { error: rpcErr } = await adminClient.rpc("fn_refresh_signals");
+    expect(rpcErr).toBeNull();
+
+    const agentClient = anonClient();
+    await agentClient.auth.signInWithPassword({ email: agentEmail, password });
+    const { data, error } = await agentClient.from("signals").select("id").limit(1);
+    expect(error).toBeNull();
+    expect(data!.length).toBeGreaterThan(0);
+  });
+
+  it("fn_refresh_signals is idempotent (dedup index holds across re-runs)", async () => {
+    const { error: first } = await admin.rpc("fn_refresh_signals");
+    expect(first).toBeNull();
+    const { count: countAfterFirst } = await admin
+      .from("signals")
+      .select("id", { count: "exact", head: true });
+
+    const { error: second } = await admin.rpc("fn_refresh_signals");
+    expect(second).toBeNull();
+    const { count: countAfterSecond } = await admin
+      .from("signals")
+      .select("id", { count: "exact", head: true });
+
+    expect(countAfterSecond).toBe(countAfterFirst);
+  });
+});
+
+describe("product_relations / brand_consumption_profiles RLS", () => {
+  afterAll(async () => {
+    await admin.from("product_relations").delete().ilike("note", `RLS test%`);
+  });
+
+  it("a non-admin cannot write product_relations", async () => {
+    const client = anonClient();
+    await client.auth.signInWithPassword({ email: agentEmail, password });
+
+    const { data: products } = await admin.from("products").select("id").order("id").limit(2);
+    const { error } = await client.from("product_relations").insert({
+      product_id: products![0].id,
+      related_product_id: products![1].id,
+      relation_type: "cross_sell",
+      note: `RLS test ${stamp}`,
+    });
+    expect(error).not.toBeNull();
+  });
+
+  it("an admin can write product_relations and any authenticated user can read it", async () => {
+    const adminClient = anonClient();
+    await adminClient.auth.signInWithPassword({ email: adminEmail, password });
+
+    const { data: products } = await admin.from("products").select("id").order("id").limit(2);
+    const { data: rel, error } = await adminClient
+      .from("product_relations")
+      .insert({
+        product_id: products![0].id,
+        related_product_id: products![1].id,
+        relation_type: "cross_sell",
+        note: `RLS test ${stamp}`,
+      })
+      .select("id")
+      .single();
+    expect(error).toBeNull();
+
+    const agentClient = anonClient();
+    await agentClient.auth.signInWithPassword({ email: agentEmail, password });
+    const { data, error: readErr } = await agentClient
+      .from("product_relations")
+      .select("id")
+      .eq("id", rel!.id)
+      .single();
+    expect(readErr).toBeNull();
+    expect(data?.id).toBe(rel!.id);
+  });
+
+  it("a non-admin cannot write brand_consumption_profiles", async () => {
+    const client = anonClient();
+    await client.auth.signInWithPassword({ email: agentEmail, password });
+
+    const { error } = await client
+      .from("brand_consumption_profiles")
+      .insert({ brand: `RLS-Test-${stamp}`, category: "Test", note: "test" });
+    expect(error).not.toBeNull();
   });
 });

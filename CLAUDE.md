@@ -283,6 +283,7 @@ exists; otherwise a feedback-recency multiplier). Enrichment-origin discounted u
 | `cross_sell` | 1/2 | curated + winner_derived (Tier 1); mined co-purchase lift (Tier 2) |
 | `upsell_pack` | 1/2 | repeated small-pack ('sold' feedback or invoices) × pack_rank ladder |
 | `declining_volume` | 2 | rolling 90d revenue drop |
+| `revenue_trend_risk` | 1 | **added M4 (2026-07-23):** annual `revenue_current_year` vs `revenue_prior_year` from the VIS import down >15% (and current year > 0, to exclude already-fully-dormant companies — see caveat below) — a labeled proxy for `declining_volume`'s concept using data that already exists, not a Tier-2 replacement |
 | `first_order_followup` | 2 | first invoice 14–45d ago, no second |
 | `basket_expansion` | 2 | avg order value vs peer median |
 
@@ -290,6 +291,28 @@ exists; otherwise a feedback-recency multiplier). Enrichment-origin discounted u
 cycle = avg gap of feedback dates; overdue at ×1.25 — same math as invoice version,
 weaker source, labeled "laut Feedback". Auto-superseded by `replenishment_due` when
 Tier 2 covers the pair.
+
+**M4 build note (2026-07-23) — implemented vs. deferred:** `fn_refresh_signals()`
+(`supabase/migrations/20260723190000_fn_refresh_signals.sql`, admin-triggerable via the
+"Empfehlungen aktualisieren" button on Dashboard, not yet on a pg_cron schedule) computes
+real SQL for `focus_list_push`, `revenue_trend_risk`, `feedback_replenishment`,
+`seasonal_push`, `new_product_match`, and `cross_sell` (curated only). Types NOT
+implemented yet, by design (data prerequisite missing, not a bug — same "don't fire
+without data" principle as §4A):
+- `brand_profile_match` — needs `companies.brand_focus`, part of M5 enrichment (§4.6),
+  column doesn't exist yet. Also needs the brand workshop (§14 item 5, not scheduled).
+- `replenishment_due`, `dormant_winback`, `declining_volume`, `first_order_followup`,
+  `basket_expansion`, `category_gap` — Tier 2, `orders`/`order_items` doesn't exist yet.
+- `external_opportunity` — M5 enrichment output.
+- `upsell_pack`, `cross_sell` (winner_derived) — needs pack_rank ladder / focus-loop
+  winner stats, neither meaningful yet with real feedback volume near zero (no agents
+  onboarded in production yet).
+
+**`revenue_trend_risk` caveat:** first run fired 1000 signals; 621 of those were
+companies at `revenue_current_year = 0` (already fully dormant this year, not "at risk"
+— conflating the two would mislead agents), so the query now requires
+`revenue_current_year > 0` too. Still ~1000 companies (~7% of the active book) flag at
+score 5 — worth a sanity pass with Anis before this is treated as fully tuned.
 
 Reason templates: as v2.1/2.2, plus
 `brand_profile_match`: "Fokus auf {Marke} — {Kategorie} mit erhöhtem Verbrauch
@@ -401,6 +424,11 @@ workshop seed, seasonal_push, new_product_match, cross_sell curated/winner) + sc
 Empfehlungen tab + dashboard ranking. Winner stats + generated draft (Anis approves).
 **Done:** signal list plausibility-checked (30 samples, Anis+Sanin); first winner report
 from real feedback.
+
+**Status (2026-07-23):** schema + scoring + UI shipped (see §6 M4 build note for exactly
+which types compute real rows today vs. are deferred on data). **Not done yet:** the
+30-sample plausibility check with Anis+Sanin, and winner stats + generated focus-list
+draft (§7) — that's next, once real feedback volume exists to derive winners from.
 
 ### M5 — Enrichment (week 6–8)
 Places resolver + ambiguous queue; website fetch/distill; analyze + guardrails; Brief-

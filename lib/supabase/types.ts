@@ -127,6 +127,30 @@ export type Database = {
           },
         ]
       }
+      brand_consumption_profiles: {
+        Row: {
+          brand: string
+          category: string
+          id: string
+          note: string
+          weight: number
+        }
+        Insert: {
+          brand: string
+          category: string
+          id?: string
+          note: string
+          weight?: number
+        }
+        Update: {
+          brand?: string
+          category?: string
+          id?: string
+          note?: string
+          weight?: number
+        }
+        Relationships: []
+      }
       companies: {
         Row: {
           active: boolean
@@ -259,6 +283,41 @@ export type Database = {
         }
         Relationships: []
       }
+      company_rfm: {
+        Row: {
+          company_id: string
+          computed_at: string | null
+          frequency: number | null
+          monetary: number | null
+          recency_days: number | null
+          segment: string | null
+        }
+        Insert: {
+          company_id: string
+          computed_at?: string | null
+          frequency?: number | null
+          monetary?: number | null
+          recency_days?: number | null
+          segment?: string | null
+        }
+        Update: {
+          company_id?: string
+          computed_at?: string | null
+          frequency?: number | null
+          monetary?: number | null
+          recency_days?: number | null
+          segment?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_rfm_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           company_id: string
@@ -380,6 +439,54 @@ export type Database = {
           },
         ]
       }
+      product_relations: {
+        Row: {
+          created_at: string
+          id: string
+          note: string | null
+          origin: string
+          product_id: string
+          related_product_id: string
+          relation_type: string
+          weight: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          note?: string | null
+          origin?: string
+          product_id: string
+          related_product_id: string
+          relation_type: string
+          weight?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          note?: string | null
+          origin?: string
+          product_id?: string
+          related_product_id?: string
+          relation_type?: string
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_relations_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_relations_related_product_id_fkey"
+            columns: ["related_product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           active: boolean
@@ -389,9 +496,12 @@ export type Database = {
           description: string | null
           extraction_confidence: number | null
           id: string
+          launched_at: string | null
           name: string
           pack_content: string | null
           pack_qty: number | null
+          pack_rank: number | null
+          season: string | null
           sku: string
           source_page: number | null
           subcategory: string | null
@@ -406,9 +516,12 @@ export type Database = {
           description?: string | null
           extraction_confidence?: number | null
           id?: string
+          launched_at?: string | null
           name: string
           pack_content?: string | null
           pack_qty?: number | null
+          pack_rank?: number | null
+          season?: string | null
           sku: string
           source_page?: number | null
           subcategory?: string | null
@@ -423,9 +536,12 @@ export type Database = {
           description?: string | null
           extraction_confidence?: number | null
           id?: string
+          launched_at?: string | null
           name?: string
           pack_content?: string | null
           pack_qty?: number | null
+          pack_rank?: number | null
+          season?: string | null
           sku?: string
           source_page?: number | null
           subcategory?: string | null
@@ -557,6 +673,63 @@ export type Database = {
           },
         ]
       }
+      signals: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          origin: string
+          product_id: string | null
+          reason: string
+          score: number
+          source: Json | null
+          tier: number
+          type: string
+          verified: boolean
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          origin?: string
+          product_id?: string | null
+          reason: string
+          score?: number
+          source?: Json | null
+          tier: number
+          type: string
+          verified?: boolean
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          origin?: string
+          product_id?: string | null
+          reason?: string
+          score?: number
+          source?: Json | null
+          tier?: number
+          type?: string
+          verified?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signals_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signals_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       feedback_sales: {
@@ -641,6 +814,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      fn_refresh_signals: { Args: never; Returns: undefined }
       fn_set_day_off: {
         Args: { p_agent_id: string; p_date: string; p_off: boolean }
         Returns: {
