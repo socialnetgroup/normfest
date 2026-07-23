@@ -721,6 +721,45 @@ restore the true empty state. `cross_sell` is proven working end-to-end; it simp
 show real rows until an agent actually logs a 'sold' outcome on one of these 5 anchor
 products for some company — expected, given real feedback volume is still tiny.
 
+**Webshop cross-sell mining attempt (2026-07-24) — mechanism works, yield too low to run
+at scale today:** Anis pointed out normfest-shop.com (the live public storefront) has its
+own "Könnte Sie auch interessieren" merchandising — real, already-curated cross-sell data.
+Checked feasibility first: robots.txt is permissive (`Allow: /`, publishes a sitemap,
+~14,700 URLs) and this is Normfest's own site powering Normfest's own internal tool, not
+third-party scraping — reasonable to use. Decided (Anis) to defer a full catalog rebuild
+from the shop to backlog and scope today to just scaling `product_relations` mining.
+
+Built `scripts/mine-shop-crosssell.mjs`: searches the shop for each of our catalog's
+products (`/shop/de/produktsuche?SearchTerm=`), lands on the canonical product page, and
+parses the real `<!-- G16_Crossseller Anfang/Ende -->` section (clean HTML comment
+delimiters, reliably parseable). v1 matched by exact SKU only — **~1% hit rate on random
+samples** (0/20, then 0/100). Root cause found and confirmed with concrete examples: our
+PDF-extracted catalog has multiple pack-size/variant SKU rows per product family (e.g. 5
+separate "Thermotape" rows, 3 separate "Frostschutz-Konzentrat" rows), but the shop's
+search index surfaces roughly one canonical SKU per family — exact-SKU search mostly
+misses even when the product genuinely exists under a sibling SKU.
+
+v2 switched to name-based matching (word-overlap scoring, SKU-exact preferred when it
+works) — **didn't meaningfully improve the yield** (1/30 in the most consumer-facing
+categories, 0/30 on a repeat). Diagnosed why: every miss consistently returned "15
+candidates at 0.00 similarity" — the search's no-match behavior falls back to a fixed
+generic bestseller widget rather than an honest empty result, and the matching algorithm
+correctly rejects it (0.00 score, well under the 0.5 threshold — no fabricated matches,
+same principle as everywhere else in this project). The real bottleneck isn't matching
+precision, it's that a large share of our catalog (variant SKUs, small hardware/DIN
+fastener items, O-rings, individual accessories) simply isn't independently searchable on
+the retail storefront's search — likely a genuine assortment/indexing gap, not fixable by
+smarter fuzzy-matching. Total real evidence: ~1% hit rate across ~215 random test
+lookups, all traced to real, understood causes, not left as an unexplained failure.
+
+**Left as working, reusable code — not run at full scale.** The script is correct and
+will matter far more once the deferred "rebuild catalog from the shop" backlog item
+happens (crawling the shop's own category/sitemap structure directly, rather than
+searching backward from our PDF-extracted SKUs, would naturally have much higher overlap
+with itself). Not deleted; just not worth ~30-40 min of crawling today for an estimated
+~30-40 real pairs. `scripts/seed-product-relations.mjs`'s manual/curated pairs (above)
+remain the practical near-term path for `product_relations`.
+
 ### M5 — Enrichment (week 6–8)
 Places resolver + ambiguous queue; website fetch/distill; analyze + guardrails; Brief-
 Karte; external_opportunity + brand_focus verification chain; admin enrichment panel;
@@ -990,6 +1029,20 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     `companies.telefon`/`email`/etc. when empty, once verified. Not decided or built —
     needs a call on which fields, whether verification-gated like brand_focus, and
     whether it's automatic or a manual admin action.
+12. **Rebuild/extend Katalog from the live webshop (added 2026-07-24, backlog — not
+    started):** normfest-shop.com (the real customer-facing storefront) has a much larger
+    range than our 4,011-product PDF extract (~14,700 sitemap URLs vs. the 800-page
+    catalog PDF this app ingested for M3) and its own real "Könnte Sie auch interessieren"
+    cross-sell merchandising. Anis wants to eventually import from it directly into
+    Katalog (as its own endpoint/source, login-acceptable for price though price isn't
+    very relevant here) rather than relying solely on the PDF extract. Explicitly
+    deferred — "vratićemo se na webshop kasnije" — Anis's specified approach when picked
+    up: (1) full extraction of the shop's own product range (crawl its own category/
+    sitemap structure, not search backward from our existing SKUs — see §6/§13 M4 for why
+    that direction had ~1% yield), (2) compare the extracted set against our existing
+    4,011 products, (3) delete/merge duplicates. Scoped down for now to just mining
+    cross-sell pairs from what already exists (§6/§13 M4). Not scoped further — revisit
+    when picked up.
 
 ---
 
