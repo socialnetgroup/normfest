@@ -420,6 +420,21 @@ Chat route + full toolset + citations + context injection + feedback-confirm + b
 Security checklist, restore drill, remaining-Gebiet enrichment batches, Tier-2 import if
 invoices confirmed tabular, hypercare 2 weeks.
 
+### M9 — Call QA / Coaching Assistant (backlog, post-MVP, added 2026-07-23)
+Not scoped yet — revisit when we get here, at which point Anis picks/provisions the
+external ASR service. Concept: TL manually uploads a saved call recording (mp3/wav —
+**not** a live dialer/telephony integration, that stays out of scope per §1) →
+external ASR transcribes with speaker diarization (agent vs. customer) — needs German
+support, e.g. Deepgram Nova-3 or Whisper; not yet chosen — → Claude (Sonnet-class per
+§3.2.9 cost-tier rule) analyzes the transcript against the documented call methodology
+(§8's source material: 5-phase call structure, 5S objection technique, the 8 scripted
+objection responses, banned-phrase list, vocabulary-substitution table) → structured QA
+report for the TL: phase timestamps, objections raised + how handled, scorecard-style
+score, coaching notes. Rough cost estimate: ~$0.05–0.15/call all-in (ASR ~$0.005–0.01/min
++ Sonnet analysis ~$0.02–0.03/call) — trivial even at the TL's documented ≥15 QA
+reviews/week cadence. **Blocked on:** Anis choosing an ASR provider — nothing else is
+needed to start.
+
 Weeks assume steady part-time solo work with Claude Code; slices are independent enough
 to pause/resume without breaking main (rule §3.2.9).
 
@@ -455,6 +470,16 @@ explicitly labeled "laut Agent-Feedback", or says no data).
    compact calendar control on the overview that doesn't take much space, which
    expands into a full list of the month's days on click/drill-in — Anis
    referenced Genesys's depth-of-view pattern as the interaction model to copy.
+8. **M3 QA gate never actually closed (found 2026-07-23):** `products.extraction_confidence`
+   is null for all 4,011 committed rows — `scripts/extract-catalog.mjs` never computed or
+   wrote it, so the §11.1-step-5 QA queue has no signal to filter on and was never built as
+   a screen. No spot-check of extracted records against real PDF pages has been done either
+   (only row counts were reviewed). 41% of rows have no `description`, 29% no
+   `pack_content` — plausibly just catalog reality, unconfirmed. Not blocking M4 (the
+   signal engine doesn't depend on confidence scores), but flagged as real debt rather than
+   treated as done — revisit with a retroactive confidence-scoring + spot-check pass
+   whenever catalog data quality actually matters (KB citations in M6 are the likely
+   forcing function).
 
 ---
 
