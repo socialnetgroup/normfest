@@ -704,8 +704,16 @@ genuinely analyzed, **856 have real Places data but are waiting on an ANALYZE pa
 Anis chose to pause enrichment here rather than top up billing immediately — next step
 whenever resumed: top up Anthropic Console billing, then re-run analysis-only (no new
 Places calls needed) over the 856 backlog before doing more Places-resolution batches.
+
+### M6 — KB + Skript (week 8–9)
 KB ingest of the material folder; objection_cards extraction; Wissen + Skript menus.
 **Done:** all supplied materials published; objection cards searchable.
+
+**Status (2026-07-23):** shipped — schema, Skript (21 chunks + 8 objection cards from the
+Agent Sales Guide) and Wissen (seeded onboarding content) both live. Full detail in §8's
+M6 status block. "All supplied materials published" is intentionally not 100%: the
+Operativni Priručnik was deliberately skipped (mixes real methodology with sensitive HR/
+comp data) — Anis's call, not a gap.
 
 ### M7 — Assistant (week 9–10)
 Chat route + full toolset + citations + context injection + feedback-confirm + budgets.
