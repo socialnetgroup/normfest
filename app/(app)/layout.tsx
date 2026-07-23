@@ -16,7 +16,10 @@ const NAV_ITEMS = [
   { href: "/feedback/neu", label: "Feedback" },
 ];
 
-const ADMIN_NAV_ITEMS = [{ href: "/admin/team", label: "Team" }];
+const ADMIN_NAV_ITEMS = [
+  { href: "/admin/team", label: "Team" },
+  { href: "/admin/enrichment", label: "Enrichment" },
+];
 
 export default async function AppLayout({
   children,
