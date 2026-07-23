@@ -573,6 +573,15 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     "ti pravi sve u ovom jednom nalogu, master... ne opterećuj se userima za sad." Build
     everything as admin (single account = master) until he decides roles later. Do not
     add a `team_leader` role or split permissions unless explicitly asked.
+11. **Should Places data write into `companies` master data? (asked 2026-07-23, open —
+    Anis to decide):** right now Places-sourced phone/website/address live only on
+    `company_enrichment`, kept separate from imported VIS master data on `companies`.
+    `brand_focus` is the one exception with an explicit write-back path (§9: AI guess →
+    human verifies → writes to `companies.brand_focus`, fill-empty-only). Anis asked
+    whether Places phone/website/address should get the same treatment — i.e. fill
+    `companies.telefon`/`email`/etc. when empty, once verified. Not decided or built —
+    needs a call on which fields, whether verification-gated like brand_focus, and
+    whether it's automatic or a manual admin action.
 
 ---
 

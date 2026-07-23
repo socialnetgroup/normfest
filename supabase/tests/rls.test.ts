@@ -586,8 +586,14 @@ describe("company_enrichment / enrichment_jobs RLS (M5)", () => {
   let enrichmentId = "";
 
   beforeAll(async () => {
-    const { data: company } = await admin.from("companies").select("id").limit(1).single();
-    companyId = company!.id;
+    // Pick a company with no existing company_enrichment row — company_id
+    // is unique on that table, and real companies get enriched by the
+    // actual pipeline (scripts/enrich-*.mjs) outside of tests.
+    const { data: enriched } = await admin.from("company_enrichment").select("company_id");
+    const enrichedIds = new Set((enriched ?? []).map((e) => e.company_id));
+    const { data: candidates } = await admin.from("companies").select("id").limit(50);
+    const free = candidates!.find((c) => !enrichedIds.has(c.id));
+    companyId = free!.id;
   });
 
   afterAll(async () => {

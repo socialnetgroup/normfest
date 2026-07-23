@@ -7,9 +7,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { BrandFocusVerifyButton } from "@/components/brand-focus-verify-button";
 import { FeedbackForm } from "@/components/feedback-form";
 import { signalTypeLabel } from "@/lib/signals";
 import { createClient } from "@/lib/supabase/server";
+
+const ratingFmt = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 1 });
 
 const eur = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
 const dateFmt = new Intl.DateTimeFormat("de-DE");
@@ -47,7 +50,7 @@ export default async function CompanyProfilePage({
   const { id } = await params;
   const supabase = await createClient();
 
-  const [{ data: company, error }, { data: userData }, { data: feedbackHistory }, { data: signals }] =
+  const [{ data: company, error }, { data: userData }, { data: feedbackHistory }, { data: signals }, { data: enrichment }] =
     await Promise.all([
       supabase.from("companies").select("*").eq("id", id).single(),
       supabase.auth.getUser(),
@@ -62,6 +65,7 @@ export default async function CompanyProfilePage({
         .select("id, type, score, reason, tier, origin, products(name)")
         .eq("company_id", id)
         .order("score", { ascending: false }),
+      supabase.from("company_enrichment").select("*").eq("company_id", id).maybeSingle(),
     ]);
 
   if (error || !company) {
@@ -87,6 +91,109 @@ export default async function CompanyProfilePage({
           {company.plz} {company.ort}
         </p>
       </div>
+
+      {enrichment && (enrichment.places_place_id || enrichment.strengths?.length || enrichment.weaknesses?.length) ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Firmenbrief</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Laut Google-Bewertungen{enrichment.places_website ? " & Website" : ""} — KI-Analyse, nicht verifiziert
+              wo nicht markiert.
+            </p>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            {enrichment.places_rating !== null ? (
+              <p className="text-sm">
+                <span className="font-medium">{ratingFmt.format(enrichment.places_rating)}/5</span>{" "}
+                <span className="text-muted-foreground">
+                  ({enrichment.places_review_count ?? 0} Bewertungen)
+                  {enrichment.places_website ? (
+                    <>
+                      {" · "}
+                      <a
+                        href={enrichment.places_website}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline"
+                      >
+                        Website
+                      </a>
+                    </>
+                  ) : null}
+                </span>
+              </p>
+            ) : null}
+
+            {enrichment.strengths && enrichment.strengths.length > 0 ? (
+              <div>
+                <p className="mb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Stärken</p>
+                <ul className="list-disc pl-5 text-sm">
+                  {enrichment.strengths.map((s, i) => (
+                    <li key={i}>{s}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            {enrichment.weaknesses && enrichment.weaknesses.length > 0 ? (
+              <div>
+                <p className="mb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Schwächen</p>
+                <ul className="list-disc pl-5 text-sm">
+                  {enrichment.weaknesses.map((w, i) => (
+                    <li key={i}>{w}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            {enrichment.brand_focus_guess && enrichment.brand_focus_guess.length > 0 ? (
+              <div>
+                <p className="mb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                  Markenfokus (KI-Vermutung)
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  {enrichment.brand_focus_guess.map((brand, i) => (
+                    <div key={i} className="flex items-center gap-1.5">
+                      <Badge variant="secondary">{brand}</Badge>
+                      {userData.user ? (
+                        <BrandFocusVerifyButton
+                          companyId={company.id}
+                          brand={brand}
+                          verifierId={userData.user.id}
+                          alreadyVerified={enrichment.verified || !!company.brand_focus}
+                        />
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+                {company.brand_focus ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Stammdaten-Markenfokus: {company.brand_focus}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
+            {enrichment.external_opportunities && Array.isArray(enrichment.external_opportunities) && enrichment.external_opportunities.length > 0 ? (
+              <div>
+                <p className="mb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                  Externe Chancen
+                </p>
+                <ul className="flex flex-col gap-2 text-sm">
+                  {(enrichment.external_opportunities as { category: string; reason: string; quote: string }[]).map(
+                    (o, i) => (
+                      <li key={i}>
+                        <span className="font-medium">{o.category}</span> — {o.reason}
+                        <p className="mt-0.5 text-xs text-muted-foreground italic">&ldquo;{o.quote}&rdquo;</p>
+                      </li>
+                    ),
+                  )}
+                </ul>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
 
       {signals && signals.length > 0 ? (
         <Card>
