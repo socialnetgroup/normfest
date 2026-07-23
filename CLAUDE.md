@@ -504,37 +504,27 @@ worked — the context-injection question skipped `search_companies` and went st
 `get_company_brief`. Token usage per full 24-question run: ~213k–234k input / ~16k
 output.
 
-**Real findings, not fixed yet (flagged for Anis, not silently patched):**
-1. **Objection-card language mirroring is inconsistent.** Reproduced on both runs: a
-   fully-Bosnian question about handling an objection got a German-first narration
-   wrapper around the DE/BS card content, instead of a fully-Bosnian answer (every other
-   BS question in the set — company brief, tier-honesty, brand profile, product search,
-   the closing "what does this tool do" question — mirrored correctly). Likely cause:
-   `get_objection_cards` always returns DE+BS pairs together, and the model defaults to
-   presenting DE first regardless of the caller's language. Candidate fix: tell the
-   system prompt explicitly to lead with the agent's language when presenting a bilingual
-   card, not just "answer in the same language" as a general rule — not applied yet.
-2. **One non-deterministic empty reply.** The exact same KB question ("Wie ist der
-   Gesprächseinstieg laut Skript aufgebaut?") got a full, correctly-grounded answer on run
-   1 and hit `runChatTurn`'s empty-text fallback message on run 2 — same code, same
-   question, different outcome (model-level variance, not a code regression, since both
-   runs used identical tool-calling logic). `runChatTurn` currently discards *why*
-   `assistantText` stayed empty (no stop_reason/last-message logging) — worth adding
-   before chasing this further, since right now there's nothing to debug from. 1/48
-   answers — not blocking, but a real observed failure mode worth watching as usage
-   grows.
-3. **`log_sales_feedback` sometimes disambiguates instead of firing immediately** — asked
-   which of several real product SKUs matched "Bremsenreiniger" rather than proposing the
-   tool call with `product_id` omitted (which the schema allows). Arguably the more
-   correct behavior (avoids guessing a specific SKU), but means the confirm-card doesn't
-   always appear on the first message the way the original test expectation assumed.
-   Judgment call, not a defect.
-4. **Isolated VIS-import data artifact, unrelated to the assistant itself:** one company
-   (1 of ~13.5k) has a literal CSV double-quote-escape sequence baked into its stored
-   `name` (`"Autohandel ""An der Schmiede"""`) — visibly confused a search on one phrasing
-   in the first run; the model retried and self-corrected on both reruns, so it's not a
-   hard failure, just cosmetic. Not fixed — Anis to decide whether/how to clean it (single
-   row, not a pipeline-wide problem).
+**Real findings — QA/QoL pass (2026-07-24), 3 of 4 closed:**
+1. **Objection-card language mirroring — fixed.** `systemPrompt()` (`lib/chat/core.mjs`)
+   now explicitly instructs: when presenting a bilingual (DE+BS) objection card, always
+   lead with the agent's own language, not German by default. Not re-run through the full
+   acceptance set yet (would cost real API spend) — logic-level fix only, worth
+   re-verifying live next time the acceptance set runs.
+2. **Non-deterministic empty reply — diagnostics added, not otherwise "fixed"** (there was
+   nothing to fix — model-level variance, not a code bug). `runChatTurn` now logs
+   `stop_reason` + response content-block types whenever `assistantText` stays empty, so
+   if/when this recurs there's finally something to debug from instead of a silent
+   fallback message.
+3. **`log_sales_feedback` disambiguation — left as-is**, per the original judgment call:
+   arguably correct behavior (avoids guessing a specific SKU), not a defect.
+4. **CSV-escape company-name artifact — fixed.** Scanned all 13,573 companies for the same
+   pattern first (only this one row had it — confirmed genuinely isolated, not a
+   pipeline-wide import bug). `"Autohandel ""An der Schmiede"""` → decoded (strip outer
+   quote, `""`→`"`) → `Autohandel "An der Schmiede"`, updated directly
+   (`companies.id = 8e0f9581-05e8-4de2-a9ca-fb0090804c8d`). One other company
+   (`"Hösie" Höfer und Sielaff Transportgesellschaft m.b.H.`) matched the same search
+   pattern but is a genuine company name with a quoted nickname, not an artifact — left
+   untouched.
 
 **Still open:** real per-turn latency (p95 profile <2s / chat first-token <3s, §2.2) —
 the CLI harness bypasses the SSE-streaming path entirely, so it can't measure real
@@ -964,18 +954,24 @@ explicitly labeled "laut Agent-Feedback", or says no data).
 6. **Team Dashboard data source — RESOLVED 2026-07-23:** confirmed manual (agents
    type in each sale as it happens), so the Excel hand-off is now replaced by the
    in-app `fn_log_sale` entry (§4.11) — no dialer/CRM export integration needed.
-7. **Katalog / Team Dashboard drill-down UI (added 2026-07-23, backlog — not started):**
-   (a) per-agent profile page showing their own monthly history (not just the
-   team-wide leaderboard already on the Dashboard); (b) a retroactive daily
-   view/pivot — all the data already exists in `agent_daily_performance`, this is
-   purely a display/reshaping task (group by agent, list by day instead of only
-   monthly aggregates). Anis explicitly deferred this ("to necu sad") — do not
-   build until asked.
-   UX detail for the daily bonus view specifically (added same day, P.S. note):
-   prev/next-day arrow navigation instead of always showing only today; a
-   compact calendar control on the overview that doesn't take much space, which
-   expands into a full list of the month's days on click/drill-in — Anis
-   referenced Genesys's depth-of-view pattern as the interaction model to copy.
+7. **Katalog / Team Dashboard drill-down UI — shipped (2026-07-24).** Originally deferred
+   2026-07-23 ("to necu sad"); Anis explicitly asked for it in the 2026-07-24 backlog QA
+   pass. (a) `/admin/team/[agentId]` — per-agent monthly history (not just the team-wide
+   leaderboard on `/admin/team`), each month rendered via `MonthCalendar`
+   (`components/team/month-calendar.tsx`): compact calendar grid by default (small bar per
+   day scaled to that day's revenue), click a day for an inline detail row, or toggle
+   "Vollständige Liste anzeigen" for a full sortable day-by-day table — the Genesys-style
+   depth-of-view Anis asked for. (b) `/admin/team/tag/[date]` — the daily cross-agent
+   Tagesbonus view (same bonus table that used to only show "today" on the overview), now
+   with prev/next-day arrow navigation (`←`/`→`) and a "Heute" jump-back link; next-day
+   arrow disables at today (no future dates). `computeDailyBonus` extracted to
+   `lib/team/bonus.ts` so the overview page and the new daily page share one
+   implementation instead of drifting. Agent names on `/admin/team` (both the today-bonus
+   table and the monthly tables) now link to their `/admin/team/[agentId]` page; a
+   "Tagesansicht →" link on the overview jumps to today's daily page. Verified live in
+   browser (logged in via a throwaway admin test account, deleted after) — calendar
+   rendering, day-detail expand, full-list toggle, and prev/next/today navigation all
+   confirmed working against real `agent_daily_performance` data.
 8. **M3 QA gate — retroactive scoring + spot-check done (2026-07-23), gate now partially
    closed:** `extraction_confidence` was null for all 4,011 rows (never computed at ingest
    time). Rather than re-running the LLM extraction (real cost, no new data),

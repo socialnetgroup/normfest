@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
@@ -8,65 +9,19 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { DayOffToggle } from "@/components/day-off-toggle";
+import { computeDailyBonus, type BonusThreshold } from "@/lib/team/bonus";
 import { createClient } from "@/lib/supabase/server";
 
 const eur = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
 const eurCents = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", minimumFractionDigits: 2 });
 const pct = new Intl.NumberFormat("de-DE", { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
-type BonusThreshold = { team_revenue: number; bonus_km: number };
-
-function computeDailyBonus(
-  agents: { agentId: string; name: string; revenue: number; dayOff: boolean }[],
-  thresholds: BonusThreshold[],
-  minContributionPct: number,
-  minQualifyingAgents: number,
-) {
-  const active = agents.filter((a) => !a.dayOff);
-  const teamRevenue = active.reduce((sum, a) => sum + a.revenue, 0);
-
-  const sortedThresholds = [...thresholds].sort((a, b) => a.team_revenue - b.team_revenue);
-  let thresholdReached: BonusThreshold | null = null;
-  for (const t of sortedThresholds) {
-    if (teamRevenue >= t.team_revenue) thresholdReached = t;
-  }
-  const budget = thresholdReached?.bonus_km ?? 0;
-
-  const withContribution = active.map((a) => ({
-    ...a,
-    contributionPct: teamRevenue > 0 ? (a.revenue / teamRevenue) * 100 : 0,
-  }));
-  const qualifying = withContribution.filter((a) => a.revenue > 0 && a.contributionPct >= minContributionPct);
-  const qualifyingSumPct = qualifying.reduce((sum, a) => sum + a.contributionPct, 0);
-  const enoughQualifiers = qualifying.length >= minQualifyingAgents;
-
-  const results = withContribution
-    .map((a) => {
-      const qualifies = a.revenue > 0 && a.contributionPct >= minContributionPct;
-      const bonusKm =
-        enoughQualifiers && qualifies && budget > 0 && qualifyingSumPct > 0
-          ? Math.round((a.contributionPct / qualifyingSumPct) * budget * 100) / 100
-          : 0;
-      return { ...a, qualifies, bonusKm };
-    })
-    .sort((a, b) => b.revenue - a.revenue);
-
-  return {
-    teamRevenue,
-    thresholdReached,
-    budget,
-    qualifyingCount: qualifying.length,
-    minQualifyingAgents,
-    enoughQualifiers,
-    results,
-  };
-}
-
 type DayRow = {
   date: string;
   revenue: number;
   sales_count: number;
   calls_count: number | null;
+  agent_id: string;
   agents: { full_name: string } | null;
 };
 
@@ -91,7 +46,7 @@ export default async function TeamDashboardPage() {
   const [{ data, error }, { data: allAgents }, { data: todayRows }, { data: bonusSettings }] = await Promise.all([
     supabase
       .from("agent_daily_performance")
-      .select("date, revenue, sales_count, calls_count, agents(full_name)")
+      .select("date, revenue, sales_count, calls_count, agent_id, agents(full_name)")
       .order("date"),
     supabase.from("agents").select("id, full_name").eq("active", true).order("full_name"),
     supabase.from("agent_daily_performance").select("agent_id, revenue, day_off").eq("date", today),
@@ -128,33 +83,51 @@ export default async function TeamDashboardPage() {
   }));
   const dailyBonus = computeDailyBonus(todayAgents, thresholds, minContributionPct, minQualifyingAgents);
 
-  const byMonth = new Map<string, Map<string, { revenue: number; sales: number; calls: number; callDays: number }>>();
+  const byMonth = new Map<
+    string,
+    Map<string, { agentId: string; name: string; revenue: number; sales: number; calls: number; callDays: number }>
+  >();
   for (const row of rows) {
     const agentName = row.agents?.full_name;
     if (!agentName) continue;
     const month = row.date.slice(0, 7);
     if (!byMonth.has(month)) byMonth.set(month, new Map());
     const agentMap = byMonth.get(month)!;
-    const entry = agentMap.get(agentName) ?? { revenue: 0, sales: 0, calls: 0, callDays: 0 };
+    const entry = agentMap.get(row.agent_id) ?? {
+      agentId: row.agent_id,
+      name: agentName,
+      revenue: 0,
+      sales: 0,
+      calls: 0,
+      callDays: 0,
+    };
     entry.revenue += row.revenue;
     entry.sales += row.sales_count;
     if (row.calls_count !== null) {
       entry.calls += row.calls_count;
       entry.callDays += 1;
     }
-    agentMap.set(agentName, entry);
+    agentMap.set(row.agent_id, entry);
   }
 
   const months = [...byMonth.keys()].sort().reverse();
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="font-heading text-2xl font-semibold tracking-tight">Team Dashboard</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Nur für Admins sichtbar. Tägliche Verkaufsleistung pro Agent, importiert aus den
-          monatlichen Team-Dashboard-Dateien.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h1 className="font-heading text-2xl font-semibold tracking-tight">Team Dashboard</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Nur für Admins sichtbar. Tägliche Verkaufsleistung pro Agent, importiert aus den
+            monatlichen Team-Dashboard-Dateien.
+          </p>
+        </div>
+        <Link
+          href={`/admin/team/tag/${today}`}
+          className="shrink-0 rounded-lg border px-3 py-1.5 text-sm font-medium hover:bg-muted"
+        >
+          Tagesansicht →
+        </Link>
       </div>
 
       <Card>
@@ -202,7 +175,11 @@ export default async function TeamDashboardPage() {
               <tbody className="divide-y">
                 {dailyBonus.results.map((r) => (
                   <tr key={r.agentId}>
-                    <td className="px-3 py-2 font-medium">{r.name}</td>
+                    <td className="px-3 py-2 font-medium">
+                      <Link href={`/admin/team/${r.agentId}`} className="hover:underline">
+                        {r.name}
+                      </Link>
+                    </td>
                     <td className="px-3 py-2">{eur.format(r.revenue)}</td>
                     <td className="px-3 py-2">{pct.format(r.contributionPct / 100)}</td>
                     <td className="px-3 py-2">{r.qualifies ? "Ja" : "Nein"}</td>
@@ -216,7 +193,11 @@ export default async function TeamDashboardPage() {
                   .filter((a) => a.dayOff)
                   .map((a) => (
                     <tr key={a.agentId} className="opacity-50">
-                      <td className="px-3 py-2 font-medium">{a.name}</td>
+                      <td className="px-3 py-2 font-medium">
+                        <Link href={`/admin/team/${a.agentId}`} className="hover:underline">
+                          {a.name}
+                        </Link>
+                      </td>
                       <td className="px-3 py-2" colSpan={4}>
                         Heute frei
                       </td>
@@ -266,9 +247,13 @@ export default async function TeamDashboardPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y">
-                      {sorted.map(([name, v]) => (
-                        <tr key={name}>
-                          <td className="px-3 py-2 font-medium">{name}</td>
+                      {sorted.map(([agentId, v]) => (
+                        <tr key={agentId}>
+                          <td className="px-3 py-2 font-medium">
+                            <Link href={`/admin/team/${agentId}`} className="hover:underline">
+                              {v.name}
+                            </Link>
+                          </td>
                           <td className="px-3 py-2">{eur.format(v.revenue)}</td>
                           <td className="px-3 py-2">{v.sales}</td>
                           <td className="px-3 py-2">{v.calls > 0 ? v.calls : "—"}</td>
