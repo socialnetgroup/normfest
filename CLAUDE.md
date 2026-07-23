@@ -585,15 +585,18 @@ background):** every item checked against the real codebase/project, not assumed
   applied by hand immediately after being written (not deferred to CI), its practical value
   here is genuinely unclear — a PR rarely has un-pushed migrations sitting in it. Anis to
   decide: add the secret + step, or drop the promise from §3.3.
-- 🔴 **PITR / backups — NOT enabled, zero backups exist.** Checked directly via the
-  Supabase Management API (`GET /v1/projects/{ref}/database/backups`):
-  `pitr_enabled: false`, `backups: []`. **This is the most important finding of this
-  pass** — there is currently no way to recover this database (13.5k+ companies, full
-  catalog, all feedback/signals/enrichment data) if something goes wrong. Enabling
-  PITR/backups is a plan/billing decision (Supabase ties it to paid tiers with
-  retention-based add-on pricing) — did not attempt to change it myself. Recommend
-  enabling before go-live; the "restore drill" half of this checklist item is meaningless
-  until backups exist to drill against.
+- 🔴 **PITR / backups — NOT enabled, zero backups exist. Explicitly deferred (2026-07-23).**
+  Checked directly via the Supabase Management API
+  (`GET /v1/projects/{ref}/database/backups`): `pitr_enabled: false`, `backups: []`. Real
+  cost to fix: the org is on the **Free** plan, so this needs a Pro upgrade ($25/mo) *plus*
+  the PITR add-on itself ($100/mo for 7-day retention, up to $400/mo for 28-day) — a
+  ~$125/mo floor, checked via `GET /v1/projects/{ref}/billing/addons`. There is currently
+  no way to recover this database (13.5k+ companies, full catalog, all feedback/signals/
+  enrichment data) if something goes wrong — Anis reviewed this real cost and explicitly
+  chose to defer: "at the moment, in the testing MVP phase I don't need that." Revisit
+  before an actual go-live, not before — the "restore drill" half of this checklist item
+  is meaningless until backups exist to drill against, and won't exist until this is
+  revisited.
 
 ---
 
@@ -736,8 +739,8 @@ invoices confirmed tabular, hypercare 2 weeks.
 **Status (2026-07-23):** security checklist done — see §12 for the full audit (one real
 code gap fixed, everything else clean except the two flagged items). Everything else in
 this milestone is blocked on a decision that isn't mine to make, not on missing code:
-- **Restore drill** — can't drill a restore that doesn't exist; blocked on the PITR/backup
-  decision in §12.
+- **Restore drill** — can't drill a restore that doesn't exist; PITR/backups explicitly
+  deferred until go-live (§12, ~$125/mo, Anis's call given the MVP testing phase).
 - **Remaining-Gebiet enrichment batches** — paused. The 856-company analyze-only backlog
   (§10/§13 M5 status) got to 487/1076 analyzed before hitting the Anthropic billing wall a
   second time same day; Anis flagged the per-company cost as too high to keep pushing on
