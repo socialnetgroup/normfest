@@ -359,6 +359,19 @@ product texts flow into `produkte` collection chunks **linked to product records
 citations. Script = the existing single file (bilingual Agent Sales Guide lineage),
 collection `skript`, own menu.
 
+**M6 status (2026-07-23):** schema shipped (`kb_documents`, `kb_chunks` with generated
+German-FTS `search_vector`, `objection_cards`), all admin-write/shared-read RLS. Ingested
+so far: the Agent Sales Guide (`2. Normfest - Agent - Sales Priručnik & Skripta.docx`) →
+collection `skript`, 21 heading-chunked sections + 8 objection_cards (objection + BS/DE
+response pairs), extracted via `scripts/ingest-kb.mjs` (docx→XML text extraction, no
+pandoc/soffice dependency — see script header). `/skript` page live (objection cards +
+full guide with TOC anchors). `/wissen` page live (German FTS search UI) but **empty** —
+the one other candidate source document, the Operativni Sales Performance Priručnik,
+mixes genuine methodology with real agent earnings/MBTI-profiles/personnel lists (same
+HR-adjacent sensitivity as `agent_daily_performance`, §4.11); Anis chose to skip ingesting
+it entirely rather than have it manually curated ("Preskoci ovaj dokument za sad"). Open:
+Anis to specify what should actually populate Wissen going forward.
+
 ---
 
 ## 9. LLM Enrichment ("Show me you know me", flagship #3) — as v2.2 (pipeline, worked

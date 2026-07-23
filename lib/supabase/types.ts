@@ -631,6 +631,118 @@ export type Database = {
           },
         ]
       }
+      kb_chunks: {
+        Row: {
+          chunk_index: number
+          content: string
+          created_at: string
+          document_id: string
+          heading: string | null
+          id: string
+          metadata: Json | null
+          search_vector: unknown
+        }
+        Insert: {
+          chunk_index: number
+          content: string
+          created_at?: string
+          document_id: string
+          heading?: string | null
+          id?: string
+          metadata?: Json | null
+          search_vector?: unknown
+        }
+        Update: {
+          chunk_index?: number
+          content?: string
+          created_at?: string
+          document_id?: string
+          heading?: string | null
+          id?: string
+          metadata?: Json | null
+          search_vector?: unknown
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kb_chunks_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "kb_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kb_documents: {
+        Row: {
+          collection: string
+          created_at: string
+          deleted_at: string | null
+          id: string
+          source_path: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          collection: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          source_path?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          collection?: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          source_path?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      objection_cards: {
+        Row: {
+          category: string | null
+          created_at: string
+          deleted_at: string | null
+          id: string
+          objection: string
+          response_bs: string | null
+          response_de: string | null
+          source_document_id: string | null
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          objection: string
+          response_bs?: string | null
+          response_de?: string | null
+          source_document_id?: string | null
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          objection?: string
+          response_bs?: string | null
+          response_de?: string | null
+          source_document_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "objection_cards_source_document_id_fkey"
+            columns: ["source_document_id"]
+            isOneToOne: false
+            referencedRelation: "kb_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_relations: {
         Row: {
           created_at: string
