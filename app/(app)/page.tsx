@@ -42,10 +42,21 @@ export default async function DashboardPage() {
   const now = new Date();
   const monthStartStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
 
-  const { data: monthRows } = await supabase
-    .from("agent_daily_performance")
-    .select("agent_id, revenue, agents(full_name)")
-    .gte("date", monthStartStr);
+  const dayOfWeek = (now.getDay() + 6) % 7; // Monday = 0
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() - dayOfWeek);
+  weekStart.setHours(0, 0, 0, 0);
+
+  const [{ data: monthRows }, { count: feedbackCountThisWeek }] = await Promise.all([
+    supabase
+      .from("agent_daily_performance")
+      .select("agent_id, revenue, agents(full_name)")
+      .gte("date", monthStartStr),
+    supabase
+      .from("sales_feedback")
+      .select("id", { count: "exact", head: true })
+      .gte("created_at", weekStart.toISOString()),
+  ]);
 
   const byAgent = new Map<string, { name: string; revenue: number }>();
   for (const row of monthRows ?? []) {
@@ -67,9 +78,14 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="font-heading text-2xl font-semibold tracking-tight">Dashboard</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{monthLabel}</p>
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h1 className="font-heading text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{monthLabel}</p>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">{feedbackCountThisWeek ?? 0}</span> Feedback diese Woche
+        </p>
       </div>
 
       {myAgent ? (

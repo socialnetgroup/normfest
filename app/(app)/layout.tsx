@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: "/", label: "Dashboard" },
   { href: "/firmen", label: "Firmen" },
   { href: "/katalog", label: "Katalog" },
+  { href: "/feedback/neu", label: "Feedback" },
 ];
 
 const ADMIN_NAV_ITEMS = [{ href: "/admin/team", label: "Team" }];

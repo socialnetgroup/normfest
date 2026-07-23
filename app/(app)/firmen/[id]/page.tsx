@@ -7,10 +7,19 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { FeedbackForm } from "@/components/feedback-form";
 import { createClient } from "@/lib/supabase/server";
 
 const eur = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
 const dateFmt = new Intl.DateTimeFormat("de-DE");
+const dateTimeFmt = new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" });
+
+const OUTCOME_LABELS: Record<string, string> = {
+  sold: "Verkauft",
+  interested: "Interessiert",
+  rejected: "Abgelehnt",
+  not_relevant: "Nicht relevant",
+};
 
 function money(value: number | null) {
   return value === null ? "—" : eur.format(value);
@@ -37,15 +46,22 @@ export default async function CompanyProfilePage({
   const { id } = await params;
   const supabase = await createClient();
 
-  const { data: company, error } = await supabase
-    .from("companies")
-    .select("*")
-    .eq("id", id)
-    .single();
+  const [{ data: company, error }, { data: userData }, { data: feedbackHistory }] = await Promise.all([
+    supabase.from("companies").select("*").eq("id", id).single(),
+    supabase.auth.getUser(),
+    supabase
+      .from("sales_feedback")
+      .select("id, outcome, qty, value_net, objection, comment, created_at, products(name), profiles(full_name)")
+      .eq("company_id", id)
+      .order("created_at", { ascending: false })
+      .limit(10),
+  ]);
 
   if (error || !company) {
     notFound();
   }
+
+  const agentId = userData.user!.id;
 
   return (
     <div className="flex flex-col gap-6">
@@ -153,14 +169,56 @@ export default async function CompanyProfilePage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Notizen</CardTitle>
+          <CardTitle>Feedback erfassen</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Kommt in M2 (Feedback-Erfassung + Notizen).
-          </p>
+          <FeedbackForm companyId={company.id} agentId={agentId} />
         </CardContent>
       </Card>
+
+      {feedbackHistory && feedbackHistory.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Feedback-Verlauf</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="flex flex-col divide-y">
+              {feedbackHistory.map((f) => (
+                <li key={f.id} className="py-2.5 text-sm">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge
+                      variant={
+                        f.outcome === "sold"
+                          ? "default"
+                          : f.outcome === "rejected"
+                            ? "muted"
+                            : "secondary"
+                      }
+                    >
+                      {OUTCOME_LABELS[f.outcome] ?? f.outcome}
+                    </Badge>
+                    {(f.products as { name: string } | null)?.name ? (
+                      <span className="font-medium">
+                        {(f.products as { name: string }).name}
+                      </span>
+                    ) : null}
+                    {f.qty ? <span className="text-muted-foreground">×{f.qty}</span> : null}
+                    {f.value_net ? <span className="text-muted-foreground">{eur.format(f.value_net)}</span> : null}
+                  </div>
+                  {f.objection ? (
+                    <p className="mt-1 text-muted-foreground">Einwand: {f.objection}</p>
+                  ) : null}
+                  {f.comment ? <p className="mt-1 text-muted-foreground">{f.comment}</p> : null}
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {(f.profiles as { full_name: string | null } | null)?.full_name ?? "—"} ·{" "}
+                    {dateTimeFmt.format(new Date(f.created_at))}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }

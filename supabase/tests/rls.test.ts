@@ -337,3 +337,50 @@ describe("fn_set_day_off (admin-only)", () => {
     expect(row?.day_off).toBe(true);
   });
 });
+
+describe("sales_feedback RLS", () => {
+  let companyId = "";
+  let feedbackId = "";
+
+  beforeAll(async () => {
+    const { data, error } = await admin.from("companies").select("id").limit(1).single();
+    if (error) throw error;
+    companyId = data.id;
+  });
+
+  afterAll(async () => {
+    if (feedbackId) await admin.from("sales_feedback").delete().eq("id", feedbackId);
+  });
+
+  it("an agent can log feedback as themselves", async () => {
+    const client = anonClient();
+    await client.auth.signInWithPassword({ email: agentEmail, password });
+
+    const { data, error } = await client
+      .from("sales_feedback")
+      .insert({ agent_id: agentId, company_id: companyId, outcome: "interested", comment: "RLS test" })
+      .select("id")
+      .single();
+    expect(error).toBeNull();
+    feedbackId = data!.id;
+  });
+
+  it("an agent cannot log feedback as someone else", async () => {
+    const client = anonClient();
+    await client.auth.signInWithPassword({ email: agentEmail, password });
+
+    const { error } = await client
+      .from("sales_feedback")
+      .insert({ agent_id: adminId, company_id: companyId, outcome: "interested" });
+    expect(error).not.toBeNull();
+  });
+
+  it("any authenticated user can read feedback (shared flywheel visibility)", async () => {
+    const client = anonClient();
+    await client.auth.signInWithPassword({ email: adminEmail, password });
+
+    const { data, error } = await client.from("sales_feedback").select("id").eq("id", feedbackId).single();
+    expect(error).toBeNull();
+    expect(data?.id).toBe(feedbackId);
+  });
+});

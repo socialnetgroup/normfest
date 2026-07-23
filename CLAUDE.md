@@ -450,6 +450,11 @@ explicitly labeled "laut Agent-Feedback", or says no data).
    purely a display/reshaping task (group by agent, list by day instead of only
    monthly aggregates). Anis explicitly deferred this ("to necu sad") — do not
    build until asked.
+   UX detail for the daily bonus view specifically (added same day, P.S. note):
+   prev/next-day arrow navigation instead of always showing only today; a
+   compact calendar control on the overview that doesn't take much space, which
+   expands into a full list of the month's days on click/drill-in — Anis
+   referenced Genesys's depth-of-view pattern as the interaction model to copy.
 
 ---
 

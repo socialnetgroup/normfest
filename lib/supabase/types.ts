@@ -393,6 +393,67 @@ export type Database = {
         }
         Relationships: []
       }
+      sales_feedback: {
+        Row: {
+          agent_id: string
+          comment: string | null
+          company_id: string
+          created_at: string
+          id: string
+          objection: string | null
+          outcome: string
+          product_id: string | null
+          qty: number | null
+          value_net: number | null
+        }
+        Insert: {
+          agent_id: string
+          comment?: string | null
+          company_id: string
+          created_at?: string
+          id?: string
+          objection?: string | null
+          outcome: string
+          product_id?: string | null
+          qty?: number | null
+          value_net?: number | null
+        }
+        Update: {
+          agent_id?: string
+          comment?: string | null
+          company_id?: string
+          created_at?: string
+          id?: string
+          objection?: string | null
+          outcome?: string
+          product_id?: string | null
+          qty?: number | null
+          value_net?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_feedback_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_feedback_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_feedback_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       settings: {
         Row: {
           key: string
@@ -424,6 +485,55 @@ export type Database = {
       }
     }
     Views: {
+      feedback_sales: {
+        Row: {
+          agent_id: string | null
+          company_id: string | null
+          created_at: string | null
+          product_id: string | null
+          qty: number | null
+          value_net: number | null
+        }
+        Insert: {
+          agent_id?: string | null
+          company_id?: string | null
+          created_at?: string | null
+          product_id?: string | null
+          qty?: number | null
+          value_net?: number | null
+        }
+        Update: {
+          agent_id?: string | null
+          company_id?: string | null
+          created_at?: string | null
+          product_id?: string | null
+          qty?: number | null
+          value_net?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_feedback_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_feedback_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_feedback_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_categories: {
         Row: {
           category_code: string | null
