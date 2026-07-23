@@ -661,6 +661,32 @@ Anis confirmed enrichment-derived suggestions (`external_opportunity`, already b
 the Firmenbrief's quote-backed catalog matches) are a fine general mechanism independent
 of this.
 
+**`product_relations` first real seed (same day):** since Anis didn't have pairs
+memorized off-hand, built a quick browsable catalog reference (all 17 categories,
+~10 sample real products each, search filter + notes panel) rather than asking him to
+recall SKUs blind. He came back with 7 pairs in plain language; 5 resolved cleanly to real
+SKUs and are now seeded via `scripts/seed-product-relations.mjs` (`origin='curated'`,
+`relation_type='cross_sell'`, weight 3): Aderendhülse isoliert→Federbandschellen-Zange,
+Bremsenreiniger→Zellstoffrolle (Putzpapier), Reifenventil→Schlagschrauber, Autoschwamm
+Hydro→Airspray-Druckflasche, Druckluft-Ausblaspistole→Nass-Trocken-Staubsauger. 2 pairs
+left unresolved rather than force a guess: "Schlagschrauber → Nuss-Set" (no generic
+impact-socket-set product found in the catalog under that or related names — only
+insulated EV-specific Steckschlüssel-Sätze, which don't fit) and "Lackierer Nitro →
+Abdeckungsfolie" (no product literally matching "Nitro" lacquer; found a real
+"Abdeckpapier vollgeleimt" for the covering half, but didn't want to guess the lacquer SKU
+without Anis confirming which one he means) — both need Anis to point at the exact
+product name/SKU rather than a best-guess match.
+
+**Verified end-to-end, not just inserted:** ran `fn_refresh_signals()` after seeding —
+correctly produced 0 `cross_sell` rows, because the type also requires a real 'sold'
+`sales_feedback` entry on the anchor product (not just the pair existing) — confirmed this
+is real gating, not a bug, by inserting one throwaway test feedback row (Bremsenreiniger,
+a real company), re-running the refresh, confirming the `cross_sell` signal fired with the
+correct related product and reason text, then deleting the test row and re-refreshing to
+restore the true empty state. `cross_sell` is proven working end-to-end; it simply won't
+show real rows until an agent actually logs a 'sold' outcome on one of these 5 anchor
+products for some company — expected, given real feedback volume is still tiny.
+
 ### M5 — Enrichment (week 6–8)
 Places resolver + ambiguous queue; website fetch/distill; analyze + guardrails; Brief-
 Karte; external_opportunity + brand_focus verification chain; admin enrichment panel;
