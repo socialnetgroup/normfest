@@ -384,3 +384,54 @@ describe("sales_feedback RLS", () => {
     expect(data?.id).toBe(feedbackId);
   });
 });
+
+describe("focus_lists / focus_list_items RLS", () => {
+  let listId = "";
+
+  afterAll(async () => {
+    if (listId) await admin.from("focus_lists").delete().eq("id", listId);
+  });
+
+  it("a non-admin agent cannot create a focus list", async () => {
+    const client = anonClient();
+    await client.auth.signInWithPassword({ email: agentEmail, password });
+
+    const { error } = await client.from("focus_lists").insert({ name: `RLS test list ${stamp}` });
+    expect(error).not.toBeNull();
+  });
+
+  it("an admin can create a focus list and add items", async () => {
+    const client = anonClient();
+    await client.auth.signInWithPassword({ email: adminEmail, password });
+
+    const { data: list, error: listErr } = await client
+      .from("focus_lists")
+      .insert({ name: `RLS test list ${stamp}`, active: true })
+      .select("id")
+      .single();
+    expect(listErr).toBeNull();
+    listId = list!.id;
+
+    const { data: company } = await admin.from("companies").select("id").limit(1).single();
+    const { error: itemErr } = await client
+      .from("focus_list_items")
+      .insert({ focus_list_id: listId, company_id: company!.id, note: "test" });
+    expect(itemErr).toBeNull();
+  });
+
+  it("any authenticated user can read the active focus list", async () => {
+    const client = anonClient();
+    await client.auth.signInWithPassword({ email: agentEmail, password });
+
+    const { data, error } = await client.from("focus_lists").select("id").eq("id", listId).single();
+    expect(error).toBeNull();
+    expect(data?.id).toBe(listId);
+
+    const { data: items, error: itemsErr } = await client
+      .from("focus_list_items")
+      .select("id")
+      .eq("focus_list_id", listId);
+    expect(itemsErr).toBeNull();
+    expect(items!.length).toBe(1);
+  });
+});

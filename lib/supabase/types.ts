@@ -306,6 +306,80 @@ export type Database = {
           },
         ]
       }
+      focus_list_items: {
+        Row: {
+          company_id: string
+          created_at: string
+          focus_list_id: string
+          id: string
+          note: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          focus_list_id: string
+          id?: string
+          note?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          focus_list_id?: string
+          id?: string
+          note?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "focus_list_items_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "focus_list_items_focus_list_id_fkey"
+            columns: ["focus_list_id"]
+            isOneToOne: false
+            referencedRelation: "focus_lists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      focus_lists: {
+        Row: {
+          active: boolean
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          note: string | null
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          note?: string | null
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          note?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "focus_lists_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           active: boolean

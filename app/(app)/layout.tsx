@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: "/", label: "Dashboard" },
   { href: "/firmen", label: "Firmen" },
   { href: "/katalog", label: "Katalog" },
+  { href: "/fokus", label: "Fokus" },
   { href: "/feedback/neu", label: "Feedback" },
 ];
 
