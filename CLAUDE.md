@@ -365,12 +365,29 @@ so far: the Agent Sales Guide (`2. Normfest - Agent - Sales Priručnik & Skripta
 collection `skript`, 21 heading-chunked sections + 8 objection_cards (objection + BS/DE
 response pairs), extracted via `scripts/ingest-kb.mjs` (docx→XML text extraction, no
 pandoc/soffice dependency — see script header). `/skript` page live (objection cards +
-full guide with TOC anchors). `/wissen` page live (German FTS search UI) but **empty** —
-the one other candidate source document, the Operativni Sales Performance Priručnik,
-mixes genuine methodology with real agent earnings/MBTI-profiles/personnel lists (same
-HR-adjacent sensitivity as `agent_daily_performance`, §4.11); Anis chose to skip ingesting
-it entirely rather than have it manually curated ("Preskoci ovaj dokument za sad"). Open:
-Anis to specify what should actually populate Wissen going forward.
+full guide with TOC anchors).
+
+**Wissen seed content (added 2026-07-23):** rather than leave Wissen empty until the
+Operativni Priručnik question resolves, Anis asked for a first non-empty pass aimed at
+new-agent onboarding: general Normfest company facts, a telesales-is-relationship-not-
+just-hard-selling framing, and the tool landscape (Speedy CRM, the existing dialer, this
+app). Seeded via `scripts/seed-wissen.mjs` (hand-written content, not extracted from a
+source doc) — 3 documents / 9 chunks: "Normfest — Unternehmensüberblick" (summarized,
+not copied, from normfest.de/en: founded 1948, Velbert HQ, 26,000+ products, Kfz/Caravan/
+Landtechnik + "Dress and Safe" workwear brand, European subsidiaries incl. Bosnia,
+sustainability/PV-system fact, digital services), "Telesales bei Normfest — Beziehung
+statt nur Verkauf" (relationship-building framing, points to Skript for the actual call
+structure/objection handling rather than duplicating it), "Werkzeuge im Arbeitsalltag"
+(Speedy = existing CRM/lead DB, the dialer stays the calling system, this app's role as
+prep/knowledge companion + the feedback-flywheel pitch). Deliberately excludes any
+commission/bonus/KPI-scorecard specifics — same HR-adjacent-sensitivity reasoning as the
+Operativni-Priručnik skip below. `/wissen` page now also renders a default browse view
+(grouped by document) when there's no search query, not just search results.
+That Priručnik question is still open: it mixes genuine sales methodology with real agent
+earnings/MBTI-profiles/personnel lists (same HR-adjacent sensitivity as
+`agent_daily_performance`, §4.11); Anis chose to skip ingesting it entirely rather than
+have it manually curated ("Preskoci ovaj dokument za sad"). Still open: Anis to decide if/
+when anything from that document should be curated into Wissen later.
 
 ---
 

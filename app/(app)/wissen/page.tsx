@@ -32,6 +32,16 @@ export default async function WissenPage({
           .limit(20)
       : null;
 
+  const browseDocs =
+    query.length === 0 && documentCount && documentCount > 0
+      ? await supabase
+          .from("kb_documents")
+          .select("id, title, kb_chunks(id, chunk_index, heading, content)")
+          .eq("collection", "wissen")
+          .is("deleted_at", null)
+          .order("created_at")
+      : null;
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -90,6 +100,31 @@ export default async function WissenPage({
         ) : (
           <p className="text-sm text-muted-foreground">Keine Treffer für &ldquo;{query}&rdquo;.</p>
         )
+      ) : null}
+
+      {browseDocs?.data ? (
+        <div className="flex flex-col gap-6">
+          {browseDocs.data.map((doc) => {
+            const chunks = [...doc.kb_chunks].sort((a, b) => a.chunk_index - b.chunk_index);
+            return (
+              <Card key={doc.id}>
+                <CardHeader>
+                  <CardTitle className="text-base">{doc.title}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-col divide-y">
+                    {chunks.map((c) => (
+                      <section key={c.id} className="py-3 first:pt-0">
+                        <h3 className="mb-1 font-heading text-sm font-semibold">{c.heading}</h3>
+                        <p className="whitespace-pre-line text-sm text-muted-foreground">{c.content}</p>
+                      </section>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       ) : null}
     </div>
   );
