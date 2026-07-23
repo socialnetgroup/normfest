@@ -467,6 +467,28 @@ Karte; external_opportunity + brand_focus verification chain; admin enrichment p
 pilot slice (~200 companies, one Gebiet).
 **Done:** ≥70% pilot ok; 20 briefs spot-checked; floor-cleaner canonical test passes.
 
+**Status (2026-07-23):** Google Cloud project + Places API key provisioned by Anis,
+whole pipeline built and piloted same day. `lib/enrichment/*.mjs` (Places resolver,
+website fetch/distill, Sonnet ANALYZE) shared between CLI scripts and the on-demand
+`/api/enrich` route (admin-only "Jetzt anreichern" button on `/firmen/[id]`). Brief-Karte
+on the company profile; ambiguous-queue admin screen at `/admin/enrichment`.
+
+**Pilot run (Gebiet 130022 / Emina Berilo, 200 companies, ~10.5 min, $ low-single-digits):**
+149 resolved cleanly (74.5%, clears the ≥70% bar), **48 ambiguous (24%)**, 3 no-match.
+113/149 resolved had a website (76%), 137 analyzed (12 skipped — no reviews/website
+text to work from), 120 produced at least one quote-backed external opportunity. Zero
+pipeline errors. The ambiguous rate is real and higher than expected going in — likely
+structural (many small Kfz shops share generic naming patterns in the same city) rather
+than a resolver defect; 48 real cases now sit in the admin queue for Anis to work
+through. **Not done yet:** the 20-brief spot-check and the floor-cleaner canonical test
+— both need Anis's direct review, not something to do solo. Full DB total after pilot:
+212 companies enriched (200 new + 12 from earlier manual testing).
+
+Also caught and fixed a real prompt bug while testing: the model was citing this
+codebase's own "(keine Website verfügbar)" placeholder text as if it were customer
+evidence, fabricating a weakness from the absence of data. Tightened the ANALYZE prompt
+to explicitly reject placeholder text as evidence — re-verified fixed.
+
 ### M6 — KB + Skript (week 8–9)
 KB ingest of the material folder; objection_cards extraction; Wissen + Skript menus.
 **Done:** all supplied materials published; objection cards searchable.
