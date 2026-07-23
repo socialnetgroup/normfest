@@ -22,6 +22,7 @@ const NAV_ITEMS = [
 const ADMIN_NAV_ITEMS = [
   { href: "/admin/team", label: "Team" },
   { href: "/admin/enrichment", label: "Enrichment" },
+  { href: "/admin/vis-import", label: "VIS Import" },
 ];
 
 export default async function AppLayout({

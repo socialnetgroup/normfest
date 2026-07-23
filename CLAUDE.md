@@ -1031,14 +1031,32 @@ explicitly labeled "laut Agent-Feedback", or says no data).
    one-off pass. 41% of rows have no `description`, 29% no `pack_content` — spot-check
    suggests this is genuine catalog reality (many product cards simply don't have prose
    description text), not an extraction failure.
-9. **Standalone VIS-list upload CMS (added 2026-07-23, backlog — not started):** Anis
-   currently needs Claude Code to re-run `scripts/import-vis.mjs` for every VIS-list
-   refresh. Wants a self-serve admin screen instead — upload the new weekly Excel file
-   (Mondays), it re-runs the same mapping/dedup/merge-queue logic (§11.2) and updates
-   `companies` without needing a dev session. Same shape as the existing catalog-ingest
-   admin panel (§5, "Admin adds: catalog ingest panel") — likely reuses that pattern
-   (upload → server-side job → progress/QA → commit) rather than inventing a new one.
-   Not scoped further — revisit when picked up.
+9. **Standalone VIS-list upload CMS — shipped (2026-07-24).** `/admin/vis-import`: upload
+   the weekly VIS Excel export, get back parsed/written/skipped counts + a sample of
+   skipped rows, no dev session needed. Simpler shape than the catalog-ingest panel
+   deliberately — no staging table/QA queue, since the underlying import has always been a
+   synchronous parse-validate-upsert (on `kundennummer`), not a batched LLM-extraction
+   pipeline; building a QA queue for logic that already either parses a row correctly or
+   skips it with a stated reason would have been premature scope.
+   Parsing/mapping/upsert logic extracted from `scripts/import-vis.mjs` into
+   `lib/vis-import/core.mjs` (`parseVisWorkbook`, `writeCompanies`) so the CLI script and
+   the new `app/api/admin/vis-import/route.ts` share exactly one implementation — verified
+   the refactor changed nothing by dry-running the CLI script against the real
+   `input/VIS.xlsx` both before and after (13,573 parsed / 1 skipped, identical). Route is
+   admin-gated the same way as `/api/enrich` (session check → profile role check → service-
+   role client for the actual write); `maxDuration = 300` since the full ~13.5k-row refresh
+   upserts in batches of 1000. Verified end-to-end three ways: (1) a throwaway Node script
+   exercising `parseVisWorkbook`/`writeCompanies` directly, including an idempotency check
+   (re-running the same insert updates instead of duplicating); (2) the actual `/admin/vis-
+   import` page in a real browser (logged in via a throwaway admin test account, deleted
+   after) with a synthetic file attached to the real `<input type="file">` via a
+   `DataTransfer`/`File` injection (browser file-picker dialogs aren't scriptable, but this
+   produces a real `File` the input and its `change` handler see exactly as if a person had
+   picked it) — full click-through: page loads with the real company count, submit posts
+   real `multipart/form-data` to the route, response renders in the UI ("Zeilen gelesen: 1,
+   Übernommen: 1, Übersprungen: 0"); (3) confirmed the row actually landed in `companies`
+   via the service-role client, then deleted the test row and the test admin user. Nav
+   link added ("VIS Import") under the admin section.
 10. **Role model stays admin/agent only for now (decided 2026-07-23):** Anis floated TL
     being able to build Fokus lists too, but there's no TL account yet — his call was
     "ti pravi sve u ovom jednom nalogu, master... ne opterećuj se userima za sad." Build
