@@ -489,6 +489,21 @@ codebase's own "(keine Website verfügbar)" placeholder text as if it were custo
 evidence, fabricating a weakness from the absence of data. Tightened the ANALYZE prompt
 to explicitly reject placeholder text as evidence — re-verified fixed.
 
+**Concrete product matching (added 2026-07-23, Anis):** `external_opportunities` used to
+stop at a free-text category label ("Lackier- und Aufbereitungsprodukte") — useful, but
+left the agent to manually search the Katalog. Each opportunity now also carries
+`catalog_category` (the model must pick one of the 17 real `product_categories`, enforced
+via json_schema enum — never invented) and `search_terms` (1-3 German words it expects in
+a real product name). `matchCatalogProducts()` then does a real `ilike` lookup against
+`products` scoped to that category, attaching up to 3 real SKU matches
+(`matched_products`) shown as clickable Katalog links on the Firmenbrief. Real hit rate on
+one test company: 4/6 opportunities matched a real product (Politur, tire-valve parts,
+engine-oil-circuit cleaner, cable connectors); the other 2 correctly came back empty
+(search terms like "Bremsscheibe"/"Stoßdämpfer" don't exist in the catalog's PKW-parts
+naming) — no fabricated matches, consistent with the "don't fire without data" principle.
+Not yet re-run across the full 200-company pilot — only the schema/matching logic is
+proven on a single company so far.
+
 ### M6 — KB + Skript (week 8–9)
 KB ingest of the material folder; objection_cards extraction; Wissen + Skript menus.
 **Done:** all supplied materials published; objection cards searchable.

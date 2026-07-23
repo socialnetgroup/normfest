@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
@@ -190,14 +191,32 @@ export default async function CompanyProfilePage({
                   Externe Chancen
                 </p>
                 <ul className="flex flex-col gap-2 text-sm">
-                  {(enrichment.external_opportunities as { category: string; reason: string; quote: string }[]).map(
-                    (o, i) => (
-                      <li key={i}>
-                        <span className="font-medium">{o.category}</span> — {o.reason}
-                        <p className="mt-0.5 text-xs text-muted-foreground italic">&ldquo;{o.quote}&rdquo;</p>
-                      </li>
-                    ),
-                  )}
+                  {(
+                    enrichment.external_opportunities as {
+                      category: string;
+                      reason: string;
+                      quote: string;
+                      matched_products?: { id: string; sku: string; name: string }[];
+                    }[]
+                  ).map((o, i) => (
+                    <li key={i}>
+                      <span className="font-medium">{o.category}</span> — {o.reason}
+                      <p className="mt-0.5 text-xs text-muted-foreground italic">&ldquo;{o.quote}&rdquo;</p>
+                      {o.matched_products && o.matched_products.length > 0 ? (
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          {o.matched_products.map((p) => (
+                            <Link
+                              key={p.id}
+                              href={`/katalog/${p.id}`}
+                              className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary hover:bg-primary/20"
+                            >
+                              {p.name} ({p.sku})
+                            </Link>
+                          ))}
+                        </div>
+                      ) : null}
+                    </li>
+                  ))}
                 </ul>
               </div>
             ) : null}
