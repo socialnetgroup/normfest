@@ -157,6 +157,7 @@ export type Database = {
           article_count: number | null
           branche_code: string | null
           branche_name: string | null
+          brand_focus: string | null
           call_priority: boolean
           cluster: string | null
           created_at: string
@@ -200,6 +201,7 @@ export type Database = {
           article_count?: number | null
           branche_code?: string | null
           branche_name?: string | null
+          brand_focus?: string | null
           call_priority?: boolean
           cluster?: string | null
           created_at?: string
@@ -243,6 +245,7 @@ export type Database = {
           article_count?: number | null
           branche_code?: string | null
           branche_name?: string | null
+          brand_focus?: string | null
           call_priority?: boolean
           cluster?: string | null
           created_at?: string
@@ -282,6 +285,111 @@ export type Database = {
           verband?: string | null
         }
         Relationships: []
+      }
+      company_enrichment: {
+        Row: {
+          analysis_model: string | null
+          analysis_raw: Json | null
+          analyzed_at: string | null
+          brand_focus_guess: string[] | null
+          company_id: string
+          created_at: string
+          external_opportunities: Json | null
+          id: string
+          places_address: string | null
+          places_ambiguous: boolean
+          places_candidates: Json | null
+          places_name: string | null
+          places_phone: string | null
+          places_place_id: string | null
+          places_rating: number | null
+          places_resolved_at: string | null
+          places_review_count: number | null
+          places_reviews: Json | null
+          places_website: string | null
+          strengths: string[] | null
+          updated_at: string
+          verified: boolean
+          verified_at: string | null
+          verified_by: string | null
+          weaknesses: string[] | null
+          website_fetched_at: string | null
+          website_text: string | null
+        }
+        Insert: {
+          analysis_model?: string | null
+          analysis_raw?: Json | null
+          analyzed_at?: string | null
+          brand_focus_guess?: string[] | null
+          company_id: string
+          created_at?: string
+          external_opportunities?: Json | null
+          id?: string
+          places_address?: string | null
+          places_ambiguous?: boolean
+          places_candidates?: Json | null
+          places_name?: string | null
+          places_phone?: string | null
+          places_place_id?: string | null
+          places_rating?: number | null
+          places_resolved_at?: string | null
+          places_review_count?: number | null
+          places_reviews?: Json | null
+          places_website?: string | null
+          strengths?: string[] | null
+          updated_at?: string
+          verified?: boolean
+          verified_at?: string | null
+          verified_by?: string | null
+          weaknesses?: string[] | null
+          website_fetched_at?: string | null
+          website_text?: string | null
+        }
+        Update: {
+          analysis_model?: string | null
+          analysis_raw?: Json | null
+          analyzed_at?: string | null
+          brand_focus_guess?: string[] | null
+          company_id?: string
+          created_at?: string
+          external_opportunities?: Json | null
+          id?: string
+          places_address?: string | null
+          places_ambiguous?: boolean
+          places_candidates?: Json | null
+          places_name?: string | null
+          places_phone?: string | null
+          places_place_id?: string | null
+          places_rating?: number | null
+          places_resolved_at?: string | null
+          places_review_count?: number | null
+          places_reviews?: Json | null
+          places_website?: string | null
+          strengths?: string[] | null
+          updated_at?: string
+          verified?: boolean
+          verified_at?: string | null
+          verified_by?: string | null
+          weaknesses?: string[] | null
+          website_fetched_at?: string | null
+          website_text?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_enrichment_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "company_enrichment_verified_by_fkey"
+            columns: ["verified_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       company_rfm: {
         Row: {
@@ -361,6 +469,51 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      enrichment_jobs: {
+        Row: {
+          company_id: string
+          created_at: string
+          error: string | null
+          id: string
+          requested_by: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          requested_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          requested_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enrichment_jobs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enrichment_jobs_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]

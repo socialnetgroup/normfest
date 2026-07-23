@@ -579,3 +579,72 @@ describe("product_relations / brand_consumption_profiles RLS", () => {
     expect(error).not.toBeNull();
   });
 });
+
+describe("company_enrichment / enrichment_jobs RLS (M5)", () => {
+  let companyId = "";
+  let jobId = "";
+  let enrichmentId = "";
+
+  beforeAll(async () => {
+    const { data: company } = await admin.from("companies").select("id").limit(1).single();
+    companyId = company!.id;
+  });
+
+  afterAll(async () => {
+    if (enrichmentId) await admin.from("company_enrichment").delete().eq("id", enrichmentId);
+    if (jobId) await admin.from("enrichment_jobs").delete().eq("id", jobId);
+  });
+
+  it("a non-admin cannot create an enrichment job or enrichment row", async () => {
+    const client = anonClient();
+    await client.auth.signInWithPassword({ email: agentEmail, password });
+
+    const { error: jobErr } = await client.from("enrichment_jobs").insert({ company_id: companyId });
+    expect(jobErr).not.toBeNull();
+
+    const { error: enrichErr } = await client
+      .from("company_enrichment")
+      .insert({ company_id: companyId });
+    expect(enrichErr).not.toBeNull();
+  });
+
+  it("an admin can create a job + enrichment row, and any authenticated user can read them", async () => {
+    const adminClient = anonClient();
+    await adminClient.auth.signInWithPassword({ email: adminEmail, password });
+
+    const { data: job, error: jobErr } = await adminClient
+      .from("enrichment_jobs")
+      .insert({ company_id: companyId, status: "pending" })
+      .select("id")
+      .single();
+    expect(jobErr).toBeNull();
+    jobId = job!.id;
+
+    const { data: enrichment, error: enrichErr } = await adminClient
+      .from("company_enrichment")
+      .insert({ company_id: companyId, places_name: "RLS Test Place" })
+      .select("id")
+      .single();
+    expect(enrichErr).toBeNull();
+    enrichmentId = enrichment!.id;
+
+    const agentClient = anonClient();
+    await agentClient.auth.signInWithPassword({ email: agentEmail, password });
+
+    const { data: readJob, error: readJobErr } = await agentClient
+      .from("enrichment_jobs")
+      .select("id")
+      .eq("id", jobId)
+      .single();
+    expect(readJobErr).toBeNull();
+    expect(readJob?.id).toBe(jobId);
+
+    const { data: readEnrichment, error: readEnrichErr } = await agentClient
+      .from("company_enrichment")
+      .select("id, places_name")
+      .eq("id", enrichmentId)
+      .single();
+    expect(readEnrichErr).toBeNull();
+    expect(readEnrichment?.places_name).toBe("RLS Test Place");
+  });
+});
