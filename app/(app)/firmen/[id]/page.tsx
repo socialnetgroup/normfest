@@ -8,6 +8,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { BrandFocusVerifyButton } from "@/components/brand-focus-verify-button";
+import { EnrichNowButton } from "@/components/enrich-now-button";
 import { FeedbackForm } from "@/components/feedback-form";
 import { signalTypeLabel } from "@/lib/signals";
 import { createClient } from "@/lib/supabase/server";
@@ -73,6 +74,8 @@ export default async function CompanyProfilePage({
   }
 
   const agentId = userData.user!.id;
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", agentId).single();
+  const isAdmin = profile?.role === "admin";
 
   return (
     <div className="flex flex-col gap-6">
@@ -92,17 +95,24 @@ export default async function CompanyProfilePage({
         </p>
       </div>
 
-      {enrichment && (enrichment.places_place_id || enrichment.strengths?.length || enrichment.weaknesses?.length) ? (
+      {(enrichment && (enrichment.places_place_id || enrichment.strengths?.length || enrichment.weaknesses?.length)) ||
+      isAdmin ? (
         <Card>
-          <CardHeader>
-            <CardTitle>Firmenbrief</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Laut Google-Bewertungen{enrichment.places_website ? " & Website" : ""} — KI-Analyse, nicht verifiziert
-              wo nicht markiert.
-            </p>
+          <CardHeader className="flex flex-row items-start justify-between gap-3">
+            <div>
+              <CardTitle>Firmenbrief</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Laut Google-Bewertungen{enrichment?.places_website ? " & Website" : ""} — KI-Analyse, nicht
+                verifiziert wo nicht markiert.
+              </p>
+            </div>
+            {isAdmin ? <EnrichNowButton companyId={company.id} /> : null}
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            {enrichment.places_rating !== null ? (
+            {!enrichment || (!enrichment.places_place_id && !enrichment.strengths?.length) ? (
+              <p className="text-sm text-muted-foreground">Noch nicht angereichert.</p>
+            ) : null}
+            {enrichment && enrichment.places_rating !== null ? (
               <p className="text-sm">
                 <span className="font-medium">{ratingFmt.format(enrichment.places_rating)}/5</span>{" "}
                 <span className="text-muted-foreground">
@@ -124,7 +134,7 @@ export default async function CompanyProfilePage({
               </p>
             ) : null}
 
-            {enrichment.strengths && enrichment.strengths.length > 0 ? (
+            {enrichment?.strengths && enrichment.strengths.length > 0 ? (
               <div>
                 <p className="mb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Stärken</p>
                 <ul className="list-disc pl-5 text-sm">
@@ -135,7 +145,7 @@ export default async function CompanyProfilePage({
               </div>
             ) : null}
 
-            {enrichment.weaknesses && enrichment.weaknesses.length > 0 ? (
+            {enrichment?.weaknesses && enrichment.weaknesses.length > 0 ? (
               <div>
                 <p className="mb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Schwächen</p>
                 <ul className="list-disc pl-5 text-sm">
@@ -146,7 +156,7 @@ export default async function CompanyProfilePage({
               </div>
             ) : null}
 
-            {enrichment.brand_focus_guess && enrichment.brand_focus_guess.length > 0 ? (
+            {enrichment?.brand_focus_guess && enrichment.brand_focus_guess.length > 0 ? (
               <div>
                 <p className="mb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                   Markenfokus (KI-Vermutung)
@@ -174,7 +184,7 @@ export default async function CompanyProfilePage({
               </div>
             ) : null}
 
-            {enrichment.external_opportunities && Array.isArray(enrichment.external_opportunities) && enrichment.external_opportunities.length > 0 ? (
+            {enrichment?.external_opportunities && Array.isArray(enrichment.external_opportunities) && enrichment.external_opportunities.length > 0 ? (
               <div>
                 <p className="mb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                   Externe Chancen
