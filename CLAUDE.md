@@ -637,9 +637,29 @@ which types compute real rows today vs. are deferred on data). Winner stats + ge
 draft also shipped same day (see §7) — with only 2 real `sales_feedback` rows in
 production so far, `focus_winner_min_sold` starts at 1 (admin-adjustable in `settings`)
 so the feature is demonstrably useful rather than empty; raise the threshold once real
-volume grows. **Not done yet:** the 30-sample plausibility check with Anis+Sanin — needs
-the two of them to actually sit down with real signal output, not something buildable
-solo.
+volume grows.
+
+**Plausibility check — done (2026-07-23), partial by necessity:** of the 6 Tier-1 types,
+only `revenue_trend_risk` had any real rows to check (1,000 of them) — the other five
+(focus_list_push, feedback_replenishment, seasonal_push, new_product_match, cross_sell)
+are still at zero rows, waiting on data prerequisites, so there was nothing to plausibility-
+check for them yet. Reviewed 31 real `revenue_trend_risk` samples (mix of top-score and
+spread-score) via an interactive review artifact — **Anis: all plausible.** The
+small-looking absolute revenue values (e.g. 134.78 → 45.28) are real, not a units bug —
+these are genuinely small independent shops, per Anis directly. Still open: Sanin hasn't
+reviewed anything yet (this pass was Anis solo) — worth a second pass once he's available,
+and the other 5 types still need their own check once they have real data to look at.
+
+**Cross-sell/upsell data-source clarification (same day, Anis asked):** neither
+`cross_sell` nor `upsell_pack` is Tier-2-locked by design — `cross_sell`'s `curated` origin
+(admin-defined pairs in `product_relations`, same pattern as the brand-profile workshop) is
+already built and computing, just empty because nobody's seeded any pairs yet; its
+`winner_derived` origin and `upsell_pack` both have Tier-1 paths (repeat "sold" feedback)
+that are simply unbuilt/unfired for lack of volume, not lack of a Tier-1 path. Only the
+Tier-2 "mined co-purchase lift" variant of `cross_sell` strictly needs real invoice data.
+Anis confirmed enrichment-derived suggestions (`external_opportunity`, already built —
+the Firmenbrief's quote-backed catalog matches) are a fine general mechanism independent
+of this.
 
 ### M5 — Enrichment (week 6–8)
 Places resolver + ambiguous queue; website fetch/distill; analyze + guardrails; Brief-
