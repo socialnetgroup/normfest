@@ -680,9 +680,17 @@ text to work from), 120 produced at least one quote-backed external opportunity.
 pipeline errors. The ambiguous rate is real and higher than expected going in — likely
 structural (many small Kfz shops share generic naming patterns in the same city) rather
 than a resolver defect; 48 real cases now sit in the admin queue for Anis to work
-through. **Not done yet:** the 20-brief spot-check and the floor-cleaner canonical test
-— both need Anis's direct review, not something to do solo. Full DB total after pilot:
-212 companies enriched (200 new + 12 from earlier manual testing).
+through. Full DB total after pilot: 212 companies enriched (200 new + 12 from earlier
+manual testing).
+
+**20-brief spot-check — done (2026-07-23):** reviewed via an interactive artifact showing
+real source (reviews/website) next to each AI claim, 20 companies mixed across
+review-based/website-only/name-branche-only evidence. **Anis: "Analyzen generell sauber
+und gut und auch immer konstant"** (quote-fidelity holds up, consistently) — with one real
+finding along the way, the `external_opportunities` branche-fallback gap, now fixed (see
+above). Floor-cleaner canonical test specifically not separately re-verified — the
+underlying quote→opportunity→matched-product chain it was meant to prove is the same
+mechanism spot-checked here, just not that literal example again.
 
 Also caught and fixed a real prompt bug while testing: the model was citing this
 codebase's own "(keine Website verfügbar)" placeholder text as if it were customer
@@ -703,6 +711,25 @@ engine-oil-circuit cleaner, cable connectors); the other 2 correctly came back e
 naming) — no fabricated matches, consistent with the "don't fire without data" principle.
 Not yet re-run across the full 200-company pilot — only the schema/matching logic is
 proven on a single company so far.
+
+**`external_opportunities` branche-fallback fix (added 2026-07-23, from the M5 spot-check):**
+Anis's spot-check flagged that opportunities aren't always returned even when they should
+be. Checked against real data: 94.1% of the 492 analyzed companies get ≥1 opportunity, and
+the 5.9% that don't split into two groups — genuinely-irrelevant businesses (potato
+wholesaler, energy co-op — correctly empty, forcing a Kfz pitch there would be exactly the
+fabrication §9's guardrail exists to prevent) and a smaller, real gap: logistics/fleet
+companies (e.g. "SeaLand Project Logistics") that plausibly operate vehicles needing NFZ
+parts, but got zero opportunities because the prompt only allowed branche-derived
+`evidence_source: "name_branche"` reasoning when there was ZERO Google data — the moment
+any reviews/website text existed, that fallback silently stopped being offered, even if
+the actual text said nothing about fleet maintenance. Fixed in `buildPrompt()`
+(`lib/enrichment/analyze.mjs`): branche-derived opportunity reasoning is now always
+available in parallel with review/website evidence, not gated behind having zero Google
+data (strengths/weaknesses remain untouched — still strictly evidence-bound). Verified by
+re-analyzing SeaLand directly: 0 → 5 opportunities, correctly mixing real website quotes
+("6 Volvo-Zugmaschinen der neuesten Generation") with branche-derived reasoning, all
+matched to real catalog SKUs. Not yet re-run across the other ~26 previously-empty
+companies to confirm the fix generalizes — cheap to do (~$0.04/company) whenever useful.
 
 **Name/branche-only analysis + purchase-priority batching (added 2026-07-23):** not
 every company has a Google Business Profile, and the company name/branche alone is often
