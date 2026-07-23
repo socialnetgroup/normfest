@@ -332,7 +332,9 @@ export type Database = {
       }
       company_enrichment: {
         Row: {
+          analysis_input_tokens: number | null
           analysis_model: string | null
+          analysis_output_tokens: number | null
           analysis_raw: Json | null
           analyzed_at: string | null
           brand_focus_guess: string[] | null
@@ -361,7 +363,9 @@ export type Database = {
           website_text: string | null
         }
         Insert: {
+          analysis_input_tokens?: number | null
           analysis_model?: string | null
+          analysis_output_tokens?: number | null
           analysis_raw?: Json | null
           analyzed_at?: string | null
           brand_focus_guess?: string[] | null
@@ -390,7 +394,9 @@ export type Database = {
           website_text?: string | null
         }
         Update: {
+          analysis_input_tokens?: number | null
           analysis_model?: string | null
+          analysis_output_tokens?: number | null
           analysis_raw?: Json | null
           analyzed_at?: string | null
           brand_focus_guess?: string[] | null

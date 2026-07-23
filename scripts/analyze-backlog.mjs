@@ -9,8 +9,8 @@
 //
 // Usage: node scripts/analyze-backlog.mjs [limit]
 // Omit limit to process the entire backlog.
-import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
+import { getAnthropicClient } from "../lib/ai/provider.mjs";
 import { analyzeCompanyEnrichment } from "../lib/enrichment/analyze.mjs";
 
 if (process.env.NEXT_PUBLIC_SUPABASE_URL === undefined) process.loadEnvFile(".env.local");
@@ -18,7 +18,7 @@ if (process.env.NEXT_PUBLIC_SUPABASE_URL === undefined) process.loadEnvFile(".en
 const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
-const anthropic = new Anthropic();
+const anthropic = getAnthropicClient();
 
 async function pool(items, worker, concurrency) {
   let next = 0;
@@ -38,12 +38,24 @@ function purchaseTier(c) {
   return 3;
 }
 
-const stats = { analyzed: 0, errors: 0 };
+// $2/$10 per M tokens — Sonnet 5 intro pricing through 2026-08-31 (CLAUDE.md
+// claude-api skill cache, 2026-06-24). Real usage is now tracked per-row
+// (company_enrichment.analysis_input_tokens/analysis_output_tokens, added
+// this migration) specifically because the pre-instrumentation cost
+// estimate for this exact script turned out to be well under what was
+// actually spent — this printed total should be trusted over any
+// character-count guess.
+const SONNET_5_INTRO_INPUT_PER_M = 2;
+const SONNET_5_INTRO_OUTPUT_PER_M = 10;
+
+const stats = { analyzed: 0, errors: 0, inputTokens: 0, outputTokens: 0 };
 
 async function analyzeOne(target, index, total) {
   try {
-    await analyzeCompanyEnrichment(admin, anthropic, target.company_id);
+    const result = await analyzeCompanyEnrichment(admin, anthropic, target.company_id);
     stats.analyzed++;
+    stats.inputTokens += result.usage.input_tokens;
+    stats.outputTokens += result.usage.output_tokens;
   } catch (err) {
     console.error(`[${index + 1}/${total}] ${target.name}: FAILED —`, err.message);
     stats.errors++;
@@ -91,7 +103,14 @@ async function main() {
   await pool(run, (t, i) => analyzeOne(t, i, run.length), 5);
   const seconds = Math.round((Date.now() - start) / 1000);
 
+  const cost =
+    (stats.inputTokens * SONNET_5_INTRO_INPUT_PER_M) / 1e6 +
+    (stats.outputTokens * SONNET_5_INTRO_OUTPUT_PER_M) / 1e6;
   console.log(`\nDone in ${seconds}s. Final stats:`, stats);
+  console.log(
+    `Real cost: $${cost.toFixed(4)} for ${stats.analyzed} companies ` +
+      `($${(cost / Math.max(stats.analyzed, 1)).toFixed(4)}/company).`,
+  );
 }
 
 main();

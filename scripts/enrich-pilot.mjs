@@ -8,8 +8,8 @@
 // Gebiet — used for the post-pilot 1000/1800-company rollout-readiness
 // batches (2026-07-23, Anis: wants a broader sample before a real go-live
 // funding decision, not scoped to one Gebiet anymore).
-import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
+import { getAnthropicClient } from "../lib/ai/provider.mjs";
 import { resolvePlaceForCompany } from "../lib/enrichment/places.mjs";
 import { fetchWebsiteForCompany } from "../lib/enrichment/website.mjs";
 import { analyzeCompanyEnrichment } from "../lib/enrichment/analyze.mjs";
@@ -19,7 +19,7 @@ if (process.env.NEXT_PUBLIC_SUPABASE_URL === undefined) process.loadEnvFile(".en
 const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
-const anthropic = new Anthropic();
+const anthropic = getAnthropicClient();
 
 async function pool(items, worker, concurrency) {
   let next = 0;
@@ -32,6 +32,10 @@ async function pool(items, worker, concurrency) {
   await Promise.all(Array.from({ length: concurrency }, run));
 }
 
+// $2/$10 per M tokens — Sonnet 5 intro pricing through 2026-08-31.
+const SONNET_5_INTRO_INPUT_PER_M = 2;
+const SONNET_5_INTRO_OUTPUT_PER_M = 10;
+
 const stats = {
   resolved: 0,
   ambiguous: 0,
@@ -40,6 +44,8 @@ const stats = {
   analyzedWithGoogleData: 0,
   analyzedNameOnly: 0,
   errors: 0,
+  analyzeInputTokens: 0,
+  analyzeOutputTokens: 0,
 };
 
 async function processCompany(company, index, total) {
@@ -68,9 +74,11 @@ async function processCompany(company, index, total) {
     // VIS master data) is evidence enough on its own, and not every company
     // has a Google Business Profile in the first place.
     try {
-      await analyzeCompanyEnrichment(admin, anthropic, company.id);
+      const result = await analyzeCompanyEnrichment(admin, anthropic, company.id);
       if (hasGoogleData) stats.analyzedWithGoogleData++;
       else stats.analyzedNameOnly++;
+      stats.analyzeInputTokens += result.usage.input_tokens;
+      stats.analyzeOutputTokens += result.usage.output_tokens;
     } catch (err) {
       console.error(`[${index + 1}/${total}] ${company.name}: analyze failed —`, err.message);
       stats.errors++;
@@ -147,7 +155,13 @@ async function main() {
   await pool(targets, (c, i) => processCompany(c, i, targets.length), 5);
   const seconds = Math.round((Date.now() - start) / 1000);
 
+  const analyzeCost =
+    (stats.analyzeInputTokens * SONNET_5_INTRO_INPUT_PER_M) / 1e6 +
+    (stats.analyzeOutputTokens * SONNET_5_INTRO_OUTPUT_PER_M) / 1e6;
   console.log(`\nDone in ${seconds}s. Final stats:`, stats);
+  console.log(
+    `Real ANALYZE cost (Anthropic only, excludes Places API spend): $${analyzeCost.toFixed(4)}.`,
+  );
 }
 
 main();

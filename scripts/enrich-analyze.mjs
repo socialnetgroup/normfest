@@ -2,8 +2,8 @@
 // shared with the on-demand API route.
 //
 // Usage: node scripts/enrich-analyze.mjs <companyId> [companyId...]
-import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
+import { getAnthropicClient } from "../lib/ai/provider.mjs";
 import { analyzeCompanyEnrichment } from "../lib/enrichment/analyze.mjs";
 
 if (process.env.NEXT_PUBLIC_SUPABASE_URL === undefined) process.loadEnvFile(".env.local");
@@ -11,7 +11,7 @@ if (process.env.NEXT_PUBLIC_SUPABASE_URL === undefined) process.loadEnvFile(".en
 const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
-const anthropic = new Anthropic();
+const anthropic = getAnthropicClient();
 
 async function analyzeOne(companyId) {
   const { data: company } = await admin.from("companies").select("name").eq("id", companyId).single();
@@ -23,7 +23,7 @@ async function analyzeOne(companyId) {
       console.log(`${label}: no reviews or website text — nothing to analyze, skipping`);
       return;
     }
-    const { parsed } = result;
+    const { parsed, usage } = result;
     console.log(`\n=== ${label} ===`);
     console.log("Stärken:", parsed.strengths.map((s) => `${s.claim} ("${s.quote}")`));
     console.log("Schwächen:", parsed.weaknesses.map((w) => `${w.claim} ("${w.quote}")`));
@@ -32,6 +32,7 @@ async function analyzeOne(companyId) {
       "Chancen:",
       parsed.external_opportunities.map((o) => `${o.category} — ${o.reason} ("${o.quote}")`),
     );
+    console.log(`Tokens: ${usage.input_tokens} in / ${usage.output_tokens} out`);
   } catch (err) {
     console.error(`${label}: FAILED —`, err.message);
   }

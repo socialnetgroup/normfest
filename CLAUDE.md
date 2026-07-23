@@ -737,6 +737,27 @@ this milestone is blocked on a decision that isn't mine to make, not on missing 
 - **Tier-2 import** — still waiting on Anis confirming invoice access/format (§14 item 1).
 - **Hypercare** — not applicable until an actual go-live date exists.
 
+**Cost investigation (2026-07-23, same day):** Anis reported the $10 top-up got fully
+consumed by the M7 acceptance runs + this backlog batch combined and asked why. A
+character-count estimate from real stored prompts (avg ~6,176 chars/prompt, ~2,417
+chars/output) put the expected cost at only ~$1.83–2.21 per 200 companies — a real gap
+from what was actually spent, and one I couldn't fully close: the free `count_tokens`
+endpoint that would give an exact number is *also* blocked at zero credit balance, so
+there was no way to verify the true chars-per-token ratio for German/mixed text against
+this specific pricing tier. Rather than keep guessing, fixed the actual gap — **no
+durable token-usage tracking existed anywhere**, despite §3.2.9 promising "usage counters
+in admin." Added `company_enrichment.analysis_input_tokens`/`analysis_output_tokens`
+(migration `20260723250000_enrichment_token_usage.sql`), wired through
+`analyzeCompanyEnrichment`'s return value, and every enrichment script
+(`analyze-backlog.mjs`, `enrich-pilot.mjs`, `enrich-analyze.mjs`) now prints/persists the
+*real* per-call cost instead of an estimate. Also swapped every remaining raw
+`new Anthropic()` in the enrichment scripts for the shared `getAnthropicClient()` adapter
+while touching these files (§3.2.9 consistency). Confirmed the instrumentation is wired
+correctly with a 1-company test call — but credit is fully gone again (same "credit
+balance too low" error), so there's no real number yet. The next successful run — however
+small — will finally answer whether it's ~$0.01/company (my estimate) or something
+higher, with data instead of a guess.
+
 ### M9 — Call QA / Coaching Assistant (backlog, post-MVP, added 2026-07-23)
 Not scoped yet — revisit when we get here, at which point Anis picks/provisions the
 external ASR service. Concept: TL manually uploads a saved call recording (mp3/wav —
