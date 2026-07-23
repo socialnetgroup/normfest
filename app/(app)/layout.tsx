@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { href: "/fokus", label: "Fokus" },
   { href: "/wissen", label: "Wissen" },
   { href: "/skript", label: "Skript" },
+  { href: "/assistent", label: "Assistent" },
   { href: "/feedback/neu", label: "Feedback" },
 ];
 

@@ -654,3 +654,119 @@ describe("company_enrichment / enrichment_jobs RLS (M5)", () => {
     expect(readEnrichment?.places_name).toBe("RLS Test Place");
   });
 });
+
+describe("chat_log RLS + chat tool RPCs (M7)", () => {
+  let companyId = "";
+  let agentChatLogId = "";
+
+  beforeAll(async () => {
+    const { data: candidates } = await admin.from("companies").select("id, name").limit(1);
+    companyId = candidates![0].id;
+  });
+
+  afterAll(async () => {
+    if (agentChatLogId) await admin.from("chat_log").delete().eq("id", agentChatLogId);
+  });
+
+  it("an agent can insert their own chat_log row and read it back", async () => {
+    const client = anonClient();
+    await client.auth.signInWithPassword({ email: agentEmail, password });
+
+    const { data, error } = await client
+      .from("chat_log")
+      .insert({ agent_id: agentId, role: "user", content: "RLS test message" })
+      .select("id")
+      .single();
+    expect(error).toBeNull();
+    agentChatLogId = data!.id;
+
+    const { data: readBack, error: readErr } = await client
+      .from("chat_log")
+      .select("content")
+      .eq("id", agentChatLogId)
+      .single();
+    expect(readErr).toBeNull();
+    expect(readBack?.content).toBe("RLS test message");
+  });
+
+  it("an agent cannot insert a chat_log row for another agent", async () => {
+    const client = anonClient();
+    await client.auth.signInWithPassword({ email: agentEmail, password });
+
+    const { error } = await client
+      .from("chat_log")
+      .insert({ agent_id: adminId, role: "user", content: "spoofed" });
+    expect(error).not.toBeNull();
+  });
+
+  it("an agent cannot read another agent's chat_log row, but an admin can", async () => {
+    const adminClient = anonClient();
+    await adminClient.auth.signInWithPassword({ email: adminEmail, password });
+    const { data: adminOwnRow } = await adminClient
+      .from("chat_log")
+      .insert({ agent_id: adminId, role: "user", content: "admin-only message" })
+      .select("id")
+      .single();
+
+    const agentClient = anonClient();
+    await agentClient.auth.signInWithPassword({ email: agentEmail, password });
+    const { data: agentRead, error: agentReadErr } = await agentClient
+      .from("chat_log")
+      .select("id")
+      .eq("id", adminOwnRow!.id)
+      .maybeSingle();
+    expect(agentReadErr).toBeNull();
+    expect(agentRead).toBeNull(); // filtered out by RLS, not an error
+
+    const { data: adminRead, error: adminReadErr } = await adminClient
+      .from("chat_log")
+      .select("id")
+      .eq("id", adminOwnRow!.id)
+      .single();
+    expect(adminReadErr).toBeNull();
+    expect(adminRead?.id).toBe(adminOwnRow!.id);
+
+    await admin.from("chat_log").delete().eq("id", adminOwnRow!.id);
+  });
+
+  it("fn_chat_log_sales_feedback writes as the calling agent, not a spoofed id", async () => {
+    const client = anonClient();
+    await client.auth.signInWithPassword({ email: agentEmail, password });
+
+    const { data: newId, error } = await client.rpc("fn_chat_log_sales_feedback", {
+      p_company_id: companyId,
+      p_outcome: "interested",
+      p_comment: "RLS test via chat tool",
+    });
+    expect(error).toBeNull();
+
+    const { data: row } = await admin
+      .from("sales_feedback")
+      .select("agent_id, outcome, comment")
+      .eq("id", newId as string)
+      .single();
+    expect(row?.agent_id).toBe(agentId);
+    expect(row?.outcome).toBe("interested");
+
+    await admin.from("sales_feedback").delete().eq("id", newId as string);
+  });
+
+  it("fn_chat_search_companies and fn_chat_get_company_brief return real data under RLS", async () => {
+    const client = anonClient();
+    await client.auth.signInWithPassword({ email: agentEmail, password });
+
+    const { data: company } = await admin.from("companies").select("name").eq("id", companyId).single();
+
+    const { data: searchResults, error: searchErr } = await client.rpc("fn_chat_search_companies", {
+      p_query: company!.name.slice(0, 5),
+    });
+    expect(searchErr).toBeNull();
+    expect(searchResults!.some((r) => r.id === companyId)).toBe(true);
+
+    const { data: brief, error: briefErr } = await client.rpc("fn_chat_get_company_brief", {
+      p_company_id: companyId,
+    });
+    expect(briefErr).toBeNull();
+    expect((brief as { company: { id: string } }).company.id).toBe(companyId);
+  });
+});

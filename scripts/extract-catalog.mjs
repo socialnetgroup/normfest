@@ -13,11 +13,13 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
+import { getModel } from "../lib/ai/provider.mjs";
+
 if (existsSync(".env.local")) process.loadEnvFile(".env.local");
 
 const PDF_PATH = "input/gesamtkatalog_2025_26.pdf";
 const PAGES_PER_BATCH = 10;
-const MODEL = "claude-haiku-4-5";
+const MODEL = getModel("bulk");
 const CONCURRENCY = 5;
 
 const C1_CONTROL_RE = new RegExp("[\\u0080-\\u009F]", "g");

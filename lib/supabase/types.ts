@@ -151,6 +151,50 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_log: {
+        Row: {
+          agent_id: string
+          content: string
+          created_at: string
+          id: string
+          input_tokens: number | null
+          model: string | null
+          output_tokens: number | null
+          role: string
+          tool_calls: Json | null
+        }
+        Insert: {
+          agent_id: string
+          content: string
+          created_at?: string
+          id?: string
+          input_tokens?: number | null
+          model?: string | null
+          output_tokens?: number | null
+          role: string
+          tool_calls?: Json | null
+        }
+        Update: {
+          agent_id?: string
+          content?: string
+          created_at?: string
+          id?: string
+          input_tokens?: number | null
+          model?: string | null
+          output_tokens?: number | null
+          role?: string
+          tool_calls?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_log_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       companies: {
         Row: {
           active: boolean
@@ -1112,6 +1156,70 @@ export type Database = {
       }
     }
     Functions: {
+      fn_chat_get_brand_profile: {
+        Args: { p_brand: string }
+        Returns: {
+          category: string
+          note: string
+          weight: number
+        }[]
+      }
+      fn_chat_get_company_brief: {
+        Args: { p_company_id: string }
+        Returns: Json
+      }
+      fn_chat_list_objection_cards: {
+        Args: never
+        Returns: {
+          category: string
+          objection: string
+          response_bs: string
+          response_de: string
+        }[]
+      }
+      fn_chat_log_sales_feedback: {
+        Args: {
+          p_comment?: string
+          p_company_id: string
+          p_objection?: string
+          p_outcome: string
+          p_product_id?: string
+          p_qty?: number
+          p_value_net?: number
+        }
+        Returns: string
+      }
+      fn_chat_search_companies: {
+        Args: { p_query: string }
+        Returns: {
+          branche_name: string
+          id: string
+          kundennummer: string
+          name: string
+          ort: string
+          plz: string
+        }[]
+      }
+      fn_chat_search_kb: {
+        Args: { p_collection?: string; p_query: string }
+        Returns: {
+          collection: string
+          content: string
+          doc_title: string
+          heading: string
+        }[]
+      }
+      fn_chat_search_products: {
+        Args: { p_category?: string; p_query: string }
+        Returns: {
+          category_name: string
+          description: string
+          id: string
+          name: string
+          pack_content: string
+          sku: string
+        }[]
+      }
       fn_company_visible: { Args: { p_gebiet: string }; Returns: boolean }
       fn_is_admin: { Args: never; Returns: boolean }
       fn_log_sale: {

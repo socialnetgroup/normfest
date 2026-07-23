@@ -94,6 +94,12 @@ export default async function CompanyProfilePage({
           {company.kundennummer} · {company.branche_name} ·{" "}
           {company.plz} {company.ort}
         </p>
+        <Link
+          href={`/assistent?company=${company.id}`}
+          className="text-sm text-primary hover:underline"
+        >
+          Im Assistenten fragen →
+        </Link>
       </div>
 
       {(enrichment && (enrichment.places_place_id || enrichment.strengths?.length || enrichment.weaknesses?.length)) ||

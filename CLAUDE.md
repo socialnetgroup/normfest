@@ -407,6 +407,54 @@ facts always attributed with quote; objection flow via cards; persona German/BS;
 company-context injection). New tool: `get_brand_profile(brand)` → curated consumption
 categories + notes (for pitch preparation).
 
+**M7 status (2026-07-23):** shipped. `lib/ai/provider.mjs` is the §3.2.9 cost-tier
+adapter (`bulk`/`analyze`/`chat` → model id) — `lib/enrichment/analyze.mjs` and
+`scripts/extract-catalog.mjs` now read their model through it instead of a hardcoded
+string, closing a gap from M3/M5. Schema: `chat_log` (private per agent, admin can read
+all for cost/QA oversight — deliberately NOT shared-visibility like `sales_feedback`,
+since a chat transcript is closer to a personal notebook) + 7 `security invoker` RPC
+tools (`fn_chat_search_companies`, `fn_chat_get_company_brief`, `fn_chat_get_brand_profile`,
+`fn_chat_search_products`, `fn_chat_search_kb`, `fn_chat_list_objection_cards`,
+`fn_chat_log_sales_feedback`) — none is `security definer`, so RLS applies exactly as it
+would to a direct query under the caller's JWT (§3.2.4). `fn_chat_get_company_brief`
+reconstructs {claim, quote} pairs from `company_enrichment.analysis_raw` (the plain
+`strengths`/`weaknesses` text[] columns drop the quote at storage time) so the assistant
+can satisfy the "enrichment facts always carry their quote" rule.
+
+`/api/chat` (SSE, manual tool loop, ≤6 round-trips) runs under the user's own session —
+not the admin client — for exactly this reason. Read tools execute inline; `log_sales_feedback`
+and `request_enrichment` never execute inside the route (§3.2.5) — they only emit a
+`pending_action` SSE event, and the model is instructed never to claim the action already
+happened. `/api/chat/confirm` executes the confirmed `log_sales_feedback` via the RPC
+under the user's session (zod-validated payload); confirming `request_enrichment` instead
+calls the existing admin-gated `/api/enrich` route directly from the client — no second
+enrichment code path was built. Per-agent daily token budget (`chat_daily_token_budget`
+setting, default 200k) checked before every call, tracked via `chat_log.input_tokens`/
+`output_tokens`. `/assistent` page + nav item; company-context injection via
+`?company=<id>` (a "Im Assistenten fragen" link now sits on the Firmenprofil header) —
+the server component resolves the id to `{id, name}` and the client always sends it back
+to `/api/chat` so the assistant can skip a search round-trip when the question is clearly
+about that company.
+
+**Scope decisions (flagged, not silent deviations):** (1) conversation history is held
+client-side only for v1 — no session list/resume UI; `chat_log` exists for audit/budget,
+not as the source of truth the client reloads from. Reload = fresh conversation. (2) The
+confirm-gate was extended from `log_sales_feedback` (the only tool §3.2.5 names) to also
+cover `request_enrichment`, since it's real-cost + write and the same UX applies naturally.
+(3) If the model proposes two confirm-only tool calls in the same turn, only the last
+`pending_action` survives (the variable is overwritten) — accepted as a rare edge case for
+v1, not handled with an array of pending actions.
+
+**Not verified live:** the Anthropic account is still out of credit (same blocker as the
+M5 rollout batch, §13 M5 status) — confirmed again with a 5-token smoke call before
+writing this section, same `"Your credit balance is too low"` error. Everything here is
+typecheck/lint/test-verified (`supabase/tests/rls.test.ts` covers `chat_log` RLS +
+`fn_chat_log_sales_feedback` correctly writing as the calling agent, not a spoofable
+`agent_id` + the search/brief RPCs returning real rows under RLS) and manually
+code-reviewed against the Anthropic TS SDK docs, but no real multi-turn conversation has
+been run end-to-end, and the §13.4 acceptance set has not been attempted. Do that once
+billing is topped up — same next step as the M5 backlog.
+
 ---
 
 ## 11. Import & ingestion pipelines
@@ -563,6 +611,12 @@ KB ingest of the material folder; objection_cards extraction; Wissen + Skript me
 ### M7 — Assistant (week 9–10)
 Chat route + full toolset + citations + context injection + feedback-confirm + budgets.
 **Done:** acceptance set passes (§13.4); latency targets met.
+
+**Status (2026-07-23):** built (see §10 M7 status for the full breakdown) — provider
+adapter, schema + 7 tool RPCs, `/api/chat` + `/api/chat/confirm`, `/assistent` page +
+company-context link. **Not done:** the §13.4 acceptance set and latency targets, both
+blocked on the same Anthropic billing issue as the M5 backlog — nothing to run against
+until credit is topped up.
 
 ### M8 — Hardening & full go-live (week 10–11)
 Security checklist, restore drill, remaining-Gebiet enrichment batches, Tier-2 import if
