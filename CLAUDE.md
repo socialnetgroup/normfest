@@ -504,7 +504,29 @@ naming) — no fabricated matches, consistent with the "don't fire without data"
 Not yet re-run across the full 200-company pilot — only the schema/matching logic is
 proven on a single company so far.
 
-### M6 — KB + Skript (week 8–9)
+**Name/branche-only analysis + purchase-priority batching (added 2026-07-23):** not
+every company has a Google Business Profile, and the company name/branche alone is often
+real signal (Anis's example: "Ausbeultechnik" in the name → dent/body repair → Karosserie
+products) — verified on a real no-match company ("Bernd Honekamp Fahrzeugausbau"): empty
+strengths/weaknesses (correctly — name says nothing about service quality) but 3 real
+opportunities derived from the name alone, quote-tagged `evidence_source: "name_branche"`
+so the UI never blends this with Google-sourced claims. `analyzeCompanyEnrichment` now
+always runs regardless of Places outcome. `scripts/enrich-pilot.mjs` also now orders
+targets by purchase recency (bought this year > last year > year before > never) rather
+than arbitrary order — Anis wants real spend prioritized where the flywheel has a live
+relationship first, ahead of a go-live funding decision.
+
+**Rollout-readiness batch #1 (2026-07-23) — blocked mid-run on Anthropic billing:**
+attempted 788 companies (targeting ~1000 enriched total to get a bigger pre-go-live
+sample; Anis has $300 GCP credit for Places, separate from Anthropic). Places resolution
+ran to completion for all 788 (699 resolved, 85 ambiguous, 4 no-match, 475 website
+fetches) — that data is real and saved, no wasted Places spend. **The Anthropic account
+ran out of credit around company #29** and every ANALYZE call failed for the rest of the
+batch (760 of 788). Current DB state: 1076 companies have an enrichment row total, 220
+genuinely analyzed, **856 have real Places data but are waiting on an ANALYZE pass**.
+Anis chose to pause enrichment here rather than top up billing immediately — next step
+whenever resumed: top up Anthropic Console billing, then re-run analysis-only (no new
+Places calls needed) over the 856 backlog before doing more Places-resolution batches.
 KB ingest of the material folder; objection_cards extraction; Wissen + Skript menus.
 **Done:** all supplied materials published; objection cards searchable.
 
