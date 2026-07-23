@@ -753,10 +753,21 @@ in admin." Added `company_enrichment.analysis_input_tokens`/`analysis_output_tok
 *real* per-call cost instead of an estimate. Also swapped every remaining raw
 `new Anthropic()` in the enrichment scripts for the shared `getAnthropicClient()` adapter
 while touching these files (§3.2.9 consistency). Confirmed the instrumentation is wired
-correctly with a 1-company test call — but credit is fully gone again (same "credit
-balance too low" error), so there's no real number yet. The next successful run — however
-small — will finally answer whether it's ~$0.01/company (my estimate) or something
-higher, with data instead of a guess.
+correctly with a 1-company test call, credit ran out again immediately after, Anis topped
+up $5 more, and a 5-company real test with the new instrumentation resolved this cleanly:
+
+**Real cost is $0.0433/company for ANALYZE-only — my char-count estimate (~$0.01) was
+off by ~4x.** The gap is almost certainly structured-output/json_schema enforcement
+overhead that isn't visible in the prompt/response text itself (real output tokens/company
+came in ~4.5–5x higher than the stored `analysis_raw` JSON's character count would
+suggest) — something only a live call could reveal, which is exactly why the earlier
+estimate (made while credit was unavailable) missed it. This number fully reconciles the
+original mystery: 200 companies × $0.0433 ≈ $8.66, plus the ~$1.20 from the two M7
+acceptance-test runs ≈ $9.86 — matches the original $10 spend almost to the dollar. It
+was never a bug or wasted spend, just the real price, now stored durably instead of
+needing to be re-derived from console totals. Real cost to finish the remaining 584-company
+backlog: ~$25.30. Anis chose to stop here for now rather than spend further today
+("Stani ovdje za sad") — resume is a cost decision, not a technical one.
 
 ### M9 — Call QA / Coaching Assistant (backlog, post-MVP, added 2026-07-23)
 Not scoped yet — revisit when we get here, at which point Anis picks/provisions the
