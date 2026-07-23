@@ -445,15 +445,69 @@ cover `request_enrichment`, since it's real-cost + write and the same UX applies
 `pending_action` survives (the variable is overwritten) — accepted as a rare edge case for
 v1, not handled with an array of pending actions.
 
-**Not verified live:** the Anthropic account is still out of credit (same blocker as the
-M5 rollout batch, §13 M5 status) — confirmed again with a 5-token smoke call before
-writing this section, same `"Your credit balance is too low"` error. Everything here is
-typecheck/lint/test-verified (`supabase/tests/rls.test.ts` covers `chat_log` RLS +
-`fn_chat_log_sales_feedback` correctly writing as the calling agent, not a spoofable
-`agent_id` + the search/brief RPCs returning real rows under RLS) and manually
-code-reviewed against the Anthropic TS SDK docs, but no real multi-turn conversation has
-been run end-to-end, and the §13.4 acceptance set has not been attempted. Do that once
-billing is topped up — same next step as the M5 backlog.
+**Acceptance-set run (2026-07-23, credit restored same day):** the tool-loop logic was
+extracted into `lib/chat/core.mjs` (shared by `/api/chat` and a new
+`scripts/chat-acceptance-test.mjs`) so the CLI test exercises the exact production code
+path via a throwaway test-agent Supabase session, not a re-implementation.
+`chat-acceptance-test.mjs` runs a self-drafted ~24-question DE/BS set (§13.4 doesn't
+specify the literal questions, only the categories) covering company briefs, the
+tier-honesty trap, quote-attributed enrichment facts, the canonical brand-profile
+question, objection handling, catalog search (incl. honest no-match), KB/Skript/Wissen
+lookups, both confirm-gated tools (incl. admin-only refusal), company-context injection,
+and an out-of-scope honesty check (no tool exists for a total company count). Ran twice
+(233 → run 2 numbers below); total cost both runs ≈ $1.22 at current Sonnet-5 intro
+pricing — cheap enough to re-run freely.
+
+**Result: strong pass on every correctness-critical rule.** No fabricated facts, dates,
+SKUs, or brand-profile categories anywhere across 48 answers (2 runs × 24) — every "no
+data" case (unmatched brand, no-match product search, tier-2 order dates, aggregate
+counts) was answered honestly instead of guessed. Enrichment answers correctly carried
+the literal quote alongside every strength/weakness/opportunity. Both confirm-gated tools
+behaved correctly: `log_sales_feedback` never claimed a save happened and correctly
+paused for confirmation; `request_enrichment` correctly refused a non-admin and (in the
+`--admin` pass) correctly proposed rather than executed. Company-context injection
+worked — the context-injection question skipped `search_companies` and went straight to
+`get_company_brief`. Token usage per full 24-question run: ~213k–234k input / ~16k
+output.
+
+**Real findings, not fixed yet (flagged for Anis, not silently patched):**
+1. **Objection-card language mirroring is inconsistent.** Reproduced on both runs: a
+   fully-Bosnian question about handling an objection got a German-first narration
+   wrapper around the DE/BS card content, instead of a fully-Bosnian answer (every other
+   BS question in the set — company brief, tier-honesty, brand profile, product search,
+   the closing "what does this tool do" question — mirrored correctly). Likely cause:
+   `get_objection_cards` always returns DE+BS pairs together, and the model defaults to
+   presenting DE first regardless of the caller's language. Candidate fix: tell the
+   system prompt explicitly to lead with the agent's language when presenting a bilingual
+   card, not just "answer in the same language" as a general rule — not applied yet.
+2. **One non-deterministic empty reply.** The exact same KB question ("Wie ist der
+   Gesprächseinstieg laut Skript aufgebaut?") got a full, correctly-grounded answer on run
+   1 and hit `runChatTurn`'s empty-text fallback message on run 2 — same code, same
+   question, different outcome (model-level variance, not a code regression, since both
+   runs used identical tool-calling logic). `runChatTurn` currently discards *why*
+   `assistantText` stayed empty (no stop_reason/last-message logging) — worth adding
+   before chasing this further, since right now there's nothing to debug from. 1/48
+   answers — not blocking, but a real observed failure mode worth watching as usage
+   grows.
+3. **`log_sales_feedback` sometimes disambiguates instead of firing immediately** — asked
+   which of several real product SKUs matched "Bremsenreiniger" rather than proposing the
+   tool call with `product_id` omitted (which the schema allows). Arguably the more
+   correct behavior (avoids guessing a specific SKU), but means the confirm-card doesn't
+   always appear on the first message the way the original test expectation assumed.
+   Judgment call, not a defect.
+4. **Isolated VIS-import data artifact, unrelated to the assistant itself:** one company
+   (1 of ~13.5k) has a literal CSV double-quote-escape sequence baked into its stored
+   `name` (`"Autohandel ""An der Schmiede"""`) — visibly confused a search on one phrasing
+   in the first run; the model retried and self-corrected on both reruns, so it's not a
+   hard failure, just cosmetic. Not fixed — Anis to decide whether/how to clean it (single
+   row, not a pipeline-wide problem).
+
+**Still open:** real per-turn latency (p95 profile <2s / chat first-token <3s, §2.2) —
+the CLI harness bypasses the SSE-streaming path entirely, so it can't measure real
+first-token latency. That needs a browser-based check through `/assistent`, which this
+environment can't do (the sandboxed preview browser hits the login wall and this
+assistant does not enter credentials into it, per its own operating rules) — someone with
+a real login needs to check that directly.
 
 ---
 
@@ -614,9 +668,13 @@ Chat route + full toolset + citations + context injection + feedback-confirm + b
 
 **Status (2026-07-23):** built (see §10 M7 status for the full breakdown) — provider
 adapter, schema + 7 tool RPCs, `/api/chat` + `/api/chat/confirm`, `/assistent` page +
-company-context link. **Not done:** the §13.4 acceptance set and latency targets, both
-blocked on the same Anthropic billing issue as the M5 backlog — nothing to run against
-until credit is topped up.
+company-context link. Billing was topped up same day; the acceptance set ran twice (48
+answers total) with a strong pass on every correctness-critical rule (grounding, no
+fabrication, tier-honesty, quote-attribution, both confirm-gates, admin-gating,
+context-injection) — 4 real but non-blocking findings logged in §10, none silently
+patched. **Still not done:** real first-token/p95 latency measurement — needs a
+browser-based check through `/assistent` with a real login, which isn't available in
+this environment.
 
 ### M8 — Hardening & full go-live (week 10–11)
 Security checklist, restore drill, remaining-Gebiet enrichment batches, Tier-2 import if
