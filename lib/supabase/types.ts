@@ -404,6 +404,45 @@ export type Database = {
           },
         ]
       }
+      focus_list_products: {
+        Row: {
+          created_at: string
+          focus_list_id: string
+          id: string
+          note: string | null
+          product_id: string
+        }
+        Insert: {
+          created_at?: string
+          focus_list_id: string
+          id?: string
+          note?: string | null
+          product_id: string
+        }
+        Update: {
+          created_at?: string
+          focus_list_id?: string
+          id?: string
+          note?: string | null
+          product_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "focus_list_products_focus_list_id_fkey"
+            columns: ["focus_list_id"]
+            isOneToOne: false
+            referencedRelation: "focus_lists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "focus_list_products_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       focus_lists: {
         Row: {
           active: boolean

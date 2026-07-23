@@ -223,6 +223,18 @@ create or replace view feedback_sales as
   from sales_feedback where outcome = 'sold';
 ```
 
+**Product focus lists (added 2026-07-23, Anis):** a focus list is primarily a list of
+**products** to push this cycle ("šta gurati ove sedmice") — the company list (§4.7
+`focus_list_items`, M2) is useful but secondary. `focus_list_products` (focus_list_id,
+product_id, note) is a sibling table, same shared-read/admin-write RLS pattern. The
+Fokus page shows the product list first, each with a running "N× verkauft" count (from
+`sales_feedback` where `product_id` matches and `created_at >= focus_lists.created_at`)
+and an inline "Verkauft eintragen" quick-entry (company picker + qty/value →
+`sales_feedback` insert with `outcome='sold'`) — this is how winners get identified: no
+separate report yet, the count is visible in place. `focus_lists.active` is now enforced
+unique at the DB level (`idx_focus_lists_single_active`, added same day after finding
+nothing previously stopped two lists being active at once).
+
 ### 4.8 KB & script / 4.9 chat, imports, audit / 4.10 RLS — as v2.2. Focus-list draft
 approval: **admin (Anis)**.
 
@@ -255,6 +267,8 @@ yet, this milestone is just capture + a read-only dashboard.
 ## 5. Screens — as v2.2 (menu: Dashboard · Firmen · Katalog · Fokus · Wissen · Skript ·
 Assistent · Admin), with:
 - Katalog product page adds: PDF page reference link, tech specs table, image if present.
+- Fokus (added 2026-07-23): products in the active list first (primary, with live
+  "N× verkauft" count + quick sell-entry), companies second (secondary, optional).
 - Admin adds: catalog ingest panel (upload PDF, batch progress, QA queue §11.1).
 - Dashboard adds a small "Flywheel" widget: team feedback count this week (adoption
   visibility — social proof).
@@ -322,7 +336,10 @@ Reason templates: as v2.1/2.2, plus
 
 ## 7. Focus loop — as v2.2 (≤10s feedback UX; winner thresholds in settings; objection
 clustering; winner_derived relations; generated drafts **approved by Anis**; "Extern
-bestätigt" column; discrepancy report activates only with Tier 2).
+bestätigt" column; discrepancy report activates only with Tier 2). Product lists are the
+primary Fokus mechanism (§4.7, added 2026-07-23); the winner-derived `cross_sell` relation
+and the auto-generated next-list draft still need real feedback volume to work from —
+not built yet, tracked in §13 M4 status.
 
 ---
 
@@ -508,6 +525,14 @@ explicitly labeled "laut Agent-Feedback", or says no data).
    treated as done — revisit with a retroactive confidence-scoring + spot-check pass
    whenever catalog data quality actually matters (KB citations in M6 are the likely
    forcing function).
+9. **Standalone VIS-list upload CMS (added 2026-07-23, backlog — not started):** Anis
+   currently needs Claude Code to re-run `scripts/import-vis.mjs` for every VIS-list
+   refresh. Wants a self-serve admin screen instead — upload the new weekly Excel file
+   (Mondays), it re-runs the same mapping/dedup/merge-queue logic (§11.2) and updates
+   `companies` without needing a dev session. Same shape as the existing catalog-ingest
+   admin panel (§5, "Admin adds: catalog ingest panel") — likely reuses that pattern
+   (upload → server-side job → progress/QA → commit) rather than inventing a new one.
+   Not scoped further — revisit when picked up.
 
 ---
 

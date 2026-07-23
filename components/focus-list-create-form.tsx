@@ -12,20 +12,58 @@ import { createClient } from "@/lib/supabase/client";
 type CompanyOption = { id: string; name: string; kundennummer: string; ort: string | null };
 type SelectedCompany = CompanyOption & { note: string };
 
+type ProductOption = { id: string; name: string; sku: string };
+type SelectedProduct = ProductOption & { note: string };
+
 export function FocusListCreateForm({ createdBy }: { createdBy: string }) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
-  const [query, setQuery] = useState("");
-  const [options, setOptions] = useState<CompanyOption[]>([]);
-  const [selected, setSelected] = useState<SelectedCompany[]>([]);
+
+  const [productQuery, setProductQuery] = useState("");
+  const [productOptions, setProductOptions] = useState<ProductOption[]>([]);
+  const [selectedProducts, setSelectedProducts] = useState<SelectedProduct[]>([]);
+
+  const [companyQuery, setCompanyQuery] = useState("");
+  const [companyOptions, setCompanyOptions] = useState<CompanyOption[]>([]);
+  const [selectedCompanies, setSelectedCompanies] = useState<SelectedCompany[]>([]);
+
   const [status, setStatus] = useState<"idle" | "saving" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  async function search(q: string) {
-    setQuery(q);
+  async function searchProducts(q: string) {
+    setProductQuery(q);
     if (q.trim().length < 2) {
-      setOptions([]);
+      setProductOptions([]);
+      return;
+    }
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("products")
+      .select("id, name, sku")
+      .or(`name.ilike.%${q}%,sku.ilike.%${q}%`)
+      .limit(8);
+    setProductOptions((data ?? []).filter((p) => !selectedProducts.some((s) => s.id === p.id)));
+  }
+
+  function addProduct(p: ProductOption) {
+    setSelectedProducts((prev) => [...prev, { ...p, note: "" }]);
+    setProductOptions([]);
+    setProductQuery("");
+  }
+
+  function removeProduct(id: string) {
+    setSelectedProducts((prev) => prev.filter((p) => p.id !== id));
+  }
+
+  function setProductNote(id: string, value: string) {
+    setSelectedProducts((prev) => prev.map((p) => (p.id === id ? { ...p, note: value } : p)));
+  }
+
+  async function searchCompanies(q: string) {
+    setCompanyQuery(q);
+    if (q.trim().length < 2) {
+      setCompanyOptions([]);
       return;
     }
     const supabase = createClient();
@@ -35,26 +73,28 @@ export function FocusListCreateForm({ createdBy }: { createdBy: string }) {
       .or(`name.ilike.%${q}%,kundennummer.ilike.%${q}%`)
       .order("name")
       .limit(8);
-    setOptions((data ?? []).filter((c) => !selected.some((s) => s.id === c.id)));
+    setCompanyOptions((data ?? []).filter((c) => !selectedCompanies.some((s) => s.id === c.id)));
   }
 
   function addCompany(c: CompanyOption) {
-    setSelected((prev) => [...prev, { ...c, note: "" }]);
-    setOptions([]);
-    setQuery("");
+    setSelectedCompanies((prev) => [...prev, { ...c, note: "" }]);
+    setCompanyOptions([]);
+    setCompanyQuery("");
   }
 
   function removeCompany(id: string) {
-    setSelected((prev) => prev.filter((c) => c.id !== id));
+    setSelectedCompanies((prev) => prev.filter((c) => c.id !== id));
   }
 
   function setCompanyNote(id: string, value: string) {
-    setSelected((prev) => prev.map((c) => (c.id === id ? { ...c, note: value } : c)));
+    setSelectedCompanies((prev) => prev.map((c) => (c.id === id ? { ...c, note: value } : c)));
   }
+
+  const canSubmit = name.trim().length > 0 && (selectedProducts.length > 0 || selectedCompanies.length > 0);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim() || selected.length === 0) return;
+    if (!canSubmit) return;
 
     setStatus("saving");
     setErrorMessage(null);
@@ -81,17 +121,34 @@ export function FocusListCreateForm({ createdBy }: { createdBy: string }) {
       return;
     }
 
-    const { error: itemsError } = await supabase.from("focus_list_items").insert(
-      selected.map((c) => ({
-        focus_list_id: newList.id,
-        company_id: c.id,
-        note: c.note || null,
-      })),
-    );
-    if (itemsError) {
-      setStatus("error");
-      setErrorMessage(itemsError.message);
-      return;
+    if (selectedProducts.length > 0) {
+      const { error: productsError } = await supabase.from("focus_list_products").insert(
+        selectedProducts.map((p) => ({
+          focus_list_id: newList.id,
+          product_id: p.id,
+          note: p.note || null,
+        })),
+      );
+      if (productsError) {
+        setStatus("error");
+        setErrorMessage(productsError.message);
+        return;
+      }
+    }
+
+    if (selectedCompanies.length > 0) {
+      const { error: itemsError } = await supabase.from("focus_list_items").insert(
+        selectedCompanies.map((c) => ({
+          focus_list_id: newList.id,
+          company_id: c.id,
+          note: c.note || null,
+        })),
+      );
+      if (itemsError) {
+        setStatus("error");
+        setErrorMessage(itemsError.message);
+        return;
+      }
     }
 
     router.push("/fokus");
@@ -124,20 +181,79 @@ export function FocusListCreateForm({ createdBy }: { createdBy: string }) {
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <Label>Firmen</Label>
+        <Label>Produkte (Hauptsache dieser Liste)</Label>
         <div className="relative">
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             type="search"
-            value={query}
-            onChange={(e) => search(e.target.value)}
+            value={productQuery}
+            onChange={(e) => searchProducts(e.target.value)}
+            placeholder="Produkt suchen — Name oder Art.-Nr..."
+            className="pl-8"
+          />
+        </div>
+        {productOptions.length > 0 ? (
+          <ul className="flex flex-col divide-y rounded-lg border">
+            {productOptions.map((p) => (
+              <li key={p.id}>
+                <button
+                  type="button"
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-accent"
+                  onClick={() => addProduct(p)}
+                >
+                  <span className="font-medium">{p.name}</span>{" "}
+                  <span className="text-muted-foreground">({p.sku})</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+
+      {selectedProducts.length > 0 ? (
+        <div className="flex flex-col gap-2 rounded-lg border p-3">
+          {selectedProducts.map((p) => (
+            <div key={p.id} className="flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium">{p.name}</div>
+                <div className="truncate text-xs text-muted-foreground">{p.sku}</div>
+              </div>
+              <Input
+                value={p.note}
+                onChange={(e) => setProductNote(p.id, e.target.value)}
+                placeholder="Notiz zu diesem Produkt (optional)"
+                className="h-8 flex-1 text-xs"
+              />
+              <button
+                type="button"
+                onClick={() => removeProduct(p.id)}
+                className="text-muted-foreground hover:text-destructive"
+                aria-label="Entfernen"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">Noch keine Produkte ausgewählt.</p>
+      )}
+
+      <div className="flex flex-col gap-1.5 border-t pt-4">
+        <Label>Firmen (optional)</Label>
+        <div className="relative">
+          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="search"
+            value={companyQuery}
+            onChange={(e) => searchCompanies(e.target.value)}
             placeholder="Firma suchen — Name oder Kundennummer..."
             className="pl-8"
           />
         </div>
-        {options.length > 0 ? (
+        {companyOptions.length > 0 ? (
           <ul className="flex flex-col divide-y rounded-lg border">
-            {options.map((c) => (
+            {companyOptions.map((c) => (
               <li key={c.id}>
                 <button
                   type="button"
@@ -155,9 +271,9 @@ export function FocusListCreateForm({ createdBy }: { createdBy: string }) {
         ) : null}
       </div>
 
-      {selected.length > 0 ? (
+      {selectedCompanies.length > 0 ? (
         <div className="flex flex-col gap-2 rounded-lg border p-3">
-          {selected.map((c) => (
+          {selectedCompanies.map((c) => (
             <div key={c.id} className="flex items-center gap-2">
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium">{c.name}</div>
@@ -180,13 +296,13 @@ export function FocusListCreateForm({ createdBy }: { createdBy: string }) {
             </div>
           ))}
         </div>
-      ) : (
-        <p className="text-sm text-muted-foreground">Noch keine Firmen ausgewählt.</p>
-      )}
+      ) : null}
 
       <div className="flex items-center gap-3">
-        <Button type="submit" disabled={status === "saving" || !name.trim() || selected.length === 0}>
-          {status === "saving" ? "Speichern..." : `Liste erstellen (${selected.length})`}
+        <Button type="submit" disabled={status === "saving" || !canSubmit}>
+          {status === "saving"
+            ? "Speichern..."
+            : `Liste erstellen (${selectedProducts.length} Produkte, ${selectedCompanies.length} Firmen)`}
         </Button>
         {status === "error" && errorMessage ? (
           <span className="text-sm text-destructive" role="alert">

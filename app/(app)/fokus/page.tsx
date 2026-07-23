@@ -1,11 +1,12 @@
 import Link from "next/link";
 
+import { FocusProductSellForm } from "@/components/focus-product-sell-form";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
 
-type ItemRow = {
+type CompanyItemRow = {
   id: string;
   note: string | null;
   companies: {
@@ -15,6 +16,12 @@ type ItemRow = {
     ort: string | null;
     gebiet: string | null;
   } | null;
+};
+
+type ProductItemRow = {
+  id: string;
+  note: string | null;
+  products: { id: string; name: string; sku: string } | null;
 };
 
 export default async function FokusPage() {
@@ -30,15 +37,38 @@ export default async function FokusPage() {
 
   const isAdmin = profile?.role === "admin";
 
-  const { data: items } = activeList
-    ? await supabase
-        .from("focus_list_items")
-        .select("id, note, companies(id, name, kundennummer, ort, gebiet)")
-        .eq("focus_list_id", activeList.id)
-        .order("created_at")
-    : { data: null };
+  const [{ data: companyItems }, { data: productItems }] = activeList
+    ? await Promise.all([
+        supabase
+          .from("focus_list_items")
+          .select("id, note, companies(id, name, kundennummer, ort, gebiet)")
+          .eq("focus_list_id", activeList.id)
+          .order("created_at"),
+        supabase
+          .from("focus_list_products")
+          .select("id, note, products(id, name, sku)")
+          .eq("focus_list_id", activeList.id)
+          .order("created_at"),
+      ])
+    : [{ data: null }, { data: null }];
 
-  const rows = (items ?? []) as unknown as ItemRow[];
+  const companyRows = (companyItems ?? []) as unknown as CompanyItemRow[];
+  const productRows = (productItems ?? []) as unknown as ProductItemRow[];
+
+  const productIds = productRows.map((r) => r.products?.id).filter((id): id is string => !!id);
+  const soldCounts = new Map<string, number>();
+  if (activeList && productIds.length > 0) {
+    const { data: soldRows } = await supabase
+      .from("sales_feedback")
+      .select("product_id")
+      .in("product_id", productIds)
+      .eq("outcome", "sold")
+      .gte("created_at", activeList.created_at);
+    for (const row of soldRows ?? []) {
+      if (!row.product_id) continue;
+      soldCounts.set(row.product_id, (soldCounts.get(row.product_id) ?? 0) + 1);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -59,47 +89,94 @@ export default async function FokusPage() {
       {!activeList ? (
         <p className="text-sm text-muted-foreground">Aktuell keine aktive Fokusliste.</p>
       ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>{activeList.name}</CardTitle>
-            {activeList.note ? (
-              <p className="text-sm text-muted-foreground">{activeList.note}</p>
-            ) : null}
-          </CardHeader>
-          <CardContent>
-            {rows.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Diese Liste enthält noch keine Firmen.</p>
-            ) : (
-              <div className="overflow-hidden rounded-lg border">
-                <ul className="divide-y">
-                  {rows.map((row) =>
-                    row.companies ? (
-                      <li key={row.id}>
-                        <Link
-                          href={`/firmen/${row.companies.id}`}
-                          className="flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-accent"
-                        >
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle>{activeList.name}</CardTitle>
+              {activeList.note ? (
+                <p className="text-sm text-muted-foreground">{activeList.note}</p>
+              ) : null}
+            </CardHeader>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Produkte in dieser Liste</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {productRows.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Diese Liste enthält noch keine Produkte.</p>
+              ) : (
+                <ul className="flex flex-col divide-y">
+                  {productRows.map((row) =>
+                    row.products ? (
+                      <li key={row.id} className="flex flex-col gap-2 py-3">
+                        <div className="flex items-center justify-between gap-3">
                           <div className="min-w-0">
-                            <span className="font-medium">{row.companies.name}</span>
+                            <Link href={`/katalog/${row.products.id}`} className="font-medium hover:underline">
+                              {row.products.name}
+                            </Link>
                             <div className="text-sm text-muted-foreground">
-                              {row.companies.kundennummer} · {row.companies.ort}
+                              {row.products.sku}
                               {row.note ? ` · ${row.note}` : ""}
                             </div>
                           </div>
-                          {row.companies.gebiet ? (
-                            <Badge variant="secondary" className="shrink-0">
-                              {row.companies.gebiet}
+                          <div className="flex shrink-0 items-center gap-2">
+                            <Badge variant={soldCounts.get(row.products.id) ? "default" : "muted"}>
+                              {soldCounts.get(row.products.id) ?? 0}× verkauft
                             </Badge>
-                          ) : null}
-                        </Link>
+                            {user ? (
+                              <FocusProductSellForm productId={row.products.id} agentId={user.id} />
+                            ) : null}
+                          </div>
+                        </div>
                       </li>
                     ) : null,
                   )}
                 </ul>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Firmen in dieser Liste</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {companyRows.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Diese Liste enthält noch keine Firmen.</p>
+              ) : (
+                <div className="overflow-hidden rounded-lg border">
+                  <ul className="divide-y">
+                    {companyRows.map((row) =>
+                      row.companies ? (
+                        <li key={row.id}>
+                          <Link
+                            href={`/firmen/${row.companies.id}`}
+                            className="flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-accent"
+                          >
+                            <div className="min-w-0">
+                              <span className="font-medium">{row.companies.name}</span>
+                              <div className="text-sm text-muted-foreground">
+                                {row.companies.kundennummer} · {row.companies.ort}
+                                {row.note ? ` · ${row.note}` : ""}
+                              </div>
+                            </div>
+                            {row.companies.gebiet ? (
+                              <Badge variant="secondary" className="shrink-0">
+                                {row.companies.gebiet}
+                              </Badge>
+                            ) : null}
+                          </Link>
+                        </li>
+                      ) : null,
+                    )}
+                  </ul>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
       )}
     </div>
   );

@@ -417,6 +417,23 @@ describe("focus_lists / focus_list_items RLS", () => {
       .from("focus_list_items")
       .insert({ focus_list_id: listId, company_id: company!.id, note: "test" });
     expect(itemErr).toBeNull();
+
+    const { data: product } = await admin.from("products").select("id").limit(1).single();
+    const { error: productErr } = await client
+      .from("focus_list_products")
+      .insert({ focus_list_id: listId, product_id: product!.id, note: "test" });
+    expect(productErr).toBeNull();
+  });
+
+  it("a non-admin cannot add a product to a focus list", async () => {
+    const client = anonClient();
+    await client.auth.signInWithPassword({ email: agentEmail, password });
+
+    const { data: product } = await admin.from("products").select("id").limit(1).single();
+    const { error } = await client
+      .from("focus_list_products")
+      .insert({ focus_list_id: listId, product_id: product!.id });
+    expect(error).not.toBeNull();
   });
 
   it("any authenticated user can read a focus list by id (active or not)", async () => {
@@ -433,6 +450,13 @@ describe("focus_lists / focus_list_items RLS", () => {
       .eq("focus_list_id", listId);
     expect(itemsErr).toBeNull();
     expect(items!.length).toBe(1);
+
+    const { data: products, error: productsErr } = await client
+      .from("focus_list_products")
+      .select("id")
+      .eq("focus_list_id", listId);
+    expect(productsErr).toBeNull();
+    expect(products!.length).toBe(1);
   });
 
   it("the DB rejects a second simultaneously-active list", async () => {
