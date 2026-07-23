@@ -725,6 +725,18 @@ this environment.
 Security checklist, restore drill, remaining-Gebiet enrichment batches, Tier-2 import if
 invoices confirmed tabular, hypercare 2 weeks.
 
+**Status (2026-07-23):** security checklist done — see §12 for the full audit (one real
+code gap fixed, everything else clean except the two flagged items). Everything else in
+this milestone is blocked on a decision that isn't mine to make, not on missing code:
+- **Restore drill** — can't drill a restore that doesn't exist; blocked on the PITR/backup
+  decision in §12.
+- **Remaining-Gebiet enrichment batches** — paused. The 856-company analyze-only backlog
+  (§10/§13 M5 status) got to 487/1076 analyzed before hitting the Anthropic billing wall a
+  second time same day; Anis flagged the per-company cost as too high to keep pushing on
+  right now, so this is on hold pending a cost-model decision, not a technical blocker.
+- **Tier-2 import** — still waiting on Anis confirming invoice access/format (§14 item 1).
+- **Hypercare** — not applicable until an actual go-live date exists.
+
 ### M9 — Call QA / Coaching Assistant (backlog, post-MVP, added 2026-07-23)
 Not scoped yet — revisit when we get here, at which point Anis picks/provisions the
 external ASR service. Concept: TL manually uploads a saved call recording (mp3/wav —
