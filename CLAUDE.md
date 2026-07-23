@@ -550,6 +550,51 @@ PDF-invoice parsing = post-MVP milestone if that's the only form (§14.2).
 ## 12. Security — engineering hygiene as v2.2 (RLS CI-asserted, key hygiene, zod, typed
 RPCs, no self-signup, audit incl. enrichment + master-data fills, PITR + restore drill).
 
+**M8 pre-checklist audit (2026-07-23, done ahead of M8 while the M5 backlog ran in the
+background):** every item checked against the real codebase/project, not assumed.
+
+- ✅ **RLS CI-asserted** — `.github/workflows/ci.yml` runs the full `supabase/tests/rls.test.ts`
+  suite (35+ tests covering every table's policies) against the real project on every
+  push/PR, with typecheck+lint gating first.
+- ✅ **Key hygiene** — `.env*` gitignored except `.env.example` (confirmed: no `.env` variant
+  ever tracked in git). `SUPABASE_SERVICE_ROLE_KEY` usage is confined to
+  `lib/supabase/admin.ts`, CLI scripts, and the test file — confirmed zero client-component
+  imports of the admin client; only `app/api/enrich/route.ts` imports it, and that route is
+  admin-role-gated server-side.
+- ✅ **zod everywhere** — fixed the one real gap found: `app/api/enrich/route.ts` had no
+  input validation (`const { companyId } = await request.json()` with a bare `typeof`
+  check). Added `enrichRequestSchema` (zod, `.uuid()`). Every API route now validates its
+  body with zod; also swapped its raw `new Anthropic()` for the shared
+  `getAnthropicClient()` adapter for consistency with §3.2.9.
+- ✅ **Typed RPCs** — `lib/supabase/types.ts` regenerated after every migration; every
+  `supabase.rpc()` call in the app is typed against it (verified while building M7's tools).
+- ✅ **No self-signup** — confirmed zero `signUp`/self-registration code paths anywhere in
+  the app. Accounts only come from `admin.auth.admin.createUser()` (service-role, CLI-only)
+  → the `fn_handle_new_user` DB trigger creates the `profiles` row.
+- ⚠️ **Audit (enrichment + master-data fills) — partial.** `company_enrichment.verified` /
+  `verified_by` / `verified_at` gives an implicit audit trail for the one master-data-fill
+  feature that exists today (`companies.brand_focus`, written only when empty, per §3.2.6) —
+  but there's no general-purpose `audit_log` table. Not built this pass: a real audit log
+  matters more once §14 item 11 (whether Places phone/website/address should also write
+  back to `companies`) gets decided — building generic audit infrastructure for a single
+  fill-in feature felt like premature scope. Revisit when item 11 is resolved.
+- ⚠️ **CI migration dry-run — documented but not built.** §3.3's tech-stack table promises
+  "migration dry-run" as a CI step; `ci.yml` only runs typecheck/lint/test. Not added this
+  pass: `supabase db push --dry-run --linked` would need a `SUPABASE_ACCESS_TOKEN` GitHub
+  secret I can't confirm is configured, and given migrations in this solo workflow are
+  applied by hand immediately after being written (not deferred to CI), its practical value
+  here is genuinely unclear — a PR rarely has un-pushed migrations sitting in it. Anis to
+  decide: add the secret + step, or drop the promise from §3.3.
+- 🔴 **PITR / backups — NOT enabled, zero backups exist.** Checked directly via the
+  Supabase Management API (`GET /v1/projects/{ref}/database/backups`):
+  `pitr_enabled: false`, `backups: []`. **This is the most important finding of this
+  pass** — there is currently no way to recover this database (13.5k+ companies, full
+  catalog, all feedback/signals/enrichment data) if something goes wrong. Enabling
+  PITR/backups is a plan/billing decision (Supabase ties it to paid tiers with
+  retention-based add-on pricing) — did not attempt to change it myself. Recommend
+  enabling before go-live; the "restore drill" half of this checklist item is meaningless
+  until backups exist to drill against.
+
 ---
 
 ## 13. Build plan (solo: Anis + Claude Code — vertical slices, earliest value first)

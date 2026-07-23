@@ -1,11 +1,14 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
+import { z } from "zod";
 
+import { getAnthropicClient } from "@/lib/ai/provider.mjs";
 import { analyzeCompanyEnrichment } from "@/lib/enrichment/analyze.mjs";
 import { fetchWebsiteForCompany } from "@/lib/enrichment/website.mjs";
 import { resolvePlaceForCompany } from "@/lib/enrichment/places.mjs";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+
+const enrichRequestSchema = z.object({ companyId: z.string().uuid() });
 
 // M5 on-demand enrichment (CLAUDE.md §9/§13): runs Places -> website ->
 // LLM ANALYZE synchronously for one company. Admin-only — the pipeline
@@ -24,10 +27,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const { companyId } = await request.json();
-  if (!companyId || typeof companyId !== "string") {
-    return NextResponse.json({ error: "companyId required" }, { status: 400 });
+  const parsedBody = enrichRequestSchema.safeParse(await request.json());
+  if (!parsedBody.success) {
+    return NextResponse.json({ error: "companyId (uuid) required" }, { status: 400 });
   }
+  const { companyId } = parsedBody.data;
 
   const admin = createAdminClient();
   const { data: company, error: companyErr } = await admin
@@ -54,7 +58,7 @@ export async function POST(request: Request) {
 
     let analysisResult = null;
     if (placesResult.status === "resolved") {
-      const anthropic = new Anthropic();
+      const anthropic = getAnthropicClient();
       analysisResult = await analyzeCompanyEnrichment(admin, anthropic, companyId);
     }
 
