@@ -328,6 +328,40 @@ companies at `revenue_current_year = 0` (already fully dormant this year, not "a
 `revenue_current_year > 0` too. Still ~1000 companies (~7% of the active book) flag at
 score 5 — worth a sanity pass with Anis before this is treated as fully tuned.
 
+**Enrichment-derived affinity, reducing reliance on feedback (added 2026-07-24, Anis:
+"dont rely so much on agent logs a sale, try to make as much as possible to work out of
+the box... later on added info ofc helps"):** `seasonal_push`, `new_product_match`, and
+`cross_sell` all gated their category/product affinity purely on `sales_feedback`
+('sold'/'interested') — with real feedback at 2 rows total, all three were effectively
+dead regardless of how good the enrichment pipeline's output was. Checked before building
+anything: 1,384 distinct (company, catalog_category) affinity pairs already exist from M5
+enrichment (`company_enrichment.external_opportunities[].catalog_category`, derived from
+Google reviews/website/name — zero agent action needed) across 345 companies, vs. 2 from
+feedback. Migration `20260723260000_fn_refresh_signals_enrichment_affinity.sql` adds
+enrichment as a second, parallel affinity source (UNIONed with feedback, not replacing
+it) for all three types, plus a second `cross_sell` trigger path (an enrichment-matched
+real catalog product on `external_opportunities[].matched_products`, alongside the
+existing "already sold the anchor product" trigger). Provenance kept honest per §3.2.6
+("never silently mixed"): enrichment-sourced rows get `origin='enrichment'`, a discounted
+score, and reason text that says "laut KI-Anreicherung, nicht verifiziert" — when both
+sources agree for the same (company, product), the feedback-sourced row wins via explicit
+priority ordering, never silently blended. `feedback_replenishment` deliberately untouched
+— it's about real repurchase *cycles* (avg gap between actual sales), which enrichment has
+no substitute for.
+
+Verified with real data, not just a passing function call: `seasonal_push`/
+`new_product_match` still return 0 rows after this fix — checked directly and confirmed
+it's a *different*, pre-existing gap (`products.season`/`launched_at` are 0% populated,
+zero rows in either column — the workshop-seed prerequisite noted above, unrelated to
+this affinity change). `cross_sell` verified working end-to-end via a throwaway test:
+temporarily attached a matched-product opportunity to a real company's enrichment row,
+confirmed the signal fired correctly (`origin='enrichment'`, discounted score, correctly
+labeled reason), then reverted the test data and re-ran the refresh to restore the true
+state. The 5 real seeded pairs (§7) don't yet overlap with any of the 492 companies'
+actual enrichment matches, so real `cross_sell` rows are still 0 today — the mechanism is
+proven, it just needs either more seeded pairs or more enrichment coverage to produce
+visible rows, not more feedback.
+
 Reason templates: as v2.1/2.2, plus
 `brand_profile_match`: "Fokus auf {Marke} — {Kategorie} mit erhöhtem Verbrauch
 ({Begründung aus Profil}). Noch nicht im Sortiment des Kunden."
