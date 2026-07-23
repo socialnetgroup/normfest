@@ -533,6 +533,11 @@ explicitly labeled "laut Agent-Feedback", or says no data).
    admin panel (§5, "Admin adds: catalog ingest panel") — likely reuses that pattern
    (upload → server-side job → progress/QA → commit) rather than inventing a new one.
    Not scoped further — revisit when picked up.
+10. **Role model stays admin/agent only for now (decided 2026-07-23):** Anis floated TL
+    being able to build Fokus lists too, but there's no TL account yet — his call was
+    "ti pravi sve u ovom jednom nalogu, master... ne opterećuj se userima za sad." Build
+    everything as admin (single account = master) until he decides roles later. Do not
+    add a `team_leader` role or split permissions unless explicitly asked.
 
 ---
 

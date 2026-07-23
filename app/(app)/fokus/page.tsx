@@ -21,7 +21,7 @@ type CompanyItemRow = {
 type ProductItemRow = {
   id: string;
   note: string | null;
-  products: { id: string; name: string; sku: string } | null;
+  products: { id: string; name: string; sku: string; category_name: string | null } | null;
 };
 
 export default async function FokusPage() {
@@ -46,7 +46,7 @@ export default async function FokusPage() {
           .order("created_at"),
         supabase
           .from("focus_list_products")
-          .select("id, note, products(id, name, sku)")
+          .select("id, note, products(id, name, sku, category_name)")
           .eq("focus_list_id", activeList.id)
           .order("created_at"),
       ])
@@ -54,6 +54,15 @@ export default async function FokusPage() {
 
   const companyRows = (companyItems ?? []) as unknown as CompanyItemRow[];
   const productRows = (productItems ?? []) as unknown as ProductItemRow[];
+
+  const productsByCategory = new Map<string, ProductItemRow[]>();
+  for (const row of productRows) {
+    if (!row.products) continue;
+    const category = row.products.category_name ?? "Ohne Kategorie";
+    if (!productsByCategory.has(category)) productsByCategory.set(category, []);
+    productsByCategory.get(category)!.push(row);
+  }
+  const categories = [...productsByCategory.keys()].sort();
 
   const productIds = productRows.map((r) => r.products?.id).filter((id): id is string => !!id);
   const soldCounts = new Map<string, number>();
@@ -101,39 +110,51 @@ export default async function FokusPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Produkte in dieser Liste</CardTitle>
+              <CardTitle>Katalog des Fokus</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                {productRows.length} Produkte in {categories.length}{" "}
+                {categories.length === 1 ? "Kategorie" : "Kategorien"} — das lernt und drückt das ganze Team diese
+                Runde.
+              </p>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex flex-col gap-5">
               {productRows.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Diese Liste enthält noch keine Produkte.</p>
               ) : (
-                <ul className="flex flex-col divide-y">
-                  {productRows.map((row) =>
-                    row.products ? (
-                      <li key={row.id} className="flex flex-col gap-2 py-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <Link href={`/katalog/${row.products.id}`} className="font-medium hover:underline">
-                              {row.products.name}
-                            </Link>
-                            <div className="text-sm text-muted-foreground">
-                              {row.products.sku}
-                              {row.note ? ` · ${row.note}` : ""}
+                categories.map((category) => (
+                  <div key={category}>
+                    <h3 className="mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                      {category} ({productsByCategory.get(category)!.length})
+                    </h3>
+                    <ul className="flex flex-col divide-y rounded-lg border">
+                      {productsByCategory.get(category)!.map((row) =>
+                        row.products ? (
+                          <li key={row.id} className="flex flex-col gap-2 px-3 py-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <Link href={`/katalog/${row.products.id}`} className="font-medium hover:underline">
+                                  {row.products.name}
+                                </Link>
+                                <div className="text-sm text-muted-foreground">
+                                  {row.products.sku}
+                                  {row.note ? ` · ${row.note}` : ""}
+                                </div>
+                              </div>
+                              <div className="flex shrink-0 items-center gap-2">
+                                <Badge variant={soldCounts.get(row.products.id) ? "default" : "muted"}>
+                                  {soldCounts.get(row.products.id) ?? 0}× verkauft
+                                </Badge>
+                                {user ? (
+                                  <FocusProductSellForm productId={row.products.id} agentId={user.id} />
+                                ) : null}
+                              </div>
                             </div>
-                          </div>
-                          <div className="flex shrink-0 items-center gap-2">
-                            <Badge variant={soldCounts.get(row.products.id) ? "default" : "muted"}>
-                              {soldCounts.get(row.products.id) ?? 0}× verkauft
-                            </Badge>
-                            {user ? (
-                              <FocusProductSellForm productId={row.products.id} agentId={user.id} />
-                            ) : null}
-                          </div>
-                        </div>
-                      </li>
-                    ) : null,
-                  )}
-                </ul>
+                          </li>
+                        ) : null,
+                      )}
+                    </ul>
+                  </div>
+                ))
               )}
             </CardContent>
           </Card>

@@ -12,7 +12,7 @@ import { createClient } from "@/lib/supabase/client";
 type CompanyOption = { id: string; name: string; kundennummer: string; ort: string | null };
 type SelectedCompany = CompanyOption & { note: string };
 
-type ProductOption = { id: string; name: string; sku: string };
+type ProductOption = { id: string; name: string; sku: string; category_name: string | null };
 type SelectedProduct = ProductOption & { note: string };
 
 export function FocusListCreateForm({ createdBy }: { createdBy: string }) {
@@ -40,7 +40,7 @@ export function FocusListCreateForm({ createdBy }: { createdBy: string }) {
     const supabase = createClient();
     const { data } = await supabase
       .from("products")
-      .select("id, name, sku")
+      .select("id, name, sku, category_name")
       .or(`name.ilike.%${q}%,sku.ilike.%${q}%`)
       .limit(8);
     setProductOptions((data ?? []).filter((p) => !selectedProducts.some((s) => s.id === p.id)));
@@ -202,7 +202,9 @@ export function FocusListCreateForm({ createdBy }: { createdBy: string }) {
                   onClick={() => addProduct(p)}
                 >
                   <span className="font-medium">{p.name}</span>{" "}
-                  <span className="text-muted-foreground">({p.sku})</span>
+                  <span className="text-muted-foreground">
+                    ({p.sku}{p.category_name ? ` · ${p.category_name}` : ""})
+                  </span>
                 </button>
               </li>
             ))}
@@ -211,29 +213,41 @@ export function FocusListCreateForm({ createdBy }: { createdBy: string }) {
       </div>
 
       {selectedProducts.length > 0 ? (
-        <div className="flex flex-col gap-2 rounded-lg border p-3">
-          {selectedProducts.map((p) => (
-            <div key={p.id} className="flex items-center gap-2">
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium">{p.name}</div>
-                <div className="truncate text-xs text-muted-foreground">{p.sku}</div>
+        <div className="flex flex-col gap-4">
+          {[...new Set(selectedProducts.map((p) => p.category_name ?? "Ohne Kategorie"))]
+            .sort()
+            .map((category) => (
+              <div key={category} className="flex flex-col gap-2 rounded-lg border p-3">
+                <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                  {category} (
+                  {selectedProducts.filter((p) => (p.category_name ?? "Ohne Kategorie") === category).length})
+                </p>
+                {selectedProducts
+                  .filter((p) => (p.category_name ?? "Ohne Kategorie") === category)
+                  .map((p) => (
+                    <div key={p.id} className="flex items-center gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium">{p.name}</div>
+                        <div className="truncate text-xs text-muted-foreground">{p.sku}</div>
+                      </div>
+                      <Input
+                        value={p.note}
+                        onChange={(e) => setProductNote(p.id, e.target.value)}
+                        placeholder="Notiz zu diesem Produkt (optional)"
+                        className="h-8 flex-1 text-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeProduct(p.id)}
+                        className="text-muted-foreground hover:text-destructive"
+                        aria-label="Entfernen"
+                      >
+                        <X className="size-4" />
+                      </button>
+                    </div>
+                  ))}
               </div>
-              <Input
-                value={p.note}
-                onChange={(e) => setProductNote(p.id, e.target.value)}
-                placeholder="Notiz zu diesem Produkt (optional)"
-                className="h-8 flex-1 text-xs"
-              />
-              <button
-                type="button"
-                onClick={() => removeProduct(p.id)}
-                className="text-muted-foreground hover:text-destructive"
-                aria-label="Entfernen"
-              >
-                <X className="size-4" />
-              </button>
-            </div>
-          ))}
+            ))}
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">Noch keine Produkte ausgewählt.</p>
