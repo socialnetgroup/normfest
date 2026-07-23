@@ -14,8 +14,15 @@ type SelectedCompany = CompanyOption & { note: string };
 
 type ProductOption = { id: string; name: string; sku: string; category_name: string | null };
 type SelectedProduct = ProductOption & { note: string };
+type Winner = { id: string; name: string; sku: string; category_name: string | null; sold_count: number };
 
-export function FocusListCreateForm({ createdBy }: { createdBy: string }) {
+export function FocusListCreateForm({
+  createdBy,
+  winners = [],
+}: {
+  createdBy: string;
+  winners?: Winner[];
+}) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
@@ -58,6 +65,20 @@ export function FocusListCreateForm({ createdBy }: { createdBy: string }) {
 
   function setProductNote(id: string, value: string) {
     setSelectedProducts((prev) => prev.map((p) => (p.id === id ? { ...p, note: value } : p)));
+  }
+
+  function applyWinner(w: Winner) {
+    if (selectedProducts.some((p) => p.id === w.id)) return;
+    setSelectedProducts((prev) => [
+      ...prev,
+      {
+        id: w.id,
+        name: w.name,
+        sku: w.sku,
+        category_name: w.category_name,
+        note: `Winner — ${w.sold_count}× verkauft`,
+      },
+    ]);
   }
 
   async function searchCompanies(q: string) {
@@ -179,6 +200,37 @@ export function FocusListCreateForm({ createdBy }: { createdBy: string }) {
           className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
         />
       </div>
+
+      {winners.length > 0 ? (
+        <div className="flex flex-col gap-1.5 rounded-lg border bg-muted/30 p-3">
+          <Label>Winner-Vorschläge — laut Feedback bereits verkauft</Label>
+          <ul className="flex flex-col gap-1.5">
+            {winners.map((w) => {
+              const already = selectedProducts.some((p) => p.id === w.id);
+              return (
+                <li key={w.id} className="flex items-center justify-between gap-2 text-sm">
+                  <div className="min-w-0">
+                    <span className="font-medium">{w.name}</span>{" "}
+                    <span className="text-muted-foreground">
+                      ({w.sku}
+                      {w.category_name ? ` · ${w.category_name}` : ""})
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant={already ? "secondary" : "outline"}
+                    size="xs"
+                    disabled={already}
+                    onClick={() => applyWinner(w)}
+                  >
+                    {already ? "Übernommen" : `${w.sold_count}× — Übernehmen`}
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
 
       <div className="flex flex-col gap-1.5">
         <Label>Produkte (Hauptsache dieser Liste)</Label>

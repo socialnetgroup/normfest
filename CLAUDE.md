@@ -337,9 +337,19 @@ Reason templates: as v2.1/2.2, plus
 ## 7. Focus loop — as v2.2 (≤10s feedback UX; winner thresholds in settings; objection
 clustering; winner_derived relations; generated drafts **approved by Anis**; "Extern
 bestätigt" column; discrepancy report activates only with Tier 2). Product lists are the
-primary Fokus mechanism (§4.7, added 2026-07-23); the winner-derived `cross_sell` relation
-and the auto-generated next-list draft still need real feedback volume to work from —
-not built yet, tracked in §13 M4 status.
+primary Fokus mechanism (§4.7, added 2026-07-23).
+
+**Winner stats + generated draft (added 2026-07-23):** `product_winner_stats` view
+aggregates sold_count/qty/value per product from `sales_feedback`; a product qualifies
+once `sold_count >= settings.focus_winner_min_sold` (starts at 1, admin-adjustable —
+real feedback volume is still ~2 rows total). `/fokus/neu` shows qualifying winners with
+an "Übernehmen" button that adds them into the new list's product picker with a
+"Winner — Nx verkauft" note; the admin's normal review-and-submit on that same form **is**
+the approval step — no separate draft/approval state was built, since the existing
+create flow already requires a human to look before a list goes active. The
+winner-derived `cross_sell` relation (product_relations origin='winner_derived') is
+still not built — needs enough repeat-winner history to derive a meaningful pairing,
+which doesn't exist yet.
 
 ---
 
@@ -443,9 +453,13 @@ Empfehlungen tab + dashboard ranking. Winner stats + generated draft (Anis appro
 from real feedback.
 
 **Status (2026-07-23):** schema + scoring + UI shipped (see §6 M4 build note for exactly
-which types compute real rows today vs. are deferred on data). **Not done yet:** the
-30-sample plausibility check with Anis+Sanin, and winner stats + generated focus-list
-draft (§7) — that's next, once real feedback volume exists to derive winners from.
+which types compute real rows today vs. are deferred on data). Winner stats + generated
+draft also shipped same day (see §7) — with only 2 real `sales_feedback` rows in
+production so far, `focus_winner_min_sold` starts at 1 (admin-adjustable in `settings`)
+so the feature is demonstrably useful rather than empty; raise the threshold once real
+volume grows. **Not done yet:** the 30-sample plausibility check with Anis+Sanin — needs
+the two of them to actually sit down with real signal output, not something buildable
+solo.
 
 ### M5 — Enrichment (week 6–8)
 Places resolver + ambiguous queue; website fetch/distill; analyze + guardrails; Brief-

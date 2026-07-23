@@ -827,6 +827,24 @@ export type Database = {
         }
         Relationships: []
       }
+      product_winner_stats: {
+        Row: {
+          last_sold_at: string | null
+          product_id: string | null
+          sold_count: number | null
+          total_qty: number | null
+          total_value: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_feedback_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       fn_company_visible: { Args: { p_gebiet: string }; Returns: boolean }
