@@ -1,0 +1,16 @@
+-- CLAUDE.md §14 item 11, resolved 2026-07-24 (Anis: "moze kad vec imamo, ali iz
+-- VIS liste kao default ostaviti ako odstupa" — yes, write Places data back
+-- into companies master data, but the VIS import stays authoritative on any
+-- conflict). Adds the missing column; the actual fill-empty-only backfill
+-- runs from scripts/backfill-places-contact-data.mjs (plain SQL couldn't
+-- express the cross-table "only if empty" join as cleanly as a script, and
+-- it needs to be safely re-runnable as more companies get enriched).
+--
+-- Scope: telefon + website only. Address deliberately excluded — companies
+-- already has structured strasse/plz/ort/land from the VIS import, while
+-- Places only offers one formatted address string; parsing that back into
+-- the structured columns is a real risk of silently corrupting good VIS
+-- data for no clear benefit (§3.2.6 "enrichment never overwrites imported
+-- master data" — safest reading of that rule here is not to attempt the
+-- parse at all, not just to gate it).
+alter table companies add column if not exists website text;

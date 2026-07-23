@@ -286,6 +286,21 @@ export default async function CompanyProfilePage({
               <Field label="Telefon" value={company.telefon} />
               <Field label="E-Mail" value={company.email} />
               <Field
+                label="Website"
+                value={
+                  company.website ? (
+                    <a
+                      href={company.website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline"
+                    >
+                      {company.website}
+                    </a>
+                  ) : null
+                }
+              />
+              <Field
                 label="Gebiet"
                 value={
                   <>

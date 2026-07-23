@@ -239,6 +239,7 @@ export type Database = {
           telefon: string | null
           updated_at: string
           verband: string | null
+          website: string | null
         }
         Insert: {
           active?: boolean
@@ -283,6 +284,7 @@ export type Database = {
           telefon?: string | null
           updated_at?: string
           verband?: string | null
+          website?: string | null
         }
         Update: {
           active?: boolean
@@ -327,6 +329,7 @@ export type Database = {
           telefon?: string | null
           updated_at?: string
           verband?: string | null
+          website?: string | null
         }
         Relationships: []
       }

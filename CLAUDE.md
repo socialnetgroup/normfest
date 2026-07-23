@@ -417,11 +417,13 @@ prep/knowledge companion + the feedback-flywheel pitch). Deliberately excludes a
 commission/bonus/KPI-scorecard specifics — same HR-adjacent-sensitivity reasoning as the
 Operativni-Priručnik skip below. `/wissen` page now also renders a default browse view
 (grouped by document) when there's no search query, not just search results.
-That Priručnik question is still open: it mixes genuine sales methodology with real agent
+**Resolved (2026-07-24):** the Priručnik mixes genuine sales methodology with real agent
 earnings/MBTI-profiles/personnel lists (same HR-adjacent sensitivity as
-`agent_daily_performance`, §4.11); Anis chose to skip ingesting it entirely rather than
-have it manually curated ("Preskoci ovaj dokument za sad"). Still open: Anis to decide if/
-when anything from that document should be curated into Wissen later.
+`agent_daily_performance`, §4.11); Anis skipped ingesting it entirely rather than have it
+manually curated ("Preskoci ovaj dokument za sad"). Anis has since clarified the document
+stays out of the app and Wissen for good, not pending a later curation pass — it serves as
+background context for Claude Code sessions only ("više tebi kao intel, a ne za app i
+wissen, to smo riješili drukčije").
 
 ---
 
@@ -580,6 +582,23 @@ background):** every item checked against the real codebase/project, not assumed
 - ✅ **RLS CI-asserted** — `.github/workflows/ci.yml` runs the full `supabase/tests/rls.test.ts`
   suite (35+ tests covering every table's policies) against the real project on every
   push/PR, with typecheck+lint gating first.
+  **Two real bugs found + fixed in the test file itself (2026-07-24)**, surfaced while
+  re-running the suite after the day's data changes: the `chat_log RLS` describe block's
+  `beforeAll` picked a company via `select("id, name").limit(1)` with no `order by` and no
+  filter — undefined order without `ORDER BY`, so across the real ~13.5k-row table it could
+  land on a `do_not_contact=true` row (fails the `sales_feedback` insert check) or a company
+  whose name is common enough to fall outside `fn_chat_search_companies`' top-10-by-name
+  cap. Fixed: filter `active=true, do_not_contact=false`, `order by id` for determinism, and
+  search by `kundennummer` (unique) instead of a name prefix. **Separately — still open, not
+  fixed:** 2-4 of the same describe block's tests fail intermittently even after that fix,
+  always on an `auth.uid()`-dependent check immediately after a fresh
+  `signInWithPassword` (symptom: RLS violation or a null insert result, as if the session
+  wasn't yet recognized server-side). Confirmed NOT caused by this session's changes — no
+  edits touched `chat_log`/`sales_feedback`/auth in that pass — and confirmed NOT a general
+  auth rate-limit (the exact same sign-in-then-query pattern runs 30+ times elsewhere in the
+  same file without issue). Root cause not found; smells like a session-propagation timing
+  quirk specific to this describe block. Re-run the suite once or twice if it goes red on
+  exactly these assertions before assuming a real regression.
 - ✅ **Key hygiene** — `.env*` gitignored except `.env.example` (confirmed: no `.env` variant
   ever tracked in git). `SUPABASE_SERVICE_ROLE_KEY` usage is confined to
   `lib/supabase/admin.ts`, CLI scripts, and the test file — confirmed zero client-component
@@ -595,13 +614,15 @@ background):** every item checked against the real codebase/project, not assumed
 - ✅ **No self-signup** — confirmed zero `signUp`/self-registration code paths anywhere in
   the app. Accounts only come from `admin.auth.admin.createUser()` (service-role, CLI-only)
   → the `fn_handle_new_user` DB trigger creates the `profiles` row.
-- ⚠️ **Audit (enrichment + master-data fills) — partial.** `company_enrichment.verified` /
-  `verified_by` / `verified_at` gives an implicit audit trail for the one master-data-fill
-  feature that exists today (`companies.brand_focus`, written only when empty, per §3.2.6) —
-  but there's no general-purpose `audit_log` table. Not built this pass: a real audit log
-  matters more once §14 item 11 (whether Places phone/website/address should also write
-  back to `companies`) gets decided — building generic audit infrastructure for a single
-  fill-in feature felt like premature scope. Revisit when item 11 is resolved.
+- ⚠️ **Audit (enrichment + master-data fills) — partial, still no general log.**
+  `company_enrichment.verified`/`verified_by`/`verified_at` gives an implicit audit trail
+  for `companies.brand_focus` (§9). §14 item 11 (Places → `telefon`/`website` fill-empty
+  write-back) resolved and shipped 2026-07-24 — now 2 master-data-fill features exist, both
+  still without a general-purpose `audit_log` table. Deliberately not built this pass
+  either: both are the same fill-empty-only shape, re-runnable and traceable via
+  `scripts/backfill-places-contact-data.mjs`'s own console output rather than a persisted
+  log — real audit infrastructure still feels like premature scope for 2 narrow features.
+  Revisit if a third master-data-fill feature shows up, or before an actual go-live.
 - ⚠️ **CI migration dry-run — documented but not built.** §3.3's tech-stack table promises
   "migration dry-run" as a CI step; `ci.yml` only runs typecheck/lint/test. Not added this
   pass: `supabase db push --dry-run --linked` would need a `SUPABASE_ACCESS_TOKEN` GitHub
@@ -698,8 +719,11 @@ impact-socket-set product found in the catalog under that or related names — o
 insulated EV-specific Steckschlüssel-Sätze, which don't fit) and "Lackierer Nitro →
 Abdeckungsfolie" (no product literally matching "Nitro" lacquer; found a real
 "Abdeckpapier vollgeleimt" for the covering half, but didn't want to guess the lacquer SKU
-without Anis confirming which one he means) — both need Anis to point at the exact
-product name/SKU rather than a best-guess match.
+without Anis confirming which one he means). **Closed, not pursued further (2026-07-24):**
+Anis pointed out these are the same kind of catalog gap the webshop cross-sell mining
+attempt (below) surfaced generally — not worth chasing two specific pairs by hand when the
+underlying catalog-completeness question is already tracked as its own backlog item
+(§14 item 12, webshop rebuild). Dropped as an open TODO.
 
 **Verified end-to-end, not just inserted:** ran `fn_refresh_signals()` after seeding —
 correctly produced 0 `cross_sell` rows, because the type also requires a real 'sold'
@@ -951,6 +975,10 @@ explicitly labeled "laut Agent-Feedback", or says no data).
    needed at M5, not before.
 4. VIS list + catalog PDF + KB folder handover — needed at M1/M3/M6 respectively.
 5. brand_consumption_profiles workshop (1–2h, Anis+Sanin+top agent) — needed before M4.
+   **Checked directly 2026-07-24** (Anis believed this was already done, asked to be
+   corrected if not): `brand_consumption_profiles` has **0 rows** — the workshop has not
+   happened yet. This is why `brand_profile_match` still doesn't fire (§6 M4 build note) —
+   not just missing `companies.brand_focus`, but the curated table itself is empty too.
 6. **Team Dashboard data source — RESOLVED 2026-07-23:** confirmed manual (agents
    type in each sale as it happens), so the Excel hand-off is now replaced by the
    in-app `fn_log_sale` entry (§4.11) — no dialer/CRM export integration needed.
@@ -990,8 +1018,8 @@ explicitly labeled "laut Agent-Feedback", or says no data).
      have an Art.-Nr. that's a **parametric base number** needing a Gewinde-Ø/Steigung
      suffix to be a real orderable SKU (confirmed NOT a category-wide problem — page 753's
      Gewindestift table, by contrast, fully enumerates real complete per-variant SKUs).
-     Anis should decide what to do with these 11: exclude from agent-facing views, or
-     leave as reference-only family entries — not decided yet.
+     **Decided (2026-07-24, Anis: "ostaviti"):** leave them as reference-only family
+     entries, no exclusion built — not worth the extra filtering logic for 11 rows.
    - All 17 random high-confidence samples check out correctly on name/category/
      pack_content/description. 2 of 17 (~12%) have `source_page` off by exactly one page
      (SKU 3502-14: DB says 349, real page is 350; SKU 7713-000: DB says 641, real page is
@@ -1016,15 +1044,23 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     "ti pravi sve u ovom jednom nalogu, master... ne opterećuj se userima za sad." Build
     everything as admin (single account = master) until he decides roles later. Do not
     add a `team_leader` role or split permissions unless explicitly asked.
-11. **Should Places data write into `companies` master data? (asked 2026-07-23, open —
-    Anis to decide):** right now Places-sourced phone/website/address live only on
-    `company_enrichment`, kept separate from imported VIS master data on `companies`.
-    `brand_focus` is the one exception with an explicit write-back path (§9: AI guess →
-    human verifies → writes to `companies.brand_focus`, fill-empty-only). Anis asked
-    whether Places phone/website/address should get the same treatment — i.e. fill
-    `companies.telefon`/`email`/etc. when empty, once verified. Not decided or built —
-    needs a call on which fields, whether verification-gated like brand_focus, and
-    whether it's automatic or a manual admin action.
+11. **Should Places data write into `companies` master data? — resolved + shipped
+    (2026-07-24).** Anis: "moze kad vec imamo, ali iz VIS liste kao default ostaviti ako
+    odstupa" — yes, write it back, but the VIS import always wins on conflict (fill-empty-
+    only, same fill-empty-only pattern as the existing `brand_focus` write-back in §9, just
+    without a verification gate — Places phone/website are direct factual pulls from a
+    Google Business Profile, not an LLM interpretation, so there's nothing to verify the
+    way there is for a brand-focus guess). Scope: **telefon + website only** — address
+    deliberately excluded (migration `20260724010000_companies_website_places_backfill.sql`
+    comment has the full reasoning): Places only offers one formatted address string,
+    while `companies` already has structured `strasse`/`plz`/`ort`/`land` from the VIS
+    import, and parsing the former into the latter risks silently corrupting good VIS data
+    for no clear benefit — safer to just not attempt it. Added `companies.website` (didn't
+    exist before). `scripts/backfill-places-contact-data.mjs` does the fill (re-runnable
+    any time more companies get enriched — only ever touches null fields): first real run
+    filled `telefon` on 44 companies and `website` on 705, out of 889 companies with
+    Places phone/website data (166 already had both fields from VIS). Website now also
+    shown as a clickable link on the Firmenprofil (`/firmen/[id]`).
 12. **Rebuild/extend Katalog from the live webshop (added 2026-07-24, backlog — not
     started):** normfest-shop.com (the real customer-facing storefront) has a much larger
     range than our 4,011-product PDF extract (~14,700 sitemap URLs vs. the 800-page

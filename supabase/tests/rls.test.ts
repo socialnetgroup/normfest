@@ -660,7 +660,18 @@ describe("chat_log RLS + chat tool RPCs (M7)", () => {
   let agentChatLogId = "";
 
   beforeAll(async () => {
-    const { data: candidates } = await admin.from("companies").select("id, name").limit(1);
+    // Deterministic + valid: an unordered/unfiltered limit(1) can land on any
+    // row in the real ~13.5k-row dataset (order is not guaranteed without
+    // ORDER BY, and does shift as rows get updated elsewhere) — including one
+    // with do_not_contact=true (fails the sales_feedback RLS insert below) or
+    // a name common enough to fall outside fn_chat_search_companies' top-10.
+    const { data: candidates } = await admin
+      .from("companies")
+      .select("id, name")
+      .eq("active", true)
+      .eq("do_not_contact", false)
+      .order("id")
+      .limit(1);
     companyId = candidates![0].id;
   });
 
@@ -755,10 +766,16 @@ describe("chat_log RLS + chat tool RPCs (M7)", () => {
     const client = anonClient();
     await client.auth.signInWithPassword({ email: agentEmail, password });
 
-    const { data: company } = await admin.from("companies").select("name").eq("id", companyId).single();
+    const { data: company } = await admin.from("companies").select("kundennummer").eq("id", companyId).single();
 
+    // Search by kundennummer (unique), not a name prefix: fn_chat_search_companies
+    // caps results at 10 ordered by name, so a name-prefix search can miss the
+    // target company whenever >10 real companies share that prefix — not
+    // reproducible with a fixed test fixture since `companyId` is picked
+    // arbitrarily (any company in the real, 13k+-row dataset) rather than a
+    // company created by this test.
     const { data: searchResults, error: searchErr } = await client.rpc("fn_chat_search_companies", {
-      p_query: company!.name.slice(0, 5),
+      p_query: company!.kundennummer,
     });
     expect(searchErr).toBeNull();
     expect(searchResults!.some((r) => r.id === companyId)).toBe(true);
