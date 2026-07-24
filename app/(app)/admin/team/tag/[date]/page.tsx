@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DateJumpPicker } from "@/components/team/date-jump-picker";
 import { DayOffToggle } from "@/components/day-off-toggle";
 import { computeDailyBonus, shiftDate, type BonusThreshold } from "@/lib/team/bonus";
 import { createClient } from "@/lib/supabase/server";
@@ -97,6 +98,7 @@ export default async function TeamDayPage({ params }: { params: Promise<{ date: 
               Heute
             </Link>
           ) : null}
+          <DateJumpPicker date={date} max={today} />
         </div>
       </div>
 
