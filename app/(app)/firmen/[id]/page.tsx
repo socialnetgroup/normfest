@@ -12,6 +12,7 @@ import {
 import { BrandFocusVerifyButton } from "@/components/brand-focus-verify-button";
 import { EnrichNowButton } from "@/components/enrich-now-button";
 import { FeedbackForm } from "@/components/feedback-form";
+import { SignalDismissButton } from "@/components/signal-dismiss-button";
 import { signalTypeLabel, signalTypeVariant } from "@/lib/signals";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
@@ -75,7 +76,7 @@ export default async function CompanyProfilePage({
         .limit(10),
       supabase
         .from("signals")
-        .select("id, type, score, reason, tier, origin, products(name)")
+        .select("id, type, score, reason, tier, origin, product_id, products(name)")
         .eq("company_id", id)
         .order("score", { ascending: false }),
       supabase.from("company_enrichment").select("*").eq("company_id", id).maybeSingle(),
@@ -278,9 +279,10 @@ export default async function CompanyProfilePage({
                     </div>
                     <p className="mt-1 text-muted-foreground">{s.reason}</p>
                   </div>
-                  <Badge variant={s.tier === 1 ? "muted" : "secondary"} className="shrink-0">
-                    Tier {s.tier}
-                  </Badge>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Badge variant={s.tier === 1 ? "muted" : "secondary"}>Tier {s.tier}</Badge>
+                    <SignalDismissButton companyId={company.id} type={s.type} productId={s.product_id} />
+                  </div>
                 </li>
               ))}
             </ul>

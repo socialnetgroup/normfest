@@ -1030,6 +1030,55 @@ export type Database = {
           },
         ]
       }
+      signal_dismissals: {
+        Row: {
+          company_id: string
+          created_at: string
+          dismissed_by: string | null
+          id: string
+          product_id: string | null
+          type: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          dismissed_by?: string | null
+          id?: string
+          product_id?: string | null
+          type: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          dismissed_by?: string | null
+          id?: string
+          product_id?: string | null
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signal_dismissals_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signal_dismissals_dismissed_by_fkey"
+            columns: ["dismissed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signal_dismissals_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       signals: {
         Row: {
           company_id: string
@@ -1230,6 +1279,10 @@ export type Database = {
         }[]
       }
       fn_company_visible: { Args: { p_gebiet: string }; Returns: boolean }
+      fn_dismiss_signal: {
+        Args: { p_company_id: string; p_product_id?: string; p_type: string }
+        Returns: undefined
+      }
       fn_is_admin: { Args: never; Returns: boolean }
       fn_log_sale: {
         Args: { p_amount: number }

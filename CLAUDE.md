@@ -298,11 +298,24 @@ utegnemo".** Went through his punch-list top to bottom same day:
   in Top-Empfehlungen now color-coded via a new `signalTypeVariant()` helper
   (`lib/signals.ts`): risk types (`revenue_trend_risk`, `declining_volume`,
   `dormant_winback`) render `warning`, opportunity types render `success`.
-  **Answered Anis's open question** (delete/dismiss recommendations vs. wait for next
-  VIS list): recommended adding an explicit dismiss action as a fast-follow, not built
-  this pass — needs schema work (a persisted dismissed-set that survives
-  `fn_refresh_signals()`'s full delete+insert), out of scope for a same-day pre-demo
-  pass.
+  **Anis's open question resolved + shipped same night** (delete/dismiss
+  recommendations vs. wait for next VIS list): recommended a dismiss action as a
+  fast-follow, then built it once Anis said to keep going through the list. New
+  `signal_dismissals` table (migration `20260724040000_signal_dismissals.sql`) keyed
+  the same way as `signals`' own dedup index (company, type, product-or-zero-uuid);
+  `fn_refresh_signals()` now excludes dismissed pairs in every insert block (also
+  fixed em dashes in the reason strings it generates — missed in the tsx-only sweep,
+  since these render straight into the Empfehlungen UI). A single
+  `fn_dismiss_signal(company_id, type, product_id)` RPC
+  (`20260724050000_fn_dismiss_signal.sql`) does both atomically: records the
+  dismissal AND deletes the live `signals` row immediately (security definer, since
+  `signals` itself is admin-only to write — an agent dismissing something they
+  handled shouldn't have to wait for the next admin-triggered refresh to see it
+  gone). New `SignalDismissButton` client component wired into both the Dashboard's
+  Top-Empfehlungen and the Firmenprofil's Empfehlungen list. Verified live end-to-end:
+  dismissed a real `revenue_trend_risk` signal through the actual UI, confirmed it
+  disappeared immediately and the "Empfehlungen offen" counter ticked down, then
+  re-ran `fn_refresh_signals()` for real and confirmed it did not come back.
 - **Firmen search — real bug fixed.** `gebiet` was missing from the `.or()` search
   filter entirely (confirmed: searching a real Gebiet code returned 0 rows). Added it.
   Kundennummer search was tested directly (admin client, RLS-scoped anon client, and

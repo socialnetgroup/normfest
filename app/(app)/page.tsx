@@ -3,6 +3,7 @@ import Link from "next/link";
 import { LogSaleForm } from "@/components/log-sale-form";
 import { ProgressBar } from "@/components/progress-bar";
 import { RefreshSignalsButton } from "@/components/refresh-signals-button";
+import { SignalDismissButton } from "@/components/signal-dismiss-button";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -77,7 +78,7 @@ export default async function DashboardPage() {
       .gte("created_at", weekStart.toISOString()),
     supabase
       .from("signals")
-      .select("id, type, score, reason, company_id, companies(name)")
+      .select("id, type, score, reason, company_id, product_id, companies(name)")
       .order("score", { ascending: false })
       .limit(8),
     supabase.from("signals").select("id", { count: "exact", head: true }),
@@ -187,10 +188,10 @@ export default async function DashboardPage() {
             ) : (
             <ul className="flex flex-col divide-y">
               {topSignals.map((s) => (
-                <li key={s.id} className="py-2.5 text-sm">
+                <li key={s.id} className="flex items-start gap-2 py-2.5 text-sm">
                   <Link
                     href={`/firmen/${s.company_id}`}
-                    className="flex items-start justify-between gap-3 hover:underline"
+                    className="flex flex-1 items-start justify-between gap-3 hover:underline"
                   >
                     <div>
                       <div className="flex items-center gap-2">
@@ -202,6 +203,7 @@ export default async function DashboardPage() {
                       <p className="mt-1 text-muted-foreground">{s.reason}</p>
                     </div>
                   </Link>
+                  <SignalDismissButton companyId={s.company_id} type={s.type} productId={s.product_id} />
                 </li>
               ))}
             </ul>
