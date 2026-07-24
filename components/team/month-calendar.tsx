@@ -8,10 +8,15 @@ import { cn } from "@/lib/utils";
 const eur = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
 const eurCents = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", minimumFractionDigits: 2 });
 const pct = new Intl.NumberFormat("de-DE", { style: "percent", maximumFractionDigits: 0 });
+const dateFmt = new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
 const WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 
 function bonusLabel(km: number) {
   return km > 0 ? eurCents.format(km).replace("€", "KM") : "-";
+}
+
+function formatDate(date: string) {
+  return dateFmt.format(new Date(`${date}T00:00:00Z`));
 }
 
 export type DayEntry = {
@@ -74,7 +79,7 @@ export function MonthCalendar({ month, days }: { month: string; days: DayEntry[]
             <tbody className="divide-y">
               {sorted.map((d) => (
                 <tr key={d.date} className={d.dayOff ? "opacity-50" : undefined}>
-                  <td className="px-3 py-2 font-medium tabular-nums">{d.date}</td>
+                  <td className="px-3 py-2 font-medium tabular-nums">{formatDate(d.date)}</td>
                   <td className="px-3 py-2 tabular-nums">{d.dayOff ? "frei" : eur.format(d.revenue)}</td>
                   <td className="px-3 py-2 tabular-nums">{d.dayOff ? "-" : d.salesCount}</td>
                   <td className="px-3 py-2 tabular-nums">{d.callsCount ?? "-"}</td>
@@ -136,7 +141,7 @@ export function MonthCalendar({ month, days }: { month: string; days: DayEntry[]
       </div>
       {selectedEntry ? (
         <div className="flex flex-wrap gap-4 rounded-lg border bg-muted/20 px-3 py-2 text-sm">
-          <span className="font-medium tabular-nums">{selectedEntry.date}</span>
+          <span className="font-medium tabular-nums">{formatDate(selectedEntry.date)}</span>
           {selectedEntry.dayOff ? (
             <span className="text-muted-foreground">Frei</span>
           ) : (

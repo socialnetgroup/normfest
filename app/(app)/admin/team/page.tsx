@@ -135,12 +135,20 @@ export default async function TeamDashboardPage() {
             monatlichen Team-Dashboard-Dateien.
           </p>
         </div>
-        <Link
-          href={`/admin/team/tag/${today}`}
-          className="shrink-0 rounded-lg border px-3 py-1.5 text-sm font-medium hover:bg-muted"
-        >
-          Tagesansicht →
-        </Link>
+        <div className="flex shrink-0 gap-2">
+          <Link
+            href="/admin/team/bonus-regeln"
+            className="rounded-lg border px-3 py-1.5 text-sm font-medium hover:bg-muted"
+          >
+            Bonus-Regeln
+          </Link>
+          <Link
+            href={`/admin/team/tag/${today}`}
+            className="rounded-lg border px-3 py-1.5 text-sm font-medium hover:bg-muted"
+          >
+            Tagesansicht →
+          </Link>
+        </div>
       </div>
 
       <Card>

@@ -20,8 +20,14 @@ import { cn } from "@/lib/utils";
 const ratingFmt = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 1 });
 
 const eur = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
-const dateFmt = new Intl.DateTimeFormat("de-DE");
-const dateTimeFmt = new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" });
+const dateFmt = new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+const dateTimeFmt = new Intl.DateTimeFormat("de-DE", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
 
 const OUTCOME_LABELS: Record<string, string> = {
   sold: "Verkauft",
