@@ -1108,6 +1108,17 @@ score, coaching notes. Rough cost estimate: ~$0.05–0.15/call all-in (ASR ~$0.0
 reviews/week cadence. **Blocked on:** Anis choosing an ASR provider — nothing else is
 needed to start.
 
+**Placeholder shipped (2026-07-24):** `/admin/qa-anrufe` — nav item (badged "Bald")
++ concept explainer + a mock report, built purely so the concept is demoable before
+the real ASR integration exists. Uses `input/Osnovna dokumentacija/Elida.mp3` as the
+example filename in the mock upload card, but the audio itself is deliberately **not**
+embedded or served anywhere in the app (it's a real customer call recording; copying
+it into `public/` would expose it at an unauthenticated static-asset URL on the live
+domain — not worth the risk for a placeholder). The example transcript and QA
+scorecard shown are entirely fictional/illustrative, clearly labeled as such, not a
+real transcription of that file. No functional change otherwise — this is scope
+exactly as described above, still blocked on the same ASR-provider decision.
+
 Weeks assume steady part-time solo work with Claude Code; slices are independent enough
 to pause/resume without breaking main (rule §3.2.9).
 
