@@ -29,7 +29,14 @@ export default async function LoginPage({
       }}
     >
       <div className="flex w-full max-w-sm flex-col items-center gap-6">
-        <Image src="/logo.png" alt="Social Net" width={56} height={56} priority />
+        <Image
+          src="/logo.png"
+          alt="Social Net"
+          width={56}
+          height={56}
+          priority
+          className="brightness-0 invert"
+        />
         <Card className="w-full">
           <CardHeader>
             <CardTitle>Normfest Sales Assistant</CardTitle>
