@@ -176,42 +176,6 @@ export default async function DashboardPage() {
         </Card>
       ) : null}
 
-      {(topSignals && topSignals.length > 0) || isAdmin ? (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Top-Empfehlungen</CardTitle>
-            {isAdmin ? <RefreshSignalsButton /> : null}
-          </CardHeader>
-          <CardContent>
-            {!topSignals || topSignals.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Noch keine Empfehlungen berechnet.</p>
-            ) : (
-            <ul className="flex flex-col divide-y">
-              {topSignals.map((s) => (
-                <li key={s.id} className="flex items-start gap-2 py-2.5 text-sm">
-                  <Link
-                    href={`/firmen/${s.company_id}`}
-                    className="flex flex-1 items-start justify-between gap-3 hover:underline"
-                  >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant={signalTypeVariant(s.type)}>{signalTypeLabel(s.type)}</Badge>
-                        <span className="font-medium">
-                          {(s.companies as { name: string } | null)?.name}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-muted-foreground">{s.reason}</p>
-                    </div>
-                  </Link>
-                  <SignalDismissButton companyId={s.company_id} type={s.type} productId={s.product_id} />
-                </li>
-              ))}
-            </ul>
-            )}
-          </CardContent>
-        </Card>
-      ) : null}
-
       <Card>
         <CardHeader>
           <CardTitle>Rangliste - {monthLabel}</CardTitle>
@@ -247,6 +211,42 @@ export default async function DashboardPage() {
           )}
         </CardContent>
       </Card>
+
+      {(topSignals && topSignals.length > 0) || isAdmin ? (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Top-Empfehlungen</CardTitle>
+            {isAdmin ? <RefreshSignalsButton /> : null}
+          </CardHeader>
+          <CardContent>
+            {!topSignals || topSignals.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Noch keine Empfehlungen berechnet.</p>
+            ) : (
+            <ul className="flex flex-col divide-y">
+              {topSignals.map((s) => (
+                <li key={s.id} className="flex items-start gap-2 py-2.5 text-sm">
+                  <Link
+                    href={`/firmen/${s.company_id}`}
+                    className="flex flex-1 items-start justify-between gap-3 hover:underline"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={signalTypeVariant(s.type)}>{signalTypeLabel(s.type)}</Badge>
+                        <span className="font-medium">
+                          {(s.companies as { name: string } | null)?.name}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-muted-foreground">{s.reason}</p>
+                    </div>
+                  </Link>
+                  <SignalDismissButton companyId={s.company_id} type={s.type} productId={s.product_id} />
+                </li>
+              ))}
+            </ul>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }
