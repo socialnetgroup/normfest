@@ -309,8 +309,7 @@ export default async function DashboardPage() {
             <CardTitle>Kontakt-Abdeckung nach Agent</CardTitle>
             <p className="text-sm text-muted-foreground">
               Firmen je Gebiet und wie viele davon seit 3+ Monaten nicht kontaktiert wurden - laut{" "}
-              <span className="font-medium">Dat.l.Kontakt</span> (last_contact_date) aus der VIS-Liste. Vorläufig -
-              Quelle noch nicht final bestätigt.
+              <span className="font-medium">Dat.l.Kontakt</span> (last_contact_date) aus der VIS-Liste.
             </p>
           </CardHeader>
           <CardContent>
