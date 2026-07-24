@@ -6,8 +6,13 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const eur = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+const eurCents = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", minimumFractionDigits: 2 });
 const pct = new Intl.NumberFormat("de-DE", { style: "percent", maximumFractionDigits: 0 });
 const WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+
+function bonusLabel(km: number) {
+  return km > 0 ? eurCents.format(km).replace("€", "KM") : "-";
+}
 
 export type DayEntry = {
   date: string;
@@ -15,6 +20,7 @@ export type DayEntry = {
   salesCount: number;
   callsCount: number | null;
   dayOff: boolean;
+  bonusKm: number;
 };
 
 /**
@@ -40,7 +46,7 @@ export function MonthCalendar({ month, days }: { month: string; days: DayEntry[]
     ...Array.from({ length: leadingBlanks }, () => null),
     ...Array.from({ length: daysInMonth }, (_, i) => {
       const date = `${month}-${String(i + 1).padStart(2, "0")}`;
-      return byDate.get(date) ?? { date, revenue: 0, salesCount: 0, callsCount: null, dayOff: false };
+      return byDate.get(date) ?? { date, revenue: 0, salesCount: 0, callsCount: null, dayOff: false, bonusKm: 0 };
     }),
   ];
 
@@ -62,6 +68,7 @@ export function MonthCalendar({ month, days }: { month: string; days: DayEntry[]
                 <th className="px-3 py-2 font-medium">Sales</th>
                 <th className="px-3 py-2 font-medium">Anrufe</th>
                 <th className="px-3 py-2 font-medium">CR</th>
+                <th className="px-3 py-2 font-medium">Bonus</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -73,6 +80,9 @@ export function MonthCalendar({ month, days }: { month: string; days: DayEntry[]
                   <td className="px-3 py-2 tabular-nums">{d.callsCount ?? "-"}</td>
                   <td className="px-3 py-2 tabular-nums">
                     {d.callsCount ? pct.format(d.salesCount / d.callsCount) : "-"}
+                  </td>
+                  <td className="px-3 py-2 tabular-nums font-medium text-success-foreground">
+                    {d.dayOff ? "-" : bonusLabel(d.bonusKm)}
                   </td>
                 </tr>
               ))}
@@ -145,6 +155,12 @@ export function MonthCalendar({ month, days }: { month: string; days: DayEntry[]
                 CR:{" "}
                 <span className="font-medium tabular-nums">
                   {selectedEntry.callsCount ? pct.format(selectedEntry.salesCount / selectedEntry.callsCount) : "-"}
+                </span>
+              </span>
+              <span>
+                Bonus:{" "}
+                <span className="font-medium text-success-foreground tabular-nums">
+                  {bonusLabel(selectedEntry.bonusKm)}
                 </span>
               </span>
             </>

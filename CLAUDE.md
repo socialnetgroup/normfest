@@ -364,6 +364,37 @@ utegnemo".** Went through his punch-list top to bottom same day:
   (§14 item 12), and Enrichment is an admin-only utility screen agents never see, not
   worth design time before a sales-facing demo.
 
+**Live feedback after the demo prep (2026-07-24), Anis: "Es funktioniert! ... perfekt"**
+— confirmed the assistant now answers only from real grounded data, no hallucinated
+info. Three small follow-ups from the same message, all shipped same day:
+- **Firmenprofil font sizes bumped** — field values `text-sm`→`text-base`, labels
+  `text-xs`→`text-sm`, plus the Firmenbrief's Stärken/Schwächen/Externe Chancen lists
+  and the Empfehlungen/Feedback-Verlauf list rows. Secondary/meta text (subtitles,
+  empty states) deliberately left smaller — the ask was "the important stuff is hard to
+  read," not "make everything bigger."
+- **Fokus redesigned**: active list header now its own colored (primary-accent) card
+  with an "Aktiv" badge instead of a plain `CardTitle`; section headers get icons
+  (`Package`/`Building2`/`ListChecks`); each product category inside "Katalog des
+  Fokus" gets its own tinted background block with a left accent bar and a count badge
+  instead of a plain uppercase label; "Alle Fokuslisten" rows get a left accent bar
+  (green when active) instead of a flat divided list.
+- **Team Dashboard — real gap found and closed: no bonus was shown per agent
+  anywhere except "today."** Bonus is fundamentally a daily, team-wide calculation
+  (each day's budget + each agent's share depends on the WHOLE team's revenue that
+  day), so showing it per agent per day/month required computing it across every
+  agent for every date, not just the one agent being viewed. Added
+  `computeBonusByDate()` to `lib/team/bonus.ts` (groups daily rows by date, runs the
+  existing `computeDailyBonus()` per day, returns date→agentId→bonusKm). Wired in
+  two places: `/admin/team`'s monthly tables now show a Bonus (KM) column per agent
+  and a team-month total; `/admin/team/[agentId]` now shows a monthly bonus total in
+  the stats line and a real per-day bonus in both the calendar's day-detail expand and
+  the full day-list table (`components/team/month-calendar.tsx`'s `DayEntry` gained a
+  `bonusKm` field). Verified with real data: per-agent monthly totals match between
+  the overview and per-agent pages, and clicking two different real days on the
+  calendar showed genuinely different bonus amounts (9,22 KM on the one day it was
+  actually earned, "-" on a neighboring day with revenue but no bonus) — confirming
+  it's real per-day data, not a stale total repeated everywhere.
+
 ---
 
 ## 6. Signal engine (flagship #1) — with tier awareness

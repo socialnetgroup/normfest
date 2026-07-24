@@ -1,3 +1,4 @@
+import { Building2, ListChecks, Package, Target } from "lucide-react";
 import Link from "next/link";
 
 import { FocusItemRemoveButton } from "@/components/focus-item-remove-button";
@@ -8,8 +9,24 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
+import { cn } from "@/lib/utils";
 
 const dateFmt = new Intl.DateTimeFormat("de-DE", { dateStyle: "medium" });
+
+function IconTitle({
+  icon: Icon,
+  children,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  children: React.ReactNode;
+}) {
+  return (
+    <CardTitle className="flex items-center gap-2">
+      <Icon className="size-4 text-primary" />
+      {children}
+    </CardTitle>
+  );
+}
 
 type CompanyItemRow = {
   id: string;
@@ -108,37 +125,38 @@ export default async function FokusPage() {
         <p className="text-sm text-muted-foreground">Aktuell keine aktive Fokusliste.</p>
       ) : (
         <>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between gap-3">
-              <div>
-                <CardTitle>{activeList.name}</CardTitle>
-                {activeList.note ? (
-                  <p className="text-sm text-muted-foreground">{activeList.note}</p>
-                ) : null}
+          <div className="flex flex-col gap-2 rounded-xl border-l-4 border-l-primary bg-card p-5 ring-1 ring-foreground/10">
+            <div className="flex flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Target className="size-5 text-primary" />
+                <h2 className="font-heading text-xl font-bold tracking-tight">{activeList.name}</h2>
+                <Badge variant="success">Aktiv</Badge>
               </div>
               {isAdmin ? <FocusListManage listId={activeList.id} name={activeList.name} /> : null}
-            </CardHeader>
-          </Card>
+            </div>
+            {activeList.note ? <p className="text-sm text-muted-foreground">{activeList.note}</p> : null}
+          </div>
 
           <Card>
             <CardHeader>
-              <CardTitle>Katalog des Fokus</CardTitle>
+              <IconTitle icon={Package}>Katalog des Fokus</IconTitle>
               <p className="text-sm text-muted-foreground">
                 {productRows.length} Produkte in {categories.length}{" "}
                 {categories.length === 1 ? "Kategorie" : "Kategorien"} - das lernt und drückt das ganze Team diese
                 Runde.
               </p>
             </CardHeader>
-            <CardContent className="flex flex-col gap-5">
+            <CardContent className="flex flex-col gap-6">
               {productRows.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Diese Liste enthält noch keine Produkte.</p>
               ) : (
                 categories.map((category) => (
-                  <div key={category}>
-                    <h3 className="mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                      {category} ({productsByCategory.get(category)!.length})
+                  <div key={category} className="rounded-lg bg-muted/30 p-3">
+                    <h3 className="mb-2.5 flex items-center gap-2 border-l-4 border-l-primary/50 pl-2.5 text-sm font-bold tracking-tight text-foreground">
+                      {category}
+                      <Badge variant="secondary">{productsByCategory.get(category)!.length}</Badge>
                     </h3>
-                    <ul className="flex flex-col divide-y rounded-lg border">
+                    <ul className="flex flex-col divide-y rounded-lg border bg-card">
                       {productsByCategory.get(category)!.map((row) =>
                         row.products ? (
                           <li key={row.id} className="flex flex-col gap-2 px-3 py-3">
@@ -174,7 +192,7 @@ export default async function FokusPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Firmen in dieser Liste</CardTitle>
+              <IconTitle icon={Building2}>Firmen in dieser Liste</IconTitle>
             </CardHeader>
             <CardContent>
               {companyRows.length === 0 ? (
@@ -217,13 +235,19 @@ export default async function FokusPage() {
       {isAdmin && allLists && allLists.length > 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle>Alle Fokuslisten</CardTitle>
+            <IconTitle icon={ListChecks}>Alle Fokuslisten</IconTitle>
             <p className="text-sm text-muted-foreground">Verwalten, aktivieren oder löschen.</p>
           </CardHeader>
           <CardContent>
-            <ul className="flex flex-col divide-y">
+            <ul className="flex flex-col gap-2">
               {allLists.map((list) => (
-                <li key={list.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                <li
+                  key={list.id}
+                  className={cn(
+                    "flex items-center justify-between gap-3 rounded-lg border-l-4 px-3 py-2.5 text-sm",
+                    list.active ? "border-l-success-foreground bg-success/10" : "border-l-transparent bg-muted/20",
+                  )}
+                >
                   <div className="flex items-center gap-2">
                     {list.active ? <Badge variant="success">Aktiv</Badge> : null}
                     <span className="font-medium">{list.name}</span>

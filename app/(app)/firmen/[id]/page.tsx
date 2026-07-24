@@ -41,8 +41,8 @@ function date(value: string | null) {
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="text-sm font-medium">{value ?? "-"}</dd>
+      <dt className="text-sm text-muted-foreground">{label}</dt>
+      <dd className="text-base font-medium">{value ?? "-"}</dd>
     </div>
   );
 }
@@ -138,7 +138,7 @@ export default async function CompanyProfilePage({
               <p className="text-sm text-muted-foreground">Noch nicht angereichert.</p>
             ) : null}
             {enrichment && enrichment.places_rating !== null ? (
-              <p className="text-sm">
+              <p className="text-base">
                 <span className="font-medium">{ratingFmt.format(enrichment.places_rating)}/5</span>{" "}
                 <span className="text-muted-foreground">
                   ({enrichment.places_review_count ?? 0} Bewertungen)
@@ -162,7 +162,7 @@ export default async function CompanyProfilePage({
             {enrichment?.strengths && enrichment.strengths.length > 0 ? (
               <div>
                 <p className="mb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Stärken</p>
-                <ul className="list-disc pl-5 text-sm">
+                <ul className="list-disc pl-5 text-base">
                   {enrichment.strengths.map((s, i) => (
                     <li key={i}>{s}</li>
                   ))}
@@ -173,7 +173,7 @@ export default async function CompanyProfilePage({
             {enrichment?.weaknesses && enrichment.weaknesses.length > 0 ? (
               <div>
                 <p className="mb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Schwächen</p>
-                <ul className="list-disc pl-5 text-sm">
+                <ul className="list-disc pl-5 text-base">
                   {enrichment.weaknesses.map((w, i) => (
                     <li key={i}>{w}</li>
                   ))}
@@ -214,7 +214,7 @@ export default async function CompanyProfilePage({
                 <p className="mb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                   Externe Chancen
                 </p>
-                <ul className="flex flex-col gap-2 text-sm">
+                <ul className="flex flex-col gap-2 text-base">
                   {(
                     enrichment.external_opportunities as {
                       category: string;
@@ -269,7 +269,7 @@ export default async function CompanyProfilePage({
           <CardContent>
             <ul className="flex flex-col divide-y">
               {signals.map((s) => (
-                <li key={s.id} className="flex items-start justify-between gap-3 py-2.5 text-sm">
+                <li key={s.id} className="flex items-start justify-between gap-3 py-2.5 text-base">
                   <div>
                     <div className="flex items-center gap-2">
                       <Badge variant={signalTypeVariant(s.type)}>{signalTypeLabel(s.type)}</Badge>
@@ -427,7 +427,7 @@ export default async function CompanyProfilePage({
           <CardContent>
             <ul className="flex flex-col divide-y">
               {feedbackHistory.map((f) => (
-                <li key={f.id} className="py-2.5 text-sm">
+                <li key={f.id} className="py-2.5 text-base">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge
                       variant={

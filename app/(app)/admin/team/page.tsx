@@ -9,7 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { DayOffToggle } from "@/components/day-off-toggle";
-import { computeDailyBonus, type BonusThreshold } from "@/lib/team/bonus";
+import { computeBonusByDate, computeDailyBonus, type BonusThreshold } from "@/lib/team/bonus";
 import { createClient } from "@/lib/supabase/server";
 
 const eur = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
@@ -22,6 +22,7 @@ type DayRow = {
   sales_count: number;
   calls_count: number | null;
   agent_id: string;
+  day_off: boolean;
   agents: { full_name: string } | null;
 };
 
@@ -46,7 +47,7 @@ export default async function TeamDashboardPage() {
   const [{ data, error }, { data: allAgents }, { data: todayRows }, { data: bonusSettings }] = await Promise.all([
     supabase
       .from("agent_daily_performance")
-      .select("date, revenue, sales_count, calls_count, agent_id, agents(full_name)")
+      .select("date, revenue, sales_count, calls_count, agent_id, day_off, agents(full_name)")
       .order("date"),
     supabase.from("agents").select("id, full_name").eq("active", true).order("full_name"),
     supabase.from("agent_daily_performance").select("agent_id, revenue, day_off").eq("date", today),
@@ -83,9 +84,19 @@ export default async function TeamDashboardPage() {
   }));
   const dailyBonus = computeDailyBonus(todayAgents, thresholds, minContributionPct, minQualifyingAgents);
 
+  const bonusByDate = computeBonusByDate(
+    rows.map((r) => ({ agentId: r.agent_id, date: r.date, revenue: r.revenue, dayOff: r.day_off })),
+    thresholds,
+    minContributionPct,
+    minQualifyingAgents,
+  );
+
   const byMonth = new Map<
     string,
-    Map<string, { agentId: string; name: string; revenue: number; sales: number; calls: number; callDays: number }>
+    Map<
+      string,
+      { agentId: string; name: string; revenue: number; sales: number; calls: number; callDays: number; bonusKm: number }
+    >
   >();
   for (const row of rows) {
     const agentName = row.agents?.full_name;
@@ -100,6 +111,7 @@ export default async function TeamDashboardPage() {
       sales: 0,
       calls: 0,
       callDays: 0,
+      bonusKm: 0,
     };
     entry.revenue += row.revenue;
     entry.sales += row.sales_count;
@@ -107,6 +119,7 @@ export default async function TeamDashboardPage() {
       entry.calls += row.calls_count;
       entry.callDays += 1;
     }
+    entry.bonusKm += bonusByDate.get(row.date)?.get(row.agent_id) ?? 0;
     agentMap.set(row.agent_id, entry);
   }
 
@@ -220,6 +233,7 @@ export default async function TeamDashboardPage() {
           const sorted = [...agentMap.entries()].sort((a, b) => b[1].revenue - a[1].revenue);
           const teamRevenue = sorted.reduce((sum, [, v]) => sum + v.revenue, 0);
           const teamSales = sorted.reduce((sum, [, v]) => sum + v.sales, 0);
+          const teamBonusKm = sorted.reduce((sum, [, v]) => sum + v.bonusKm, 0);
 
           return (
             <Card key={month}>
@@ -234,6 +248,12 @@ export default async function TeamDashboardPage() {
                   <span>
                     Team-Sales: <span className="font-medium text-foreground">{teamSales}</span>
                   </span>
+                  <span>
+                    Team-Bonus:{" "}
+                    <span className="font-medium text-foreground">
+                      {teamBonusKm > 0 ? `${eurCents.format(teamBonusKm).replace("€", "KM")}` : "-"}
+                    </span>
+                  </span>
                 </div>
                 <div className="overflow-hidden rounded-lg border">
                   <table className="w-full text-sm">
@@ -244,6 +264,7 @@ export default async function TeamDashboardPage() {
                         <th className="px-3 py-2 font-medium">Sales</th>
                         <th className="px-3 py-2 font-medium">Anrufe</th>
                         <th className="px-3 py-2 font-medium">CR (Sales/Anrufe)</th>
+                        <th className="px-3 py-2 font-medium">Bonus (KM)</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y">
@@ -258,6 +279,9 @@ export default async function TeamDashboardPage() {
                           <td className="px-3 py-2">{v.sales}</td>
                           <td className="px-3 py-2">{v.calls > 0 ? v.calls : "-"}</td>
                           <td className="px-3 py-2">{v.calls > 0 ? pct.format(v.sales / v.calls) : "-"}</td>
+                          <td className="px-3 py-2 font-medium text-success-foreground">
+                            {v.bonusKm > 0 ? `${eurCents.format(v.bonusKm).replace("€", "KM")}` : "-"}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

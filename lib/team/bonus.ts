@@ -50,6 +50,40 @@ export function computeDailyBonus(
   };
 }
 
+export type DailyRevenueRow = { agentId: string; date: string; revenue: number; dayOff: boolean };
+
+/** Groups daily performance rows by date and runs computeDailyBonus per day,
+ * returning date -> agentId -> bonusKm. Needs EVERY agent's row for a given
+ * date to compute team revenue/thresholds correctly -- never call this with
+ * a single agent's rows only. */
+export function computeBonusByDate(
+  rows: DailyRevenueRow[],
+  thresholds: BonusThreshold[],
+  minContributionPct: number,
+  minQualifyingAgents: number,
+): Map<string, Map<string, number>> {
+  const byDate = new Map<string, DailyRevenueRow[]>();
+  for (const r of rows) {
+    if (!byDate.has(r.date)) byDate.set(r.date, []);
+    byDate.get(r.date)!.push(r);
+  }
+
+  const result = new Map<string, Map<string, number>>();
+  for (const [date, dayRows] of byDate) {
+    const agentsInput: BonusAgentInput[] = dayRows.map((r) => ({
+      agentId: r.agentId,
+      name: "",
+      revenue: r.revenue,
+      dayOff: r.dayOff,
+    }));
+    const { results } = computeDailyBonus(agentsInput, thresholds, minContributionPct, minQualifyingAgents);
+    const dayMap = new Map<string, number>();
+    for (const res of results) dayMap.set(res.agentId, res.bonusKm);
+    result.set(date, dayMap);
+  }
+  return result;
+}
+
 export function shiftDate(date: string, deltaDays: number) {
   const d = new Date(`${date}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + deltaDays);
