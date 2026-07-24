@@ -93,7 +93,7 @@ export default async function DashboardPage() {
       .select("id", { count: "exact", head: true })
       .eq("active", true)
       .eq("do_not_contact", false)
-      .or(`last_visit_date.is.null,last_visit_date.lt.${threeMonthsAgoStr}`),
+      .or(`last_contact_date.is.null,last_contact_date.lt.${threeMonthsAgoStr}`),
     supabase.from("companies").select("id", { count: "exact", head: true }),
     myAgent
       ? supabase
@@ -308,8 +308,9 @@ export default async function DashboardPage() {
           <CardHeader>
             <CardTitle>Kontakt-Abdeckung nach Agent</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Firmen je Gebiet und wie viele davon seit 3+ Monaten nicht besucht wurden - laut{" "}
-              <span className="font-medium">Dat.l.Besuch</span> (last_visit_date) aus der VIS-Liste.
+              Firmen je Gebiet und wie viele davon seit 3+ Monaten nicht kontaktiert wurden - laut{" "}
+              <span className="font-medium">Dat.l.Kontakt</span> (last_contact_date) aus der VIS-Liste. Vorläufig -
+              Quelle noch nicht final bestätigt.
             </p>
           </CardHeader>
           <CardContent>
