@@ -264,7 +264,7 @@ export default async function CompanyProfilePage({
       {signals && signals.length > 0 ? (
         <Card>
           <CardHeader>
-            <IconTitle icon={Sparkles}>Empfehlungen</IconTitle>
+            <IconTitle icon={Sparkles}>Signale</IconTitle>
           </CardHeader>
           <CardContent>
             <ul className="flex flex-col divide-y">

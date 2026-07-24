@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { LogCallButton } from "@/components/log-call-button";
 import { LogSaleForm } from "@/components/log-sale-form";
 import { ProgressBar } from "@/components/progress-bar";
 import { RefreshSignalsButton } from "@/components/refresh-signals-button";
@@ -60,6 +61,7 @@ export default async function DashboardPage() {
   const twoMonthsAgo = new Date(now);
   twoMonthsAgo.setMonth(now.getMonth() - 2);
   const twoMonthsAgoStr = twoMonthsAgo.toISOString().slice(0, 10);
+  const todayStr = now.toISOString().slice(0, 10);
 
   const [
     { data: monthRows },
@@ -67,6 +69,7 @@ export default async function DashboardPage() {
     { data: topSignals },
     { count: signalsTotal },
     { count: uncontactedCount },
+    { data: myToday },
   ] = await Promise.all([
     supabase
       .from("agent_daily_performance")
@@ -88,6 +91,14 @@ export default async function DashboardPage() {
       .eq("active", true)
       .eq("do_not_contact", false)
       .or(`last_contact_date.is.null,last_contact_date.lt.${twoMonthsAgoStr}`),
+    myAgent
+      ? supabase
+          .from("agent_daily_performance")
+          .select("sales_count, calls_count")
+          .eq("agent_id", myAgent.id)
+          .eq("date", todayStr)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
 
   const byAgent = new Map<string, { name: string; revenue: number }>();
@@ -121,7 +132,7 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatTile label="Team-Umsatz" value={eur.format(teamRevenue)} accent="primary" />
         <StatTile label="Feedback diese Woche" value={String(feedbackCountThisWeek ?? 0)} accent="success" />
-        <StatTile label="Empfehlungen offen" value={String(signalsTotal ?? 0)} accent="secondary" />
+        <StatTile label="Signale offen" value={String(signalsTotal ?? 0)} accent="secondary" />
         <StatTile
           label="Nicht kontaktiert (2+ Mon.)"
           value={String(uncontacted)}
@@ -135,7 +146,13 @@ export default async function DashboardPage() {
             <CardTitle>Mein Ziel - {myAgent.full_name}</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            <LogSaleForm />
+            <div className="flex flex-wrap items-end gap-3">
+              <LogSaleForm />
+              <LogCallButton />
+              <span className="pb-1.5 text-sm text-muted-foreground">
+                Heute: {myToday?.sales_count ?? 0} Sales · {myToday?.calls_count ?? 0} Anrufe
+              </span>
+            </div>
             {goals.agent_monthly_goal ? (
               <div>
                 <div className="mb-1 flex justify-between text-sm">
@@ -215,12 +232,12 @@ export default async function DashboardPage() {
       {(topSignals && topSignals.length > 0) || isAdmin ? (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Top-Empfehlungen</CardTitle>
+            <CardTitle>Signale</CardTitle>
             {isAdmin ? <RefreshSignalsButton /> : null}
           </CardHeader>
           <CardContent>
             {!topSignals || topSignals.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Noch keine Empfehlungen berechnet.</p>
+              <p className="text-sm text-muted-foreground">Noch keine Signale berechnet.</p>
             ) : (
             <ul className="flex flex-col divide-y">
               {topSignals.map((s) => (

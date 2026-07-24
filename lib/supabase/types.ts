@@ -1284,6 +1284,28 @@ export type Database = {
         Returns: undefined
       }
       fn_is_admin: { Args: never; Returns: boolean }
+      fn_log_call: {
+        Args: never
+        Returns: {
+          agent_id: string
+          calls_count: number | null
+          conversion_rate: number | null
+          created_at: string
+          date: string
+          day_off: boolean
+          id: string
+          revenue: number
+          sales_count: number
+          source_file: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agent_daily_performance"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       fn_log_sale: {
         Args: { p_amount: number }
         Returns: {

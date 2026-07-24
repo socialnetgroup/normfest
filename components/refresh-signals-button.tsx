@@ -20,7 +20,7 @@ export function RefreshSignalsButton() {
 
   return (
     <Button type="button" variant="outline" size="xs" onClick={refresh} disabled={pending}>
-      {pending ? "Aktualisiert..." : "Empfehlungen aktualisieren"}
+      {pending ? "Aktualisiert..." : "Signale aktualisieren"}
     </Button>
   );
 }

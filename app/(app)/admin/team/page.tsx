@@ -145,7 +145,7 @@ export default async function TeamDashboardPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Dnevlicher Bonus - heute</CardTitle>
+          <CardTitle>Täglicher Bonus - heute</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="mb-4 flex flex-wrap gap-6 text-sm">
