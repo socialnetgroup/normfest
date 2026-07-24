@@ -28,7 +28,7 @@ export default async function WissenPage({
           .from("kb_chunks")
           .select("id, heading, content, kb_documents!inner(title, collection)")
           .eq("kb_documents.collection", "wissen")
-          .textSearch("search_vector", query, { type: "websearch", config: "german" })
+          .textSearch("search_vector", query, { type: "websearch", config: "simple" })
           .limit(20)
       : null;
 

@@ -528,6 +528,39 @@ output.
    pattern but is a genuine company name with a quoted nickname, not an artifact — left
    untouched.
 
+**Two real bugs found + fixed during pre-demo QA (2026-07-24), reported by Anis as
+"Assistent ne radi — Could not resolve authentication method":**
+1. **Root cause was a stale dev server, not missing config.** `ANTHROPIC_API_KEY` was
+   correctly set in `.env.local` the whole time (confirmed via a fresh Node process); the
+   long-running `next dev` process just hadn't picked it up. Restarting the dev server
+   fixed it immediately — flagging here in case it recurs, since a stale local process is
+   an easy thing to misdiagnose as a real config problem. Not expected to affect a real
+   Vercel deploy, where env vars are read fresh at boot.
+2. **Real bug: `kb_chunks.search_vector` used German FTS (`to_tsvector('german', ...)`)
+   for BOTH collections, but the `skript` collection (Agent Sales Guide) is written in
+   Bosnian/Croatian, not German** — `wissen` is genuinely German, `skript` is not. German
+   stemming doesn't match Bosnian word forms, so `search_kb` on real Skript questions
+   silently returned 0 rows almost every time. The model's response to repeated empty
+   results was to keep calling `search_kb` with rephrased queries instead of giving up,
+   which burned through `maxTurns` and landed on the generic "couldn't produce an answer"
+   fallback — the exact symptom that made this look like a broken assistant rather than a
+   search bug. Fixed in two migrations
+   (`20260724020000_kb_search_simple_config.sql`,
+   `20260724030000_fn_chat_search_kb_simple_config.sql`): switched both the generated
+   column and `fn_chat_search_kb`'s query to the `'simple'` FTS config (plain tokenization,
+   no language-specific stemming) — correct for both languages at the cost of losing
+   German stemming quality, an acceptable trade given the alternative was silently broken
+   search for an entire collection. Also updated `/wissen`'s own search query to match
+   (`app/(app)/wissen/page.tsx`), and reworded the `search_kb` tool description
+   (`lib/chat/core.mjs`) to tell the model explicitly that `skript` content is BS/HR and
+   `wissen` is DE — it should phrase search queries in the collection's own language, not
+   the agent's question language — plus a cap of ~1-2 retries instead of looping. Bumped
+   `runChatTurn`'s default `maxTurns` from 6 to 8 as a cheap safety margin. Verified live
+   via a direct `/api/chat` call (bypassing the flaky browser-automation input path): the
+   same question that previously exhausted 6, then 8, turns with zero output now returns a
+   full, correctly-grounded, quote-accurate answer citing the real 5-phase Skript structure
+   in one pass.
+
 **Still open:** real per-turn latency (p95 profile <2s / chat first-token <3s, §2.2) —
 the CLI harness bypasses the SSE-streaming path entirely, so it can't measure real
 first-token latency. That needs a browser-based check through `/assistent`, which this
