@@ -32,7 +32,7 @@ const COMMON_OBJECTIONS = [
 
 type ProductOption = { id: string; name: string; sku: string };
 
-export function FeedbackForm({ companyId, agentId }: { companyId: string; agentId: string }) {
+export function FeedbackForm({ companyId }: { companyId: string }) {
   const router = useRouter();
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [productQuery, setProductQuery] = useState("");
@@ -79,15 +79,14 @@ export function FeedbackForm({ companyId, agentId }: { companyId: string; agentI
     setStatus("saving");
     setErrorMessage(null);
     const supabase = createClient();
-    const { error } = await supabase.from("sales_feedback").insert({
-      agent_id: agentId,
-      company_id: companyId,
-      product_id: selectedProduct?.id ?? null,
-      outcome,
-      qty: qty ? Number(qty) : null,
-      value_net: value ? Number(value) : null,
-      objection: objection || null,
-      comment: comment || null,
+    const { error } = await supabase.rpc("fn_log_sales_feedback", {
+      p_company_id: companyId,
+      p_outcome: outcome,
+      p_product_id: selectedProduct?.id ?? undefined,
+      p_qty: qty ? Number(qty) : undefined,
+      p_value_net: value ? Number(value) : undefined,
+      p_objection: objection || undefined,
+      p_comment: comment || undefined,
     });
 
     if (error) {

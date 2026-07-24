@@ -10,7 +10,7 @@ import { createClient } from "@/lib/supabase/client";
 
 type CompanyOption = { id: string; name: string; kundennummer: string; ort: string | null };
 
-export function StandaloneFeedbackFlow({ agentId }: { agentId: string }) {
+export function StandaloneFeedbackFlow() {
   const [query, setQuery] = useState("");
   const [options, setOptions] = useState<CompanyOption[]>([]);
   const [selected, setSelected] = useState<CompanyOption | null>(null);
@@ -74,7 +74,7 @@ export function StandaloneFeedbackFlow({ agentId }: { agentId: string }) {
             <CardTitle>Feedback für {selected.name}</CardTitle>
           </CardHeader>
           <CardContent>
-            <FeedbackForm companyId={selected.id} agentId={agentId} />
+            <FeedbackForm companyId={selected.id} />
           </CardContent>
         </Card>
       ) : null}

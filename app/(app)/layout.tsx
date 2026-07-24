@@ -27,7 +27,7 @@ export default async function AppLayout({
     .single();
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex h-screen overflow-hidden">
       <AppSidebar
         isAdmin={profile?.role === "admin"}
         userLabel={profile?.full_name ?? profile?.email ?? user.email ?? ""}

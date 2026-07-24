@@ -76,7 +76,9 @@ export default async function CompanyProfilePage({
       supabase.auth.getUser(),
       supabase
         .from("sales_feedback")
-        .select("id, outcome, qty, value_net, objection, comment, created_at, products(name), profiles(full_name)")
+        .select(
+          "id, outcome, qty, value_net, objection, comment, created_at, products(name), profiles(full_name, agents(id))",
+        )
         .eq("company_id", id)
         .order("created_at", { ascending: false })
         .limit(10),
@@ -421,7 +423,7 @@ export default async function CompanyProfilePage({
           <CardTitle>Feedback erfassen</CardTitle>
         </CardHeader>
         <CardContent>
-          <FeedbackForm companyId={company.id} agentId={agentId} />
+          <FeedbackForm companyId={company.id} />
         </CardContent>
       </Card>
 
@@ -459,8 +461,19 @@ export default async function CompanyProfilePage({
                   ) : null}
                   {f.comment ? <p className="mt-1 text-muted-foreground">{f.comment}</p> : null}
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {(f.profiles as { full_name: string | null } | null)?.full_name ?? "-"} ·{" "}
-                    {dateTimeFmt.format(new Date(f.created_at))}
+                    {(() => {
+                      const fp = f.profiles as { full_name: string | null; agents: { id: string }[] } | null;
+                      const agentId = fp?.agents?.[0]?.id;
+                      const name = fp?.full_name ?? "-";
+                      return isAdmin && agentId ? (
+                        <Link href={`/admin/team/${agentId}`} className="hover:underline">
+                          {name}
+                        </Link>
+                      ) : (
+                        name
+                      );
+                    })()}{" "}
+                    · {dateTimeFmt.format(new Date(f.created_at))}
                   </p>
                 </li>
               ))}

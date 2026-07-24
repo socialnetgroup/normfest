@@ -1336,6 +1336,18 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      fn_log_sales_feedback: {
+        Args: {
+          p_comment?: string
+          p_company_id: string
+          p_objection?: string
+          p_outcome: string
+          p_product_id?: string
+          p_qty?: number
+          p_value_net?: number
+        }
+        Returns: string
+      }
       fn_refresh_signals: { Args: never; Returns: undefined }
       fn_set_day_off: {
         Args: { p_agent_id: string; p_date: string; p_off: boolean }

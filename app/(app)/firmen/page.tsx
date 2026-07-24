@@ -6,15 +6,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/server";
 
-const RESULT_LIMIT = 25;
+const PAGE_SIZE = 25;
 
 export default async function FirmenPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; page?: string }>;
 }) {
-  const { q } = await searchParams;
+  const { q, page: pageParam } = await searchParams;
   const query = q?.trim() ?? "";
+  const page = Math.max(1, Number(pageParam) || 1);
+  const from = (page - 1) * PAGE_SIZE;
+  const to = from + PAGE_SIZE - 1;
 
   const supabase = await createClient();
 
@@ -22,20 +25,24 @@ export default async function FirmenPage({
     query.length >= 2
       ? await supabase
           .from("companies")
-          .select("id, kundennummer, name, ort, plz, gebiet, do_not_contact, call_priority")
+          .select("id, kundennummer, name, ort, plz, gebiet, do_not_contact, call_priority", { count: "exact" })
           .or(
             `name.ilike.%${query}%,kundennummer.ilike.%${query}%,ort.ilike.%${query}%,plz.ilike.%${query}%,gebiet.ilike.%${query}%`,
           )
           .order("name")
-          .limit(RESULT_LIMIT)
+          .range(from, to)
       : null;
+
+  const total = results?.count ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const pageHref = (p: number) => `/firmen?q=${encodeURIComponent(query)}&page=${p}`;
 
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="font-heading text-2xl font-semibold tracking-tight">Firmen</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Suche nach Name, Kundennummer, Ort oder PLZ.
+          Suche nach Name, Kundennummer, Ort, PLZ oder Gebiet.
         </p>
       </div>
 
@@ -70,36 +77,63 @@ export default async function FirmenPage({
 
       {results?.data ? (
         results.data.length > 0 ? (
-          <div className="overflow-hidden rounded-xl border">
-            <ul className="divide-y">
-              {results.data.map((company) => (
-                <li key={company.id}>
-                  <Link
-                    href={`/firmen/${company.id}`}
-                    className="flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-accent"
-                  >
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="truncate font-medium">{company.name}</span>
-                        {company.call_priority ? (
-                          <Badge variant="warning">Zuerst anrufen</Badge>
-                        ) : null}
-                        {company.do_not_contact ? (
-                          <Badge variant="muted">Gesperrt</Badge>
-                        ) : null}
+          <>
+            <p className="text-sm text-muted-foreground">
+              {total} {total === 1 ? "Treffer" : "Treffer"} - Seite {page} von {totalPages}
+            </p>
+            <div className="overflow-hidden rounded-xl border">
+              <ul className="divide-y">
+                {results.data.map((company) => (
+                  <li key={company.id}>
+                    <Link
+                      href={`/firmen/${company.id}`}
+                      className="flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-accent"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate font-medium">{company.name}</span>
+                          {company.call_priority ? (
+                            <Badge variant="warning">Zuerst anrufen</Badge>
+                          ) : null}
+                          {company.do_not_contact ? (
+                            <Badge variant="muted">Gesperrt</Badge>
+                          ) : null}
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          {company.kundennummer} · {company.plz} {company.ort}
+                        </div>
                       </div>
-                      <div className="text-sm text-muted-foreground">
-                        {company.kundennummer} · {company.plz} {company.ort}
-                      </div>
-                    </div>
-                    <Badge variant="secondary" className="shrink-0">
-                      {company.gebiet}
-                    </Badge>
+                      <Badge variant="secondary" className="shrink-0">
+                        {company.gebiet}
+                      </Badge>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {totalPages > 1 ? (
+              <div className="flex items-center justify-between gap-3">
+                {page > 1 ? (
+                  <Link href={pageHref(page - 1)} className="rounded-lg border px-3 py-1.5 text-sm hover:bg-muted">
+                    ← Vorherige
                   </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
+                ) : (
+                  <span />
+                )}
+                <span className="text-sm text-muted-foreground">
+                  Seite {page} von {totalPages}
+                </span>
+                {page < totalPages ? (
+                  <Link href={pageHref(page + 1)} className="rounded-lg border px-3 py-1.5 text-sm hover:bg-muted">
+                    Nächste →
+                  </Link>
+                ) : (
+                  <span />
+                )}
+              </div>
+            ) : null}
+          </>
         ) : (
           <p className="text-sm text-muted-foreground">
             Keine Firmen gefunden für &ldquo;{query}&rdquo;.

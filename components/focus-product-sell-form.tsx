@@ -10,7 +10,7 @@ import { createClient } from "@/lib/supabase/client";
 
 type CompanyOption = { id: string; name: string; kundennummer: string; ort: string | null };
 
-export function FocusProductSellForm({ productId, agentId }: { productId: string; agentId: string }) {
+export function FocusProductSellForm({ productId }: { productId: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -55,13 +55,12 @@ export function FocusProductSellForm({ productId, agentId }: { productId: string
     setStatus("saving");
     setErrorMessage(null);
     const supabase = createClient();
-    const { error } = await supabase.from("sales_feedback").insert({
-      agent_id: agentId,
-      company_id: selected.id,
-      product_id: productId,
-      outcome: "sold",
-      qty: qty ? Number(qty) : null,
-      value_net: value ? Number(value) : null,
+    const { error } = await supabase.rpc("fn_log_sales_feedback", {
+      p_company_id: selected.id,
+      p_outcome: "sold",
+      p_product_id: productId,
+      p_qty: qty ? Number(qty) : undefined,
+      p_value_net: value ? Number(value) : undefined,
     });
 
     if (error) {

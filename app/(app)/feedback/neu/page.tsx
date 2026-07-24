@@ -18,7 +18,7 @@ export default async function NeuFeedbackPage() {
           Firma suchen, dann Ergebnis erfassen.
         </p>
       </div>
-      <StandaloneFeedbackFlow agentId={user.id} />
+      <StandaloneFeedbackFlow />
     </div>
   );
 }

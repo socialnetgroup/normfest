@@ -145,6 +145,7 @@ export default async function DashboardPage() {
   const coverage = [
     ...(coverageAgents ?? []).map((a) => ({
       label: a.full_name,
+      agentId: a.id as string | null,
       ...(byGebiet.get(a.gebiet) ?? { total: 0, uncontacted: 0 }),
     })),
   ].sort((a, b) => b.uncontacted - a.uncontacted);
@@ -156,7 +157,7 @@ export default async function DashboardPage() {
       { total: 0, uncontacted: 0 },
     );
   if (unassignedTotals.total > 0) {
-    coverage.push({ label: "Nicht zugeordnet", ...unassignedTotals });
+    coverage.push({ label: "Nicht zugeordnet", agentId: null, ...unassignedTotals });
   }
 
   return (
@@ -174,6 +175,7 @@ export default async function DashboardPage() {
           label="Nicht kontaktiert (3+ Mon.)"
           value={String(uncontacted)}
           accent={uncontactedSevere ? "warning" : "secondary"}
+          href={isAdmin ? "#kontakt-abdeckung" : undefined}
         />
         <StatTile label="Signale offen" value={String(signalsTotal ?? 0)} accent="secondary" />
       </div>
@@ -255,7 +257,16 @@ export default async function DashboardPage() {
                     >
                       {i + 1}
                     </span>
-                    <span className={i === 0 ? "font-semibold" : undefined}>{row.name}</span>
+                    {isAdmin ? (
+                      <Link
+                        href={`/admin/team/${row.agentId}`}
+                        className={cn("hover:underline", i === 0 ? "font-semibold" : undefined)}
+                      >
+                        {row.name}
+                      </Link>
+                    ) : (
+                      <span className={i === 0 ? "font-semibold" : undefined}>{row.name}</span>
+                    )}
                   </span>
                   <span className={cn("tabular-nums", i === 0 ? "font-bold text-primary" : "font-medium")}>
                     {eur.format(row.revenue)}
@@ -304,7 +315,7 @@ export default async function DashboardPage() {
       ) : null}
 
       {isAdmin && coverage.length > 0 ? (
-        <Card>
+        <Card id="kontakt-abdeckung" className="scroll-mt-4">
           <CardHeader>
             <CardTitle>Kontakt-Abdeckung nach Agent</CardTitle>
             <p className="text-sm text-muted-foreground">
@@ -328,7 +339,15 @@ export default async function DashboardPage() {
                     const pct = row.total > 0 ? row.uncontacted / row.total : 0;
                     return (
                       <tr key={row.label} className={row.label === "Nicht zugeordnet" ? "opacity-60" : undefined}>
-                        <td className="px-2 py-2 font-medium">{row.label}</td>
+                        <td className="px-2 py-2 font-medium">
+                          {row.agentId ? (
+                            <Link href={`/admin/team/${row.agentId}`} className="hover:underline">
+                              {row.label}
+                            </Link>
+                          ) : (
+                            row.label
+                          )}
+                        </td>
                         <td className="px-2 py-2 tabular-nums">{row.total}</td>
                         <td className="px-2 py-2 tabular-nums">{row.uncontacted}</td>
                         <td className="px-2 py-2">

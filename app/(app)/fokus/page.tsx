@@ -174,9 +174,7 @@ export default async function FokusPage() {
                                 <Badge variant={soldCounts.get(row.products.id) ? "success" : "muted"}>
                                   {soldCounts.get(row.products.id) ?? 0}× verkauft
                                 </Badge>
-                                {user ? (
-                                  <FocusProductSellForm productId={row.products.id} agentId={user.id} />
-                                ) : null}
+                                {user ? <FocusProductSellForm productId={row.products.id} /> : null}
                                 {isAdmin ? <FocusItemRemoveButton table="focus_list_products" id={row.id} /> : null}
                               </div>
                             </div>
