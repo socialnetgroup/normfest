@@ -17,8 +17,10 @@ import {
   ChevronDown,
   Upload,
   Wand2,
+  Headphones,
 } from "lucide-react";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -46,11 +48,13 @@ function NavItem({
   label,
   icon: Icon,
   active,
+  badge,
 }: {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   active: boolean;
+  badge?: string;
 }) {
   return (
     <Link
@@ -63,7 +67,12 @@ function NavItem({
       )}
     >
       <Icon className="size-4 shrink-0" />
-      {label}
+      <span className="flex-1 truncate">{label}</span>
+      {badge ? (
+        <Badge variant="warning" className="shrink-0">
+          {badge}
+        </Badge>
+      ) : null}
     </Link>
   );
 }
@@ -99,6 +108,13 @@ export function AppSidebar({
               Admin
             </div>
             <NavItem href="/admin/team" label="Team" icon={Users} active={isActive(pathname, "/admin/team")} />
+            <NavItem
+              href="/admin/qa-anrufe"
+              label="QA-Anrufe"
+              icon={Headphones}
+              active={isActive(pathname, "/admin/qa-anrufe")}
+              badge="Bald"
+            />
             <button
               type="button"
               onClick={() => setSettingsOpen((v) => !v)}
