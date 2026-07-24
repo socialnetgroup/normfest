@@ -10,8 +10,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { signalTypeLabel } from "@/lib/signals";
+import { StatTile } from "@/components/ui/stat-tile";
+import { signalTypeLabel, signalTypeVariant } from "@/lib/signals";
 import { createClient } from "@/lib/supabase/server";
+import { cn } from "@/lib/utils";
 
 const eur = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
 
@@ -54,7 +56,17 @@ export default async function DashboardPage() {
   weekStart.setDate(now.getDate() - dayOfWeek);
   weekStart.setHours(0, 0, 0, 0);
 
-  const [{ data: monthRows }, { count: feedbackCountThisWeek }, { data: topSignals }] = await Promise.all([
+  const twoMonthsAgo = new Date(now);
+  twoMonthsAgo.setMonth(now.getMonth() - 2);
+  const twoMonthsAgoStr = twoMonthsAgo.toISOString().slice(0, 10);
+
+  const [
+    { data: monthRows },
+    { count: feedbackCountThisWeek },
+    { data: topSignals },
+    { count: signalsTotal },
+    { count: uncontactedCount },
+  ] = await Promise.all([
     supabase
       .from("agent_daily_performance")
       .select("agent_id, revenue, agents(full_name)")
@@ -68,6 +80,13 @@ export default async function DashboardPage() {
       .select("id, type, score, reason, company_id, companies(name)")
       .order("score", { ascending: false })
       .limit(8),
+    supabase.from("signals").select("id", { count: "exact", head: true }),
+    supabase
+      .from("companies")
+      .select("id", { count: "exact", head: true })
+      .eq("active", true)
+      .eq("do_not_contact", false)
+      .or(`last_contact_date.is.null,last_contact_date.lt.${twoMonthsAgoStr}`),
   ]);
 
   const byAgent = new Map<string, { name: string; revenue: number }>();
@@ -88,22 +107,31 @@ export default async function DashboardPage() {
 
   const monthLabel = new Intl.DateTimeFormat("de-DE", { month: "long", year: "numeric" }).format(new Date());
 
+  const uncontacted = uncontactedCount ?? 0;
+  const uncontactedSevere = uncontacted >= 500;
+
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h1 className="font-heading text-2xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{monthLabel}</p>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">{feedbackCountThisWeek ?? 0}</span> Feedback diese Woche
-        </p>
+      <div>
+        <h1 className="font-heading text-2xl font-semibold tracking-tight">Dashboard</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{monthLabel}</p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <StatTile label="Team-Umsatz" value={eur.format(teamRevenue)} accent="primary" />
+        <StatTile label="Feedback diese Woche" value={String(feedbackCountThisWeek ?? 0)} accent="success" />
+        <StatTile label="Empfehlungen offen" value={String(signalsTotal ?? 0)} accent="secondary" />
+        <StatTile
+          label="Nicht kontaktiert (2+ Mon.)"
+          value={String(uncontacted)}
+          accent={uncontactedSevere ? "warning" : "secondary"}
+        />
       </div>
 
       {myAgent ? (
         <Card>
           <CardHeader>
-            <CardTitle>Mein Ziel — {myAgent.full_name}</CardTitle>
+            <CardTitle>Mein Ziel - {myAgent.full_name}</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <LogSaleForm />
@@ -166,7 +194,7 @@ export default async function DashboardPage() {
                   >
                     <div>
                       <div className="flex items-center gap-2">
-                        <Badge variant="secondary">{signalTypeLabel(s.type)}</Badge>
+                        <Badge variant={signalTypeVariant(s.type)}>{signalTypeLabel(s.type)}</Badge>
                         <span className="font-medium">
                           {(s.companies as { name: string } | null)?.name}
                         </span>
@@ -184,7 +212,7 @@ export default async function DashboardPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Rangliste — {monthLabel}</CardTitle>
+          <CardTitle>Rangliste - {monthLabel}</CardTitle>
         </CardHeader>
         <CardContent>
           {leaderboard.length === 0 ? (
@@ -193,11 +221,24 @@ export default async function DashboardPage() {
             <ol className="flex flex-col divide-y">
               {leaderboard.map((row, i) => (
                 <li key={row.agentId} className="flex items-center justify-between py-2 text-sm">
-                  <span>
-                    <span className="mr-2 text-muted-foreground">{i + 1}.</span>
-                    {row.name}
+                  <span className="flex items-center gap-2">
+                    <span
+                      className={cn(
+                        "flex size-5 items-center justify-center rounded-full text-xs font-bold",
+                        i === 0
+                          ? "bg-warning/25 text-warning-foreground"
+                          : i === 1 || i === 2
+                            ? "bg-muted text-foreground"
+                            : "text-muted-foreground",
+                      )}
+                    >
+                      {i + 1}
+                    </span>
+                    <span className={i === 0 ? "font-semibold" : undefined}>{row.name}</span>
                   </span>
-                  <span className="font-medium">{eur.format(row.revenue)}</span>
+                  <span className={cn("tabular-nums", i === 0 ? "font-bold text-primary" : "font-medium")}>
+                    {eur.format(row.revenue)}
+                  </span>
                 </li>
               ))}
             </ol>

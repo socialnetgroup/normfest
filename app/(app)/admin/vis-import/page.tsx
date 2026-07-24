@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { VisImportForm } from "@/components/vis-import-form";
 import { createClient } from "@/lib/supabase/server";
 
-// §14 item 9 — self-serve VIS-list re-import, so a weekly refresh doesn't
+// §14 item 9 - self-serve VIS-list re-import, so a weekly refresh doesn't
 // need a dev session. Re-runs the exact same mapping/dedup logic as
 // scripts/import-vis.mjs (shared via lib/vis-import/core.mjs): upsert on
 // kundennummer, invalid rows (missing kundennummer/name/gebiet) skipped and
@@ -27,7 +27,7 @@ export default async function VisImportPage() {
         <h1 className="font-heading text-2xl font-semibold tracking-tight">VIS-Liste importieren</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Nur für Admins sichtbar. Aktuell {companyCount ?? 0} Firmen in der Datenbank. Beim Hochladen wird
-          jede Zeile per Kundennummer abgeglichen — bestehende Firmen werden aktualisiert, neue angelegt,
+          jede Zeile per Kundennummer abgeglichen - bestehende Firmen werden aktualisiert, neue angelegt,
           nichts wird gelöscht.
         </p>
       </div>

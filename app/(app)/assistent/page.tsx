@@ -24,7 +24,7 @@ export default async function AssistentPage({
       <div>
         <h1 className="font-heading text-2xl font-semibold tracking-tight">Assistent</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Fragen zu Firmen, Produkten, Markenfokus, Skript und Wissen — mit Quellenangabe.
+          Fragen zu Firmen, Produkten, Markenfokus, Skript und Wissen - mit Quellenangabe.
         </p>
       </div>
 

@@ -40,7 +40,7 @@ export function StandaloneFeedbackFlow({ agentId }: { agentId: string }) {
           type="search"
           value={selected ? `${selected.name} (${selected.kundennummer})` : query}
           onChange={(e) => search(e.target.value)}
-          placeholder="Firma suchen — Name oder Kundennummer..."
+          placeholder="Firma suchen - Name oder Kundennummer..."
           autoFocus
           className="h-10 pl-8 text-base"
         />

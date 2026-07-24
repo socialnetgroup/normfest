@@ -18,7 +18,7 @@ export type DayEntry = {
 };
 
 /**
- * Compact month calendar for one agent's daily performance (§14 item 7 —
+ * Compact month calendar for one agent's daily performance (§14 item 7 -
  * Genesys-style depth-of-view: small by default, click a day for detail,
  * or expand to the full day-by-day list).
  */
@@ -69,10 +69,10 @@ export function MonthCalendar({ month, days }: { month: string; days: DayEntry[]
                 <tr key={d.date} className={d.dayOff ? "opacity-50" : undefined}>
                   <td className="px-3 py-2 font-medium tabular-nums">{d.date}</td>
                   <td className="px-3 py-2 tabular-nums">{d.dayOff ? "frei" : eur.format(d.revenue)}</td>
-                  <td className="px-3 py-2 tabular-nums">{d.dayOff ? "—" : d.salesCount}</td>
-                  <td className="px-3 py-2 tabular-nums">{d.callsCount ?? "—"}</td>
+                  <td className="px-3 py-2 tabular-nums">{d.dayOff ? "-" : d.salesCount}</td>
+                  <td className="px-3 py-2 tabular-nums">{d.callsCount ?? "-"}</td>
                   <td className="px-3 py-2 tabular-nums">
-                    {d.callsCount ? pct.format(d.salesCount / d.callsCount) : "—"}
+                    {d.callsCount ? pct.format(d.salesCount / d.callsCount) : "-"}
                   </td>
                 </tr>
               ))}
@@ -139,12 +139,12 @@ export function MonthCalendar({ month, days }: { month: string; days: DayEntry[]
               </span>
               <span>
                 Anrufe:{" "}
-                <span className="font-medium tabular-nums">{selectedEntry.callsCount ?? "—"}</span>
+                <span className="font-medium tabular-nums">{selectedEntry.callsCount ?? "-"}</span>
               </span>
               <span>
                 CR:{" "}
                 <span className="font-medium tabular-nums">
-                  {selectedEntry.callsCount ? pct.format(selectedEntry.salesCount / selectedEntry.callsCount) : "—"}
+                  {selectedEntry.callsCount ? pct.format(selectedEntry.salesCount / selectedEntry.callsCount) : "-"}
                 </span>
               </span>
             </>

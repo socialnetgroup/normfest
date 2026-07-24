@@ -19,3 +19,23 @@ export const SIGNAL_TYPE_LABELS: Record<string, string> = {
 export function signalTypeLabel(type: string) {
   return SIGNAL_TYPE_LABELS[type] ?? type;
 }
+
+const RISK_TYPES = new Set(["declining_volume", "revenue_trend_risk", "dormant_winback"]);
+const OPPORTUNITY_TYPES = new Set([
+  "cross_sell",
+  "upsell_pack",
+  "new_product_match",
+  "seasonal_push",
+  "external_opportunity",
+  "brand_profile_match",
+  "category_gap",
+  "basket_expansion",
+  "first_order_followup",
+]);
+
+/** Badge color for a signal type: risk (warning), opportunity (success), else neutral. */
+export function signalTypeVariant(type: string): "warning" | "success" | "secondary" {
+  if (RISK_TYPES.has(type)) return "warning";
+  if (OPPORTUNITY_TYPES.has(type)) return "success";
+  return "secondary";
+}

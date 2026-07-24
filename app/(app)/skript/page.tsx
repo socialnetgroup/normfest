@@ -1,6 +1,45 @@
+import { BookOpen, MessageCircleQuestion } from "lucide-react";
+
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
+
+const LEAD_IN = /^([A-ZÄÖÜ][A-ZÄÖÜ\s]{2,20}):\s*(.+)/;
+const LIST_ITEM = /^[-•]\s+|^\d+[.)]\s+/;
+
+/** Renders a chunk's plain-text content with real paragraph spacing instead of
+ * one dense whitespace-pre-line blob, plus light structure detection: list-like
+ * lines get a bullet, "WORD: rest" lead-ins get the lead-in bolded. */
+function ChunkContent({ content }: { content: string }) {
+  const lines = content.split("\n").map((l) => l.trim()).filter(Boolean);
+  return (
+    <div className="flex flex-col gap-2">
+      {lines.map((line, i) => {
+        const leadIn = line.match(LEAD_IN);
+        const isListItem = LIST_ITEM.test(line);
+        if (isListItem) {
+          return (
+            <p key={i} className="pl-4 text-sm leading-relaxed text-muted-foreground before:mr-2 before:-ml-4 before:text-primary before:content-['•']">
+              {line.replace(LIST_ITEM, "")}
+            </p>
+          );
+        }
+        if (leadIn) {
+          return (
+            <p key={i} className="text-sm leading-relaxed text-muted-foreground">
+              <span className="font-semibold text-foreground">{leadIn[1]}:</span> {leadIn[2]}
+            </p>
+          );
+        }
+        return (
+          <p key={i} className="text-sm leading-relaxed text-muted-foreground">
+            {line}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
 
 export default async function SkriptPage() {
   const supabase = await createClient();
@@ -32,25 +71,28 @@ export default async function SkriptPage() {
       {objections && objections.length > 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle>Einwandbehandlung</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <MessageCircleQuestion className="size-4 text-primary" />
+              Einwandbehandlung
+            </CardTitle>
             <p className="text-sm text-muted-foreground">
               Häufige Einwände mit sofort einsetzbaren Antworten (BS + DE).
             </p>
           </CardHeader>
           <CardContent>
-            <ul className="flex flex-col divide-y">
+            <ul className="flex flex-col gap-3">
               {objections.map((o) => (
-                <li key={o.id} className="py-3">
+                <li key={o.id} className="rounded-lg border-l-4 border-l-warning bg-muted/30 p-3">
                   <div className="flex items-center gap-2">
-                    <Badge variant="secondary">{o.objection}</Badge>
+                    <Badge variant="warning">{o.objection}</Badge>
                   </div>
-                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                    <div>
-                      <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">BS</p>
+                  <div className="mt-2.5 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-md bg-card p-2.5 ring-1 ring-foreground/10">
+                      <p className="mb-1 text-xs font-bold tracking-wide text-primary uppercase">BS</p>
                       <p className="text-sm">{o.response_bs}</p>
                     </div>
-                    <div>
-                      <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">DE</p>
+                    <div className="rounded-md bg-card p-2.5 ring-1 ring-foreground/10">
+                      <p className="mb-1 text-xs font-bold tracking-wide text-muted-foreground uppercase">DE</p>
                       <p className="text-sm">{o.response_de}</p>
                     </div>
                   </div>
@@ -64,21 +106,24 @@ export default async function SkriptPage() {
       {chunks && chunks.length > 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle>Vollständiger Guide</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <BookOpen className="size-4 text-primary" />
+              Vollständiger Guide
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <nav className="mb-4 flex flex-wrap gap-x-3 gap-y-1 text-sm">
+            <nav className="mb-6 flex flex-col gap-1 rounded-lg bg-muted/30 p-3 text-sm sm:flex-row sm:flex-wrap sm:gap-x-4 sm:gap-y-1.5">
               {chunks.map((c) => (
                 <a key={c.id} href={`#${c.id}`} className="text-primary hover:underline">
                   {c.heading}
                 </a>
               ))}
             </nav>
-            <div className="flex flex-col divide-y">
+            <div className="flex flex-col gap-8">
               {chunks.map((c) => (
-                <section key={c.id} id={c.id} className="scroll-mt-20 py-4">
-                  <h3 className="mb-1.5 font-heading text-base font-semibold">{c.heading}</h3>
-                  <p className="whitespace-pre-line text-sm text-muted-foreground">{c.content}</p>
+                <section key={c.id} id={c.id} className="scroll-mt-20 border-l-4 border-l-primary/30 pl-4">
+                  <h3 className="mb-3 font-heading text-lg font-bold tracking-tight">{c.heading}</h3>
+                  <ChunkContent content={c.content} />
                 </section>
               ))}
             </div>

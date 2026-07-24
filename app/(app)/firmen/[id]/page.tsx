@@ -1,3 +1,4 @@
+import { Activity, Building2, Layers, Sparkles, TrendingDown, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -11,8 +12,9 @@ import {
 import { BrandFocusVerifyButton } from "@/components/brand-focus-verify-button";
 import { EnrichNowButton } from "@/components/enrich-now-button";
 import { FeedbackForm } from "@/components/feedback-form";
-import { signalTypeLabel } from "@/lib/signals";
+import { signalTypeLabel, signalTypeVariant } from "@/lib/signals";
 import { createClient } from "@/lib/supabase/server";
+import { cn } from "@/lib/utils";
 
 const ratingFmt = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 1 });
 
@@ -28,19 +30,28 @@ const OUTCOME_LABELS: Record<string, string> = {
 };
 
 function money(value: number | null) {
-  return value === null ? "—" : eur.format(value);
+  return value === null ? "-" : eur.format(value);
 }
 
 function date(value: string | null) {
-  return value === null ? "—" : dateFmt.format(new Date(value));
+  return value === null ? "-" : dateFmt.format(new Date(value));
 }
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
       <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="text-sm font-medium">{value ?? "—"}</dd>
+      <dd className="text-sm font-medium">{value ?? "-"}</dd>
     </div>
+  );
+}
+
+function IconTitle({ icon: Icon, children }: { icon: React.ComponentType<{ className?: string }>; children: React.ReactNode }) {
+  return (
+    <CardTitle className="flex items-center gap-2">
+      <Icon className="size-4 text-primary" />
+      {children}
+    </CardTitle>
   );
 }
 
@@ -80,9 +91,14 @@ export default async function CompanyProfilePage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3 rounded-xl border bg-card p-5">
+      <div
+        className={cn(
+          "flex flex-col gap-3 rounded-xl border-l-4 bg-card p-5 ring-1 ring-foreground/10",
+          company.call_priority ? "border-l-warning" : "border-l-primary",
+        )}
+      >
         <div className="flex flex-wrap items-center gap-2">
-          <h1 className="font-heading text-2xl font-semibold tracking-tight">
+          <h1 className="font-heading text-2xl font-bold tracking-tight">
             {company.name}
           </h1>
           {company.call_priority ? (
@@ -91,13 +107,14 @@ export default async function CompanyProfilePage({
           {company.do_not_contact ? <Badge variant="muted">Gesperrt</Badge> : null}
         </div>
         <p className="text-sm text-muted-foreground">
-          {company.kundennummer} · {company.branche_name} ·{" "}
+          <span className="font-medium text-foreground">{company.kundennummer}</span> · {company.branche_name} ·{" "}
           {company.plz} {company.ort}
         </p>
         <Link
           href={`/assistent?company=${company.id}`}
-          className="text-sm text-primary hover:underline"
+          className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-primary hover:underline"
         >
+          <Sparkles className="size-3.5" />
           Im Assistenten fragen →
         </Link>
       </div>
@@ -109,7 +126,7 @@ export default async function CompanyProfilePage({
             <div>
               <CardTitle>Firmenbrief</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Laut Google-Bewertungen{enrichment?.places_website ? " & Website" : ""} — KI-Analyse, nicht
+                Laut Google-Bewertungen{enrichment?.places_website ? " & Website" : ""} - KI-Analyse, nicht
                 verifiziert wo nicht markiert.
               </p>
             </div>
@@ -246,7 +263,7 @@ export default async function CompanyProfilePage({
       {signals && signals.length > 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle>Empfehlungen</CardTitle>
+            <IconTitle icon={Sparkles}>Empfehlungen</IconTitle>
           </CardHeader>
           <CardContent>
             <ul className="flex flex-col divide-y">
@@ -254,7 +271,7 @@ export default async function CompanyProfilePage({
                 <li key={s.id} className="flex items-start justify-between gap-3 py-2.5 text-sm">
                   <div>
                     <div className="flex items-center gap-2">
-                      <Badge variant="secondary">{signalTypeLabel(s.type)}</Badge>
+                      <Badge variant={signalTypeVariant(s.type)}>{signalTypeLabel(s.type)}</Badge>
                       {(s.products as { name: string } | null)?.name ? (
                         <span className="font-medium">{(s.products as { name: string }).name}</span>
                       ) : null}
@@ -274,7 +291,7 @@ export default async function CompanyProfilePage({
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Stammdaten</CardTitle>
+            <IconTitle icon={Building2}>Stammdaten</IconTitle>
           </CardHeader>
           <CardContent>
             <dl className="grid grid-cols-2 gap-4">
@@ -320,7 +337,7 @@ export default async function CompanyProfilePage({
 
         <Card>
           <CardHeader>
-            <CardTitle>Segmentierung</CardTitle>
+            <IconTitle icon={Layers}>Segmentierung</IconTitle>
           </CardHeader>
           <CardContent>
             <dl className="grid grid-cols-2 gap-4">
@@ -341,7 +358,7 @@ export default async function CompanyProfilePage({
 
         <Card>
           <CardHeader>
-            <CardTitle>Umsatz</CardTitle>
+            <IconTitle icon={TrendingUp}>Umsatz</IconTitle>
           </CardHeader>
           <CardContent>
             <dl className="grid grid-cols-2 gap-4">
@@ -350,7 +367,26 @@ export default async function CompanyProfilePage({
               <Field label="Laufendes Jahr" value={money(company.revenue_current_year)} />
               <Field label="Laufendes Jahr (D&S/Cod.)" value={money(company.revenue_current_year_ds_cod)} />
               <Field label="Prognose" value={money(company.revenue_forecast)} />
-              <Field label="Plus/Minus" value={money(company.revenue_delta)} />
+              <Field
+                label="Plus/Minus"
+                value={
+                  company.revenue_delta === null ? null : (
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-1",
+                        company.revenue_delta < 0 ? "text-destructive" : "text-success-foreground",
+                      )}
+                    >
+                      {company.revenue_delta < 0 ? (
+                        <TrendingDown className="size-3.5" />
+                      ) : (
+                        <TrendingUp className="size-3.5" />
+                      )}
+                      {money(company.revenue_delta)}
+                    </span>
+                  )
+                }
+              />
               <Field label="Anzahl Aufträge" value={company.order_count} />
               <Field label="Anzahl Artikel" value={company.article_count} />
             </dl>
@@ -359,7 +395,7 @@ export default async function CompanyProfilePage({
 
         <Card>
           <CardHeader>
-            <CardTitle>Aktivität</CardTitle>
+            <IconTitle icon={Activity}>Aktivität</IconTitle>
           </CardHeader>
           <CardContent>
             <dl className="grid grid-cols-2 gap-4">
@@ -394,9 +430,9 @@ export default async function CompanyProfilePage({
                     <Badge
                       variant={
                         f.outcome === "sold"
-                          ? "default"
+                          ? "success"
                           : f.outcome === "rejected"
-                            ? "muted"
+                            ? "destructive"
                             : "secondary"
                       }
                     >
@@ -415,7 +451,7 @@ export default async function CompanyProfilePage({
                   ) : null}
                   {f.comment ? <p className="mt-1 text-muted-foreground">{f.comment}</p> : null}
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {(f.profiles as { full_name: string | null } | null)?.full_name ?? "—"} ·{" "}
+                    {(f.profiles as { full_name: string | null } | null)?.full_name ?? "-"} ·{" "}
                     {dateTimeFmt.format(new Date(f.created_at))}
                   </p>
                 </li>

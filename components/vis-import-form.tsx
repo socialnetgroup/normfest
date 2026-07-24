@@ -62,7 +62,7 @@ export function VisImportForm() {
 
       {pending ? (
         <p className="text-sm text-muted-foreground">
-          Import läuft — bei der vollen Liste (~13.500 Zeilen) kann das eine Weile dauern, bitte Seite offen lassen.
+          Import läuft - bei der vollen Liste (~13.500 Zeilen) kann das eine Weile dauern, bitte Seite offen lassen.
         </p>
       ) : null}
 

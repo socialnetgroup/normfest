@@ -37,7 +37,7 @@ export default async function EnrichmentAdminPage() {
         <CardHeader>
           <CardTitle>Unklare Treffer ({ambiguous?.length ?? 0})</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Mehrere mögliche Google-Places-Treffer — bitte den richtigen auswählen oder als &bdquo;kein Treffer&ldquo;
+            Mehrere mögliche Google-Places-Treffer - bitte den richtigen auswählen oder als &bdquo;kein Treffer&ldquo;
             markieren.
           </p>
         </CardHeader>

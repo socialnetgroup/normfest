@@ -67,7 +67,7 @@ export default async function AgentHistoryPage({ params }: { params: Promise<{ a
         <h1 className="font-heading mt-1 text-2xl font-semibold tracking-tight">{agent.full_name}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Gebiet {agent.gebiet}
-          {!agent.active ? " — inaktiv" : ""} · monatlicher Verlauf, jeder Monat mit Kalender-Drill-in.
+          {!agent.active ? " - inaktiv" : ""} · monatlicher Verlauf, jeder Monat mit Kalender-Drill-in.
         </p>
       </div>
 
@@ -95,12 +95,12 @@ export default async function AgentHistoryPage({ params }: { params: Promise<{ a
                     Sales: <span className="font-medium text-foreground tabular-nums">{sales}</span>
                   </span>
                   <span>
-                    Anrufe: <span className="font-medium text-foreground tabular-nums">{calls || "—"}</span>
+                    Anrufe: <span className="font-medium text-foreground tabular-nums">{calls || "-"}</span>
                   </span>
                   <span>
                     CR:{" "}
                     <span className="font-medium text-foreground tabular-nums">
-                      {calls > 0 ? pct.format(sales / calls) : "—"}
+                      {calls > 0 ? pct.format(sales / calls) : "-"}
                     </span>
                   </span>
                 </div>

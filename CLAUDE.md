@@ -275,6 +275,82 @@ Assistent · Admin), with:
 - **Team** (admin-only, §4.11): per-agent daily/monthly Umsatz, Sales, Anrufe, CR —
   ranked by revenue, one card per imported month.
 
+**Pre-demo UX/QA pass (2026-07-24), Anis: "sutra inhouse mini demo, frontend malo
+utegnemo".** Went through his punch-list top to bottom same day:
+- **Nav rebuilt as a left sidebar** (`components/app-sidebar.tsx`, replaces the old
+  horizontal top bar): Dashboard/Firmen/Katalog/Fokus/Wissen/Skript/Assistent always
+  visible; admin section below with Team as its own item and a collapsible **Settings**
+  submenu (Enrichment + VIS Import) — designed to grow as more admin-only screens show up.
+  Feedback dropped from the nav entirely (still reachable from the company profile, per
+  Anis — that was always the primary entry point anyway).
+- **Global design pass**: added a `success` semantic color token (green) alongside the
+  existing `warning`/`destructive`, plus a `success` Badge variant — used for
+  qualified/positive states (sold feedback, opportunity-type signals) so the UI isn't
+  all one accent color. New `StatTile` component (colored left bar + bold number) for
+  KPI rows. Applied consistently: Dashboard, Firmenprofil section icons + revenue
+  up/down coloring, Skript's warning-tinted objection cards, Fokus's success badge on
+  sold-count.
+- **Dashboard**: was "Team-Ziel → Empfehlungen → Rangliste" with little else. Added a
+  4-tile KPI row up top (Team-Umsatz, Feedback diese Woche, Empfehlungen offen, **Nicht
+  kontaktiert (2+ Monate)** — real count from `companies.last_contact_date`, currently
+  ~2,987 of ~13.5k active companies, which is itself a real, honest signal of how early
+  the flywheel still is). Leaderboard's #1 gets a gold-tinted rank badge. Signal badges
+  in Top-Empfehlungen now color-coded via a new `signalTypeVariant()` helper
+  (`lib/signals.ts`): risk types (`revenue_trend_risk`, `declining_volume`,
+  `dormant_winback`) render `warning`, opportunity types render `success`.
+  **Answered Anis's open question** (delete/dismiss recommendations vs. wait for next
+  VIS list): recommended adding an explicit dismiss action as a fast-follow, not built
+  this pass — needs schema work (a persisted dismissed-set that survives
+  `fn_refresh_signals()`'s full delete+insert), out of scope for a same-day pre-demo
+  pass.
+- **Firmen search — real bug fixed.** `gebiet` was missing from the `.or()` search
+  filter entirely (confirmed: searching a real Gebiet code returned 0 rows). Added it.
+  Kundennummer search was tested directly (admin client, RLS-scoped anon client, and
+  live in the running app) and worked correctly every time — couldn't reproduce that
+  half of the report; flagged back to Anis in case it recurs with a specific number.
+- **Firmenprofil**: icons on each section's CardTitle (Stammdaten/Segmentierung/
+  Umsatz/Aktivität), a colored left border on the header card (orange if
+  `call_priority`), revenue Plus/Minus now shows a colored up/down arrow, feedback
+  outcome badges use the new success/destructive variants instead of generic
+  secondary/muted.
+- **Fokus — delete/edit shipped.** Active list: rename (inline pencil) and delete
+  (trash, with confirm) on the list itself; an X to remove any single company/product
+  row without touching the rest of the list. New **"Alle Fokuslisten"** admin card
+  lists every list (not just the active one) with an "Aktivieren" action (deactivates
+  the current active list first, respecting `idx_focus_lists_single_active`) and the
+  same rename/delete controls. All three new client components
+  (`focus-list-manage.tsx`, `focus-item-remove-button.tsx`,
+  `focus-list-activate-button.tsx`) write directly via the RLS-scoped client — no new
+  RPCs needed, `focus_lists`/`focus_list_items`/`focus_list_products` already had
+  admin-only `for all` policies. Verified live: created a throwaway list through the
+  real UI's delete button, confirmed it was actually gone in the DB.
+- **Skript redesigned.** Objection cards get a warning-tinted left border + separate
+  BS/DE sub-cards instead of a flat two-column split. The full-guide chunks were
+  rendering as one dense `whitespace-pre-line` blob per section — replaced with a
+  `ChunkContent` component (`app/(app)/skript/page.tsx`) that splits on newlines into
+  real paragraphs, detects `WORD: rest of sentence` lead-ins (bolds the lead-in — a
+  real pattern in the source content, e.g. "PRIPREMA: Pregledaj listu poziva...") and
+  list-like lines (`-`/`•`/`1.` prefixes) for a bullet treatment. Section headings keep
+  their own source numbering (`1.`, `3.1`, `Faza 2:` etc. — already meaningful) rather
+  than adding a second, conflicting index.
+- **Assistant — always-on floating panel added** (`components/floating-assistant.tsx`),
+  per Anis: "ili oboje" (both the full `/assistent` page and a Notion-style
+  quick-access widget). Bottom-right circular button on every authenticated page except
+  `/assistent` itself (avoids a duplicate); expands into the same `ChatAssistant`
+  component the full page uses — zero duplicated chat logic. Auto-detects company
+  context when parked on a `/firmen/[id]` page (client-side lookup by id from the
+  pathname, same "Kontext: {name}" injection the page version already had) so a quick
+  question from a company profile doesn't need the "Im Assistenten fragen" link.
+  Verified live: opens/closes correctly, context injection confirmed on a real company
+  ("Kontext: Autohandel \"An der Schmiede\""), correctly absent on `/assistent`.
+- **All em dashes (—) replaced with plain hyphens (-)** across every user-facing string
+  in `app/` and `components/` (left source-code comments alone — not user-visible, out
+  of scope for a "frontend" pass).
+- **Katalog / Enrichment**: left as-is this pass, per explicit direction — Katalog
+  "enrichment to final form" is the already-tracked webshop-rebuild backlog item
+  (§14 item 12), and Enrichment is an admin-only utility screen agents never see, not
+  worth design time before a sales-facing demo.
+
 ---
 
 ## 6. Signal engine (flagship #1) — with tier awareness

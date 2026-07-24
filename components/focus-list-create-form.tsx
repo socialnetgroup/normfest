@@ -76,7 +76,7 @@ export function FocusListCreateForm({
         name: w.name,
         sku: w.sku,
         category_name: w.category_name,
-        note: `Winner — ${w.sold_count}× verkauft`,
+        note: `Winner - ${w.sold_count}× verkauft`,
       },
     ]);
   }
@@ -184,7 +184,7 @@ export function FocusListCreateForm({
           id="list-name"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="z.B. KW 30 — Bremsflüssigkeit"
+          placeholder="z.B. KW 30 - Bremsflüssigkeit"
           required
         />
       </div>
@@ -203,7 +203,7 @@ export function FocusListCreateForm({
 
       {winners.length > 0 ? (
         <div className="flex flex-col gap-1.5 rounded-lg border bg-muted/30 p-3">
-          <Label>Winner-Vorschläge — laut Feedback bereits verkauft</Label>
+          <Label>Winner-Vorschläge - laut Feedback bereits verkauft</Label>
           <ul className="flex flex-col gap-1.5">
             {winners.map((w) => {
               const already = selectedProducts.some((p) => p.id === w.id);
@@ -223,7 +223,7 @@ export function FocusListCreateForm({
                     disabled={already}
                     onClick={() => applyWinner(w)}
                   >
-                    {already ? "Übernommen" : `${w.sold_count}× — Übernehmen`}
+                    {already ? "Übernommen" : `${w.sold_count}× - Übernehmen`}
                   </Button>
                 </li>
               );
@@ -240,7 +240,7 @@ export function FocusListCreateForm({
             type="search"
             value={productQuery}
             onChange={(e) => searchProducts(e.target.value)}
-            placeholder="Produkt suchen — Name oder Art.-Nr..."
+            placeholder="Produkt suchen - Name oder Art.-Nr..."
             className="pl-8"
           />
         </div>
@@ -313,7 +313,7 @@ export function FocusListCreateForm({
             type="search"
             value={companyQuery}
             onChange={(e) => searchCompanies(e.target.value)}
-            placeholder="Firma suchen — Name oder Kundennummer..."
+            placeholder="Firma suchen - Name oder Kundennummer..."
             className="pl-8"
           />
         </div>

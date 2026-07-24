@@ -153,7 +153,7 @@ export default async function TeamDayPage({ params }: { params: Promise<{ date: 
                     <td className="px-3 py-2 tabular-nums">{pct.format(r.contributionPct / 100)}</td>
                     <td className="px-3 py-2">{r.qualifies ? "Ja" : "Nein"}</td>
                     <td className="px-3 py-2 tabular-nums">
-                      {r.bonusKm > 0 ? `${eurCents.format(r.bonusKm).replace("€", "KM")}` : "—"}
+                      {r.bonusKm > 0 ? `${eurCents.format(r.bonusKm).replace("€", "KM")}` : "-"}
                     </td>
                     <td className="px-3 py-2">
                       <DayOffToggle agentId={r.agentId} date={date} dayOff={r.dayOff} />

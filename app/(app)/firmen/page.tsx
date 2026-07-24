@@ -24,7 +24,7 @@ export default async function FirmenPage({
           .from("companies")
           .select("id, kundennummer, name, ort, plz, gebiet, do_not_contact, call_priority")
           .or(
-            `name.ilike.%${query}%,kundennummer.ilike.%${query}%,ort.ilike.%${query}%,plz.ilike.%${query}%`,
+            `name.ilike.%${query}%,kundennummer.ilike.%${query}%,ort.ilike.%${query}%,plz.ilike.%${query}%,gebiet.ilike.%${query}%`,
           )
           .order("name")
           .limit(RESULT_LIMIT)

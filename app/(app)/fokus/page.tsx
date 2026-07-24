@@ -1,10 +1,15 @@
 import Link from "next/link";
 
+import { FocusItemRemoveButton } from "@/components/focus-item-remove-button";
+import { FocusListActivateButton } from "@/components/focus-list-activate-button";
+import { FocusListManage } from "@/components/focus-list-manage";
 import { FocusProductSellForm } from "@/components/focus-product-sell-form";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
+
+const dateFmt = new Intl.DateTimeFormat("de-DE", { dateStyle: "medium" });
 
 type CompanyItemRow = {
   id: string;
@@ -36,6 +41,10 @@ export default async function FokusPage() {
   ]);
 
   const isAdmin = profile?.role === "admin";
+
+  const { data: allLists } = isAdmin
+    ? await supabase.from("focus_lists").select("id, name, active, created_at").order("created_at", { ascending: false })
+    : { data: null };
 
   const [{ data: companyItems }, { data: productItems }] = activeList
     ? await Promise.all([
@@ -85,7 +94,7 @@ export default async function FokusPage() {
         <div>
           <h1 className="font-heading text-2xl font-semibold tracking-tight">Fokus</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Aktuelle Fokusliste — kuratiert vom Admin.
+            Aktuelle Fokusliste - kuratiert vom Admin.
           </p>
         </div>
         {isAdmin ? (
@@ -100,11 +109,14 @@ export default async function FokusPage() {
       ) : (
         <>
           <Card>
-            <CardHeader>
-              <CardTitle>{activeList.name}</CardTitle>
-              {activeList.note ? (
-                <p className="text-sm text-muted-foreground">{activeList.note}</p>
-              ) : null}
+            <CardHeader className="flex flex-row items-center justify-between gap-3">
+              <div>
+                <CardTitle>{activeList.name}</CardTitle>
+                {activeList.note ? (
+                  <p className="text-sm text-muted-foreground">{activeList.note}</p>
+                ) : null}
+              </div>
+              {isAdmin ? <FocusListManage listId={activeList.id} name={activeList.name} /> : null}
             </CardHeader>
           </Card>
 
@@ -113,7 +125,7 @@ export default async function FokusPage() {
               <CardTitle>Katalog des Fokus</CardTitle>
               <p className="text-sm text-muted-foreground">
                 {productRows.length} Produkte in {categories.length}{" "}
-                {categories.length === 1 ? "Kategorie" : "Kategorien"} — das lernt und drückt das ganze Team diese
+                {categories.length === 1 ? "Kategorie" : "Kategorien"} - das lernt und drückt das ganze Team diese
                 Runde.
               </p>
             </CardHeader>
@@ -141,12 +153,13 @@ export default async function FokusPage() {
                                 </div>
                               </div>
                               <div className="flex shrink-0 items-center gap-2">
-                                <Badge variant={soldCounts.get(row.products.id) ? "default" : "muted"}>
+                                <Badge variant={soldCounts.get(row.products.id) ? "success" : "muted"}>
                                   {soldCounts.get(row.products.id) ?? 0}× verkauft
                                 </Badge>
                                 {user ? (
                                   <FocusProductSellForm productId={row.products.id} agentId={user.id} />
                                 ) : null}
+                                {isAdmin ? <FocusItemRemoveButton table="focus_list_products" id={row.id} /> : null}
                               </div>
                             </div>
                           </li>
@@ -171,10 +184,10 @@ export default async function FokusPage() {
                   <ul className="divide-y">
                     {companyRows.map((row) =>
                       row.companies ? (
-                        <li key={row.id}>
+                        <li key={row.id} className="flex items-center gap-2 px-2">
                           <Link
                             href={`/firmen/${row.companies.id}`}
-                            className="flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-accent"
+                            className="flex flex-1 items-center justify-between gap-4 px-2 py-3 transition-colors hover:bg-accent"
                           >
                             <div className="min-w-0">
                               <span className="font-medium">{row.companies.name}</span>
@@ -189,6 +202,7 @@ export default async function FokusPage() {
                               </Badge>
                             ) : null}
                           </Link>
+                          {isAdmin ? <FocusItemRemoveButton table="focus_list_items" id={row.id} /> : null}
                         </li>
                       ) : null,
                     )}
@@ -199,6 +213,32 @@ export default async function FokusPage() {
           </Card>
         </>
       )}
+
+      {isAdmin && allLists && allLists.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Alle Fokuslisten</CardTitle>
+            <p className="text-sm text-muted-foreground">Verwalten, aktivieren oder löschen.</p>
+          </CardHeader>
+          <CardContent>
+            <ul className="flex flex-col divide-y">
+              {allLists.map((list) => (
+                <li key={list.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                  <div className="flex items-center gap-2">
+                    {list.active ? <Badge variant="success">Aktiv</Badge> : null}
+                    <span className="font-medium">{list.name}</span>
+                    <span className="text-xs text-muted-foreground">{dateFmt.format(new Date(list.created_at))}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {!list.active ? <FocusListActivateButton listId={list.id} /> : null}
+                    <FocusListManage listId={list.id} name={list.name} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }

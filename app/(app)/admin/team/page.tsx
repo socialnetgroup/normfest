@@ -132,7 +132,7 @@ export default async function TeamDashboardPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Dnevlicher Bonus — heute</CardTitle>
+          <CardTitle>Dnevlicher Bonus - heute</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="mb-4 flex flex-wrap gap-6 text-sm">
@@ -183,7 +183,7 @@ export default async function TeamDashboardPage() {
                     <td className="px-3 py-2">{eur.format(r.revenue)}</td>
                     <td className="px-3 py-2">{pct.format(r.contributionPct / 100)}</td>
                     <td className="px-3 py-2">{r.qualifies ? "Ja" : "Nein"}</td>
-                    <td className="px-3 py-2">{r.bonusKm > 0 ? `${eurCents.format(r.bonusKm).replace("€", "KM")}` : "—"}</td>
+                    <td className="px-3 py-2">{r.bonusKm > 0 ? `${eurCents.format(r.bonusKm).replace("€", "KM")}` : "-"}</td>
                     <td className="px-3 py-2">
                       <DayOffToggle agentId={r.agentId} date={today} dayOff={r.dayOff} />
                     </td>
@@ -256,8 +256,8 @@ export default async function TeamDashboardPage() {
                           </td>
                           <td className="px-3 py-2">{eur.format(v.revenue)}</td>
                           <td className="px-3 py-2">{v.sales}</td>
-                          <td className="px-3 py-2">{v.calls > 0 ? v.calls : "—"}</td>
-                          <td className="px-3 py-2">{v.calls > 0 ? pct.format(v.sales / v.calls) : "—"}</td>
+                          <td className="px-3 py-2">{v.calls > 0 ? v.calls : "-"}</td>
+                          <td className="px-3 py-2">{v.calls > 0 ? pct.format(v.sales / v.calls) : "-"}</td>
                         </tr>
                       ))}
                     </tbody>
