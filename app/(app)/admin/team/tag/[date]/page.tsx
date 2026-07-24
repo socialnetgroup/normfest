@@ -121,9 +121,8 @@ export default async function TeamDayPage({ params }: { params: Promise<{ date: 
             </span>
             <span>
               Qualifizierte Agenten:{" "}
-              <span className="font-medium tabular-nums">
-                {dailyBonus.qualifyingCount} von {dailyBonus.minQualifyingAgents}
-              </span>
+              <span className="font-medium tabular-nums">{dailyBonus.qualifyingCount}</span>
+              <span className="text-muted-foreground"> (mind. {dailyBonus.minQualifyingAgents} nötig)</span>
               {!dailyBonus.enoughQualifiers ? (
                 <Badge variant="muted" className="ml-2">
                   Bonus wird nicht verteilt
