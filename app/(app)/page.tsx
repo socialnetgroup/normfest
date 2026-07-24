@@ -58,9 +58,9 @@ export default async function DashboardPage() {
   weekStart.setDate(now.getDate() - dayOfWeek);
   weekStart.setHours(0, 0, 0, 0);
 
-  const twoMonthsAgo = new Date(now);
-  twoMonthsAgo.setMonth(now.getMonth() - 2);
-  const twoMonthsAgoStr = twoMonthsAgo.toISOString().slice(0, 10);
+  const threeMonthsAgo = new Date(now);
+  threeMonthsAgo.setMonth(now.getMonth() - 3);
+  const threeMonthsAgoStr = threeMonthsAgo.toISOString().slice(0, 10);
   const todayStr = now.toISOString().slice(0, 10);
 
   const [
@@ -93,7 +93,7 @@ export default async function DashboardPage() {
       .select("id", { count: "exact", head: true })
       .eq("active", true)
       .eq("do_not_contact", false)
-      .or(`last_contact_date.is.null,last_contact_date.lt.${twoMonthsAgoStr}`),
+      .or(`last_visit_date.is.null,last_visit_date.lt.${threeMonthsAgoStr}`),
     supabase.from("companies").select("id", { count: "exact", head: true }),
     myAgent
       ? supabase
@@ -171,7 +171,7 @@ export default async function DashboardPage() {
         <StatTile label="Team-Umsatz" value={eur.format(teamRevenue)} accent="primary" />
         <StatTile label="Feedback diese Woche" value={String(feedbackCountThisWeek ?? 0)} accent="success" />
         <StatTile
-          label="Nicht kontaktiert (2+ Mon.)"
+          label="Nicht kontaktiert (3+ Mon.)"
           value={String(uncontacted)}
           accent={uncontactedSevere ? "warning" : "secondary"}
         />
@@ -308,8 +308,8 @@ export default async function DashboardPage() {
           <CardHeader>
             <CardTitle>Kontakt-Abdeckung nach Agent</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Firmen je Gebiet und wie viele davon seit 2+ Monaten nicht kontaktiert wurden - laut{" "}
-              <span className="font-medium">last_contact_date</span> aus der VIS-Liste.
+              Firmen je Gebiet und wie viele davon seit 3+ Monaten nicht besucht wurden - laut{" "}
+              <span className="font-medium">Dat.l.Besuch</span> (last_visit_date) aus der VIS-Liste.
             </p>
           </CardHeader>
           <CardContent>
@@ -319,7 +319,7 @@ export default async function DashboardPage() {
                   <tr>
                     <th className="px-2 py-2 font-medium">Agent</th>
                     <th className="px-2 py-2 font-medium">Firmen gesamt</th>
-                    <th className="px-2 py-2 font-medium">Nicht kontaktiert (2+ Mon.)</th>
+                    <th className="px-2 py-2 font-medium">Nicht kontaktiert (3+ Mon.)</th>
                     <th className="px-2 py-2 font-medium">Anteil</th>
                   </tr>
                 </thead>
