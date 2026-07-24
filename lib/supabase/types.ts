@@ -1138,6 +1138,14 @@ export type Database = {
       }
     }
     Views: {
+      company_gebiet_coverage: {
+        Row: {
+          gebiet: string | null
+          total: number | null
+          uncontacted: number | null
+        }
+        Relationships: []
+      }
       feedback_sales: {
         Row: {
           agent_id: string | null

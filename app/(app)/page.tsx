@@ -69,7 +69,10 @@ export default async function DashboardPage() {
     { data: topSignals },
     { count: signalsTotal },
     { count: uncontactedCount },
+    { count: totalCompanies },
     { data: myToday },
+    { data: coverageAgents },
+    { data: coverageStats },
   ] = await Promise.all([
     supabase
       .from("agent_daily_performance")
@@ -91,6 +94,7 @@ export default async function DashboardPage() {
       .eq("active", true)
       .eq("do_not_contact", false)
       .or(`last_contact_date.is.null,last_contact_date.lt.${twoMonthsAgoStr}`),
+    supabase.from("companies").select("id", { count: "exact", head: true }),
     myAgent
       ? supabase
           .from("agent_daily_performance")
@@ -99,6 +103,10 @@ export default async function DashboardPage() {
           .eq("date", todayStr)
           .maybeSingle()
       : Promise.resolve({ data: null }),
+    isAdmin
+      ? supabase.from("agents").select("id, full_name, gebiet").eq("active", true)
+      : Promise.resolve({ data: null }),
+    isAdmin ? supabase.from("company_gebiet_coverage").select("gebiet, total, uncontacted") : Promise.resolve({ data: null }),
   ]);
 
   const byAgent = new Map<string, { name: string; revenue: number }>();
@@ -122,6 +130,35 @@ export default async function DashboardPage() {
   const uncontacted = uncontactedCount ?? 0;
   const uncontactedSevere = uncontacted >= 500;
 
+  // Firmen have no direct agent_id - the link is companies.gebiet <-> agents.gebiet
+  // (each agent owns one Gebiet code, per §4.11). Aggregated in Postgres via the
+  // company_gebiet_coverage view (GROUP BY gebiet) rather than client-side over
+  // all 13.5k companies - an earlier version hit PostgREST's default 1000-row
+  // cap on an unpaginated select and silently undercounted.
+  const byGebiet = new Map<string, { total: number; uncontacted: number }>();
+  for (const row of coverageStats ?? []) {
+    if (!row.gebiet) continue;
+    byGebiet.set(row.gebiet, { total: row.total ?? 0, uncontacted: row.uncontacted ?? 0 });
+  }
+
+  const assignedGebiete = new Set((coverageAgents ?? []).map((a) => a.gebiet));
+  const coverage = [
+    ...(coverageAgents ?? []).map((a) => ({
+      label: a.full_name,
+      ...(byGebiet.get(a.gebiet) ?? { total: 0, uncontacted: 0 }),
+    })),
+  ].sort((a, b) => b.uncontacted - a.uncontacted);
+
+  const unassignedTotals = [...byGebiet.entries()]
+    .filter(([gebiet]) => !assignedGebiete.has(gebiet))
+    .reduce(
+      (sum, [, v]) => ({ total: sum.total + v.total, uncontacted: sum.uncontacted + v.uncontacted }),
+      { total: 0, uncontacted: 0 },
+    );
+  if (unassignedTotals.total > 0) {
+    coverage.push({ label: "Nicht zugeordnet", ...unassignedTotals });
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -129,15 +166,16 @@ export default async function DashboardPage() {
         <p className="mt-1 text-sm text-muted-foreground">{monthLabel}</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        <StatTile label="Firmen gesamt" value={String(totalCompanies ?? 0)} accent="primary" />
         <StatTile label="Team-Umsatz" value={eur.format(teamRevenue)} accent="primary" />
         <StatTile label="Feedback diese Woche" value={String(feedbackCountThisWeek ?? 0)} accent="success" />
-        <StatTile label="Signale offen" value={String(signalsTotal ?? 0)} accent="secondary" />
         <StatTile
           label="Nicht kontaktiert (2+ Mon.)"
           value={String(uncontacted)}
           accent={uncontactedSevere ? "warning" : "secondary"}
         />
+        <StatTile label="Signale offen" value={String(signalsTotal ?? 0)} accent="secondary" />
       </div>
 
       {myAgent ? (
@@ -261,6 +299,54 @@ export default async function DashboardPage() {
               ))}
             </ul>
             )}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {isAdmin && coverage.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Kontakt-Abdeckung nach Agent</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Firmen je Gebiet und wie viele davon seit 2+ Monaten nicht kontaktiert wurden - laut{" "}
+              <span className="font-medium">last_contact_date</span> aus der VIS-Liste.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-left text-xs text-muted-foreground">
+                  <tr>
+                    <th className="px-2 py-2 font-medium">Agent</th>
+                    <th className="px-2 py-2 font-medium">Firmen gesamt</th>
+                    <th className="px-2 py-2 font-medium">Nicht kontaktiert (2+ Mon.)</th>
+                    <th className="px-2 py-2 font-medium">Anteil</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {coverage.map((row) => {
+                    const pct = row.total > 0 ? row.uncontacted / row.total : 0;
+                    return (
+                      <tr key={row.label} className={row.label === "Nicht zugeordnet" ? "opacity-60" : undefined}>
+                        <td className="px-2 py-2 font-medium">{row.label}</td>
+                        <td className="px-2 py-2 tabular-nums">{row.total}</td>
+                        <td className="px-2 py-2 tabular-nums">{row.uncontacted}</td>
+                        <td className="px-2 py-2">
+                          <span
+                            className={cn(
+                              "tabular-nums",
+                              pct >= 0.4 ? "font-medium text-warning-foreground" : "text-muted-foreground",
+                            )}
+                          >
+                            {Math.round(pct * 100)}%
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </CardContent>
         </Card>
       ) : null}
