@@ -8,6 +8,7 @@ import { FocusProductSellForm } from "@/components/focus-product-sell-form";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 
@@ -48,12 +49,8 @@ type ProductItemRow = {
 
 export default async function FokusPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const [{ data: profile }, { data: activeList }] = await Promise.all([
-    user ? supabase.from("profiles").select("role").eq("id", user.id).single() : Promise.resolve({ data: null }),
+  const [{ user, profile }, { data: activeList }] = await Promise.all([
+    getCurrentUser(),
     supabase.from("focus_lists").select("id, name, note, created_at").eq("active", true).maybeSingle(),
   ]);
 

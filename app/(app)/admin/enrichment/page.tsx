@@ -3,17 +3,15 @@ import Link from "next/link";
 
 import { AmbiguousCandidatePicker } from "@/components/ambiguous-candidate-picker";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function EnrichmentAdminPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { user, profile } = await getCurrentUser();
   if (!user) notFound();
-
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
   if (profile?.role !== "admin") notFound();
+
+  const supabase = await createClient();
 
   const [{ data: ambiguous }, { count: totalEnriched }, { count: verifiedCount }] = await Promise.all([
     supabase

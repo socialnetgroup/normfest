@@ -4,18 +4,15 @@ import { notFound } from "next/navigation";
 import { BonusRulesForm } from "@/components/team/bonus-rules-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { type BonusThreshold } from "@/lib/team/bonus";
+import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function BonusRegelnPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { user, profile } = await getCurrentUser();
   if (!user) notFound();
-
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
   if (profile?.role !== "admin") notFound();
 
+  const supabase = await createClient();
   const { data: settingsRows } = await supabase
     .from("settings")
     .select("key, value")

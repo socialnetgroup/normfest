@@ -1,18 +1,15 @@
 import { notFound } from "next/navigation";
 
 import { FocusListCreateForm } from "@/components/focus-list-create-form";
+import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function NeueFokuslistePage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { user, profile } = await getCurrentUser();
   if (!user) notFound();
-
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
   if (profile?.role !== "admin") notFound();
 
+  const supabase = await createClient();
   const { data: minSoldSetting } = await supabase
     .from("settings")
     .select("value")

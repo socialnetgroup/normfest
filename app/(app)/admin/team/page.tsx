@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/card";
 import { DayOffToggle } from "@/components/day-off-toggle";
 import { computeBonusByDate, computeDailyBonus, type BonusThreshold } from "@/lib/team/bonus";
+import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
 const eur = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
@@ -33,15 +34,11 @@ function monthLabel(month: string) {
 }
 
 export default async function TeamDashboardPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { user, profile } = await getCurrentUser();
   if (!user) notFound();
-
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
   if (profile?.role !== "admin") notFound();
 
+  const supabase = await createClient();
   const today = new Date().toISOString().slice(0, 10);
 
   const [{ data, error }, { data: allAgents }, { data: todayRows }, { data: bonusSettings }] = await Promise.all([

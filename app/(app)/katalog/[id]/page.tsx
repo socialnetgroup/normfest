@@ -61,7 +61,6 @@ export default async function ProductPage({
                 width={128}
                 height={128}
                 className="size-full object-contain p-2"
-                unoptimized
               />
             </div>
             {product.image_is_representative ? (
@@ -155,7 +154,6 @@ export default async function ProductPage({
                           width={96}
                           height={96}
                           className="size-full object-contain p-1.5"
-                          unoptimized
                         />
                       ) : (
                         <span className="text-xs text-muted-foreground">Kein Bild</span>

@@ -13,6 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { StatTile } from "@/components/ui/stat-tile";
+import { getCurrentUser } from "@/lib/auth";
 import { signalTypeLabel, signalTypeVariant } from "@/lib/signals";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
@@ -23,11 +24,9 @@ type SettingsMap = Record<string, number>;
 
 export default async function DashboardPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { user, profile } = await getCurrentUser();
 
-  const [{ data: myAgent }, { data: settingsRows }, { data: profile }] = await Promise.all([
+  const [{ data: myAgent }, { data: settingsRows }] = await Promise.all([
     user
       ? supabase.from("agents").select("id, full_name").eq("profile_id", user.id).maybeSingle()
       : Promise.resolve({ data: null }),
@@ -41,7 +40,6 @@ export default async function DashboardPage() {
         "team_monthly_goal_stretch",
         "team_leader_bonus_threshold",
       ]),
-    user ? supabase.from("profiles").select("role").eq("id", user.id).single() : Promise.resolve({ data: null }),
   ]);
   const isAdmin = profile?.role === "admin";
 

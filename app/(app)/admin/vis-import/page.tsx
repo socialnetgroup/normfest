@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { VisImportForm } from "@/components/vis-import-form";
+import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
 // §14 item 9 - self-serve VIS-list re-import, so a weekly refresh doesn't
@@ -10,15 +11,11 @@ import { createClient } from "@/lib/supabase/server";
 // kundennummer, invalid rows (missing kundennummer/name/gebiet) skipped and
 // reported, never written half-parsed.
 export default async function VisImportPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { user, profile } = await getCurrentUser();
   if (!user) notFound();
-
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
   if (profile?.role !== "admin") notFound();
 
+  const supabase = await createClient();
   const { count: companyCount } = await supabase.from("companies").select("id", { count: "exact", head: true });
 
   return (

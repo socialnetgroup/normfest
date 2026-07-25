@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DateJumpPicker } from "@/components/team/date-jump-picker";
 import { DayOffToggle } from "@/components/day-off-toggle";
 import { computeDailyBonus, shiftDate, type BonusThreshold } from "@/lib/team/bonus";
+import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
 const eur = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
@@ -22,15 +23,11 @@ export default async function TeamDayPage({ params }: { params: Promise<{ date: 
   const { date } = await params;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) notFound();
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { user, profile } = await getCurrentUser();
   if (!user) notFound();
-
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
   if (profile?.role !== "admin") notFound();
 
+  const supabase = await createClient();
   const today = new Date().toISOString().slice(0, 10);
   const [{ data: allAgents }, { data: dayRows }, { data: bonusSettings }] = await Promise.all([
     supabase.from("agents").select("id, full_name").eq("active", true).order("full_name"),

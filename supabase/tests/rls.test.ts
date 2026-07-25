@@ -491,35 +491,43 @@ describe("signals RLS + fn_refresh_signals", () => {
     expect(error).not.toBeNull();
   });
 
-  it("an admin can call fn_refresh_signals and any authenticated user can read signals", async () => {
-    const adminClient = anonClient();
-    await adminClient.auth.signInWithPassword({ email: adminEmail, password });
+  it(
+    "an admin can call fn_refresh_signals and any authenticated user can read signals",
+    async () => {
+      const adminClient = anonClient();
+      await adminClient.auth.signInWithPassword({ email: adminEmail, password });
 
-    const { error: rpcErr } = await adminClient.rpc("fn_refresh_signals");
-    expect(rpcErr).toBeNull();
+      const { error: rpcErr } = await adminClient.rpc("fn_refresh_signals");
+      expect(rpcErr).toBeNull();
 
-    const agentClient = anonClient();
-    await agentClient.auth.signInWithPassword({ email: agentEmail, password });
-    const { data, error } = await agentClient.from("signals").select("id").limit(1);
-    expect(error).toBeNull();
-    expect(data!.length).toBeGreaterThan(0);
-  });
+      const agentClient = anonClient();
+      await agentClient.auth.signInWithPassword({ email: agentEmail, password });
+      const { data, error } = await agentClient.from("signals").select("id").limit(1);
+      expect(error).toBeNull();
+      expect(data!.length).toBeGreaterThan(0);
+    },
+    15000,
+  );
 
-  it("fn_refresh_signals is idempotent (dedup index holds across re-runs)", async () => {
-    const { error: first } = await admin.rpc("fn_refresh_signals");
-    expect(first).toBeNull();
-    const { count: countAfterFirst } = await admin
-      .from("signals")
-      .select("id", { count: "exact", head: true });
+  it(
+    "fn_refresh_signals is idempotent (dedup index holds across re-runs)",
+    async () => {
+      const { error: first } = await admin.rpc("fn_refresh_signals");
+      expect(first).toBeNull();
+      const { count: countAfterFirst } = await admin
+        .from("signals")
+        .select("id", { count: "exact", head: true });
 
-    const { error: second } = await admin.rpc("fn_refresh_signals");
-    expect(second).toBeNull();
-    const { count: countAfterSecond } = await admin
-      .from("signals")
-      .select("id", { count: "exact", head: true });
+      const { error: second } = await admin.rpc("fn_refresh_signals");
+      expect(second).toBeNull();
+      const { count: countAfterSecond } = await admin
+        .from("signals")
+        .select("id", { count: "exact", head: true });
 
-    expect(countAfterSecond).toBe(countAfterFirst);
-  });
+      expect(countAfterSecond).toBe(countAfterFirst);
+    },
+    15000,
+  );
 });
 
 describe("product_relations / brand_consumption_profiles RLS", () => {

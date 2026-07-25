@@ -1,18 +1,15 @@
 import { notFound } from "next/navigation";
 
 import { AgentEvaluationForm } from "@/components/agent-evaluation-form";
+import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function NeueBewertungPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { user, profile } = await getCurrentUser();
   if (!user) notFound();
-
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
   if (profile?.role !== "admin") notFound();
 
+  const supabase = await createClient();
   const { data: agents } = await supabase
     .from("agents")
     .select("id, full_name, gebiet")

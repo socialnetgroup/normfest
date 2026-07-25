@@ -13,6 +13,7 @@ import { BrandFocusVerifyButton } from "@/components/brand-focus-verify-button";
 import { EnrichNowButton } from "@/components/enrich-now-button";
 import { FeedbackForm } from "@/components/feedback-form";
 import { SignalDismissButton } from "@/components/signal-dismiss-button";
+import { getCurrentUser } from "@/lib/auth";
 import { signalTypeLabel, signalTypeVariant } from "@/lib/signals";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
@@ -70,10 +71,10 @@ export default async function CompanyProfilePage({
   const { id } = await params;
   const supabase = await createClient();
 
-  const [{ data: company, error }, { data: userData }, { data: feedbackHistory }, { data: signals }, { data: enrichment }] =
+  const [{ data: company, error }, { user: currentUser, profile: currentProfile }, { data: feedbackHistory }, { data: signals }, { data: enrichment }] =
     await Promise.all([
       supabase.from("companies").select("*").eq("id", id).single(),
-      supabase.auth.getUser(),
+      getCurrentUser(),
       supabase
         .from("sales_feedback")
         .select(
@@ -94,9 +95,7 @@ export default async function CompanyProfilePage({
     notFound();
   }
 
-  const agentId = userData.user!.id;
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", agentId).single();
-  const isAdmin = profile?.role === "admin";
+  const isAdmin = currentProfile?.role === "admin";
 
   return (
     <div className="flex flex-col gap-6">
@@ -198,11 +197,11 @@ export default async function CompanyProfilePage({
                   {enrichment.brand_focus_guess.map((brand, i) => (
                     <div key={i} className="flex items-center gap-1.5">
                       <Badge variant="secondary">{brand}</Badge>
-                      {userData.user ? (
+                      {currentUser ? (
                         <BrandFocusVerifyButton
                           companyId={company.id}
                           brand={brand}
-                          verifierId={userData.user.id}
+                          verifierId={currentUser.id}
                           alreadyVerified={enrichment.verified || !!company.brand_focus}
                         />
                       ) : null}

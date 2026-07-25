@@ -4,7 +4,7 @@ import { PhoneCall, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SoftphoneDialpad } from "@/components/softphone-dialpad";
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth";
 
 function IconTitle({
   icon: Icon,
@@ -22,10 +22,7 @@ function IconTitle({
 }
 
 export default async function DialerPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { user } = await getCurrentUser();
   if (!user) notFound();
 
   return (
