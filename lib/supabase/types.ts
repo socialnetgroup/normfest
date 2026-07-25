@@ -1136,6 +1136,50 @@ export type Database = {
           },
         ]
       }
+      webshop_products_staging: {
+        Row: {
+          category_breadcrumb: string | null
+          id: string
+          image_hotlink_url: string | null
+          image_stored_path: string | null
+          matched_product_id: string | null
+          name: string
+          scraped_at: string
+          sku: string
+          source_url: string
+        }
+        Insert: {
+          category_breadcrumb?: string | null
+          id?: string
+          image_hotlink_url?: string | null
+          image_stored_path?: string | null
+          matched_product_id?: string | null
+          name: string
+          scraped_at?: string
+          sku: string
+          source_url: string
+        }
+        Update: {
+          category_breadcrumb?: string | null
+          id?: string
+          image_hotlink_url?: string | null
+          image_stored_path?: string | null
+          matched_product_id?: string | null
+          name?: string
+          scraped_at?: string
+          sku?: string
+          source_url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webshop_products_staging_matched_product_id_fkey"
+            columns: ["matched_product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       company_gebiet_coverage: {
