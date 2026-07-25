@@ -12,24 +12,38 @@ import type { Database } from "@/lib/supabase/types";
 
 type Agent = { id: string; full_name: string; gebiet: string };
 type EvaluationInsert = Database["public"]["Tables"]["agent_evaluations"]["Insert"];
+type EvaluationRow = Database["public"]["Tables"]["agent_evaluations"]["Row"];
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function AgentEvaluationForm({ agents, evaluatedBy }: { agents: Agent[]; evaluatedBy: string }) {
+export function AgentEvaluationForm({
+  agents,
+  evaluatedBy,
+  initial,
+}: {
+  agents: Agent[];
+  evaluatedBy: string;
+  initial?: EvaluationRow;
+}) {
   const router = useRouter();
-  const [agentId, setAgentId] = useState(agents[0]?.id ?? "");
-  const [callDate, setCallDate] = useState(todayIso());
-  const [callDuration, setCallDuration] = useState("");
-  const [callReference, setCallReference] = useState("");
+  const isEdit = !!initial;
+  const [agentId, setAgentId] = useState(initial?.agent_id ?? agents[0]?.id ?? "");
+  const [callDate, setCallDate] = useState(initial?.call_date ?? todayIso());
+  const [callDuration, setCallDuration] = useState(initial?.call_duration_minutes?.toString() ?? "");
+  const [callReference, setCallReference] = useState(initial?.call_reference ?? "");
   const [scores, setScores] = useState<Record<string, number>>(
-    Object.fromEntries(CALL_QUALITY_PHASES.map((p) => [p.key, 0])),
+    Object.fromEntries(
+      CALL_QUALITY_PHASES.map((p) => [p.key, initial ? ((initial[`${p.key}_score` as keyof EvaluationRow] as number) ?? 0) : 0]),
+    ),
   );
   const [notes, setNotes] = useState<Record<string, string>>(
-    Object.fromEntries(CALL_QUALITY_PHASES.map((p) => [p.key, ""])),
+    Object.fromEntries(
+      CALL_QUALITY_PHASES.map((p) => [p.key, initial ? ((initial[`${p.key}_note` as keyof EvaluationRow] as string | null) ?? "") : ""]),
+    ),
   );
-  const [comment, setComment] = useState("");
+  const [comment, setComment] = useState(initial?.comment ?? "");
   const [status, setStatus] = useState<"idle" | "saving" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -63,14 +77,16 @@ export function AgentEvaluationForm({ agents, evaluatedBy }: { agents: Agent[]; 
       f5_note: notes.f5 || null,
     };
 
-    const { error } = await supabase.from("agent_evaluations").insert(row);
+    const { error } = isEdit
+      ? await supabase.from("agent_evaluations").update(row).eq("id", initial.id)
+      : await supabase.from("agent_evaluations").insert(row);
     if (error) {
       setStatus("error");
       setErrorMessage(error.message);
       return;
     }
 
-    router.push("/admin/qa-bewertungen");
+    router.push(isEdit ? `/admin/qa-bewertungen/${initial.id}` : "/admin/qa-bewertungen");
     router.refresh();
   }
 
@@ -172,7 +188,7 @@ export function AgentEvaluationForm({ agents, evaluatedBy }: { agents: Agent[]; 
 
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={status === "saving" || !agentId}>
-          {status === "saving" ? "Speichern..." : "Bewertung speichern"}
+          {status === "saving" ? "Speichern..." : isEdit ? "Änderungen speichern" : "Bewertung speichern"}
         </Button>
         {status === "error" && errorMessage ? (
           <span className="text-sm text-destructive" role="alert">

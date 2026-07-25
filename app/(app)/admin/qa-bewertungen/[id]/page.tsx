@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Pencil } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
+import { EvaluationDeleteButton } from "@/components/evaluation-delete-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getCurrentUser } from "@/lib/auth";
 import { CALL_QUALITY_PHASES } from "@/lib/qa-evaluation";
 import { createClient } from "@/lib/supabase/server";
 
@@ -14,15 +17,11 @@ function formatDate(date: string) {
 
 export default async function BewertungDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { user, profile } = await getCurrentUser();
   if (!user) notFound();
-
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
   if (profile?.role !== "admin") notFound();
 
+  const supabase = await createClient();
   const { data: evaluation } = await supabase
     .from("agent_evaluations")
     .select("*, agents(full_name, gebiet)")
@@ -49,12 +48,26 @@ export default async function BewertungDetailPage({ params }: { params: Promise<
             {evaluation.call_reference ? ` · ${evaluation.call_reference}` : ""}
           </p>
         </div>
-        <Badge
-          variant={evaluation.total_score >= 8 ? "success" : evaluation.total_score >= 5 ? "secondary" : "warning"}
-          className="text-base"
-        >
-          {evaluation.total_score} / 10
-        </Badge>
+        <div className="flex shrink-0 items-center gap-2">
+          <Badge
+            variant={evaluation.total_score >= 8 ? "success" : evaluation.total_score >= 5 ? "secondary" : "warning"}
+            className="text-base"
+          >
+            {evaluation.total_score} / 10
+          </Badge>
+          <Link
+            href={`/admin/qa-bewertungen/${evaluation.id}/bearbeiten`}
+            className={buttonVariants({ variant: "outline", size: "icon-xs" })}
+            aria-label="Bearbeiten"
+          >
+            <Pencil className="size-3.5" />
+          </Link>
+          <EvaluationDeleteButton
+            id={evaluation.id}
+            agentName={evaluation.agents?.full_name ?? "Unbekannt"}
+            redirectTo="/admin/qa-bewertungen"
+          />
+        </div>
       </div>
 
       <Card>

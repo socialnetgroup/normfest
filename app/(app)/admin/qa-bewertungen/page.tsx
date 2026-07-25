@@ -5,6 +5,8 @@ import { CheckCircle2, ClipboardList, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EvaluationDeleteButton } from "@/components/evaluation-delete-button";
+import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
 const dateFmt = new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -13,15 +15,11 @@ function formatDate(date: string) {
 }
 
 export default async function QaBewertungenPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { user, profile } = await getCurrentUser();
   if (!user) notFound();
-
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
   if (profile?.role !== "admin") notFound();
 
+  const supabase = await createClient();
   const [{ data: agents }, { data: evaluations }] = await Promise.all([
     supabase.from("agents").select("id, full_name, gebiet").eq("active", true).order("full_name"),
     supabase
@@ -112,10 +110,10 @@ export default async function QaBewertungenPage() {
           {evaluations && evaluations.length > 0 ? (
             <ul className="flex flex-col divide-y rounded-lg border">
               {evaluations.map((e) => (
-                <li key={e.id}>
+                <li key={e.id} className="flex items-center gap-2 px-1">
                   <Link
                     href={`/admin/qa-bewertungen/${e.id}`}
-                    className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm transition-colors hover:bg-accent"
+                    className="flex flex-1 items-center justify-between gap-3 rounded-md px-2 py-2.5 text-sm transition-colors hover:bg-accent"
                   >
                     <div className="min-w-0">
                       <span className="font-medium">{e.agents?.full_name ?? "Unbekannt"}</span>{" "}
@@ -125,6 +123,7 @@ export default async function QaBewertungenPage() {
                       {e.total_score} / 10
                     </Badge>
                   </Link>
+                  <EvaluationDeleteButton id={e.id} agentName={e.agents?.full_name ?? "Unbekannt"} />
                 </li>
               ))}
             </ul>
