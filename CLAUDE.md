@@ -555,6 +555,35 @@ floor-cleaner example as canonical test, anti-hallucination guardrails, batching
   signals via the curated table — the "Mercedes → oil" chain is: AI detects focus →
   human verifies → deterministic mapping fires.
 
+**Same-address auto-merge for the ambiguous queue (2026-07-25).** Anis, while working
+through the 75-company ambiguous queue: several "ambiguous" pairs are actually the same
+real business with two Google Business Profiles at the identical address (live example:
+"Krebs & Riedel Schleifscheibenfabrik" — its main profile plus a separate profile for the
+EV charging station on the same premises; both carry real reviews). `pickResolution()`
+(`lib/enrichment/places.mjs`) previously only auto-resolved via exact-count (1 result) or
+PLZ-uniqueness; extended it to also auto-resolve when every candidate shares the same
+street+house-number+postal-code (ignoring a district-name suffix Google sometimes adds to
+only one listing, e.g. "Bad Karlshafen" vs "Bad Karlshafen-Diemelhöhe" for the literal same
+building) — same address is high-confidence "same physical place", not a guess. New shared
+`mergeCandidates()` combines the review sets from all matched listings (every quote stays
+real and individually dated, tagged with `source_listing` for traceability — never blended
+into a fabricated summary quote), picks the higher-review-count listing as the primary
+contact-info source, fills phone/website from the other only if the primary lacks it.
+
+The same picker UI (`components/ambiguous-candidate-picker.tsx`) also gained a manual
+version of this for the genuinely-ambiguous remainder — Anis: sometimes 2 candidates both
+look right with real reviews on each, and forcing a single pick throws away real data.
+Checkboxes + an "Ausgewählte zusammenführen" button let the admin merge any subset by hand
+using the same `mergeCandidates()` function, so the automatic and manual paths can never
+drift apart.
+
+`scripts/rescan-ambiguous-same-address.mjs` re-checked all 74 then-current ambiguous rows
+against the new rule using only already-stored `places_candidates` (zero new Places API
+calls, free) — **19 of 74 (26%) were genuinely the same address and auto-merged** (mostly
+multi-brand dealerships and sister listings at one location, e.g. "Autohaus Geiger" with
+separate Peugeot/Fiat sub-listings), leaving 55 as real, different-address ambiguity for
+manual review. Safely re-runnable any time (only touches rows still flagged ambiguous).
+
 ---
 
 ## 10. AI assistant — as v2.2 (tools incl. `get_company_brief`, `request_enrichment`,
@@ -1367,6 +1396,20 @@ explicitly labeled "laut Agent-Feedback", or says no data).
    one-off pass. 41% of rows have no `description`, 29% no `pack_content` — spot-check
    suggests this is genuine catalog reality (many product cards simply don't have prose
    description text), not an extraction failure.
+
+   **Description gap closed — generated, not extracted (2026-07-25).** After the webshop
+   merge (item 12 below) the gap grew to 9,545 of 11,909 products (80%, since none of the
+   7,898 new webshop-origin rows carry description text either) — Anis asked for these to
+   be filled with a generated sales-facing description even without real Normfest source
+   text, specifically to give agents talking points on generic items (his example:
+   "AUSBLASPISTOLE"). `scripts/generate-product-descriptions.mjs` (Haiku bulk-tier, 2-4
+   bullet points per product, explicitly instructed to use only generic product-category
+   knowledge and never invent specific technical data/certifications that could be wrong
+   for the real SKU) + new `products.description_is_generated` column so the Katalog UI
+   badges these "KI-generiert" and never presents them as real Normfest documentation —
+   same provenance discipline as `image_is_representative`. Ran across two billing
+   top-ups (same pattern as the M5 enrichment backlog): **9,544 of 9,545 generated**, one
+   left blank rather than guessed.
 9. **Standalone VIS-list upload CMS — shipped (2026-07-24).** `/admin/vis-import`: upload
    the weekly VIS Excel export, get back parsed/written/skipped counts + a sample of
    skipped rows, no dev session needed. Simpler shape than the catalog-ingest panel
@@ -1471,6 +1514,49 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     Grillreiniger WM 2026") — real photo, real cross-sell tiles linking to other real
     products, category filter tabs still show the correct original 17 (view is
     `category_code is not null`, unaffected by the uncategorized rows).
+
+    **Category backfill completed same day**, once billing was topped up:
+    `scripts/backfill-webshop-categories.mjs` classified **7,897 of 7,898** webshop-origin
+    products into the 17 real categories (closed `json_schema` enum, never invented). The
+    one exception (`270-01`, "Hoodie weiß") is genuine merch, not an automotive part — none
+    of the 17 categories fit it, correctly left uncategorized rather than forced. Spot-
+    checked the resulting distribution before trusting it — the biggest category
+    (`15 Werkzeuge`, 65% of the new products) is real: full hand-tool ranges (socket sets,
+    wrench sets, Torx screwdrivers) our narrower 4,011-product PDF catalog never carried at
+    all, not a classifier defaulting to a catch-all bucket.
+
+13. **Dialer placeholder — shipped (2026-07-25).** New standalone nav item (`/dialer`,
+    "Bald" badge) — Anis wants an eventual in-app softphone wired to the existing dialer's
+    API so agents can call without leaving this tool. Concept explainer card (same pattern
+    as the QA-Anrufe placeholder, §13 M9) + a working dial-pad demo
+    (`components/softphone-dialpad.tsx`): the numeric keypad and backspace genuinely append/
+    remove digits from the display, the "Anrufen" button is deliberately disabled (no real
+    connection exists yet) — purely to show the interaction shape, no telephony
+    functionality, consistent with §1's "no dialer/telephony" MVP boundary. Verified live.
+
+14. **QA-Bewertungen — shipped (2026-07-25).** New standalone admin menu item (real feature,
+    not a placeholder — unlike QA-Anrufe/M9, nothing here is blocked on an external vendor
+    decision): the TL's mandatory monthly per-agent call-quality evaluation. Anis referenced
+    a Genesys evaluation-form screenshot as shape inspiration only (unrelated project, not a
+    content source) and a much broader existing "Coaching 1:1" concept doc
+    (`input/Osnovna dokumentacija/Normfest_Coaching_1on1_v1.docx`) as the real content
+    source — v1 is deliberately smaller than both: just that document's §4 "CALL KVALITET
+    RUBRIKA", the same 5-phase call structure (F1 Vorstellung, F2 Eröffnungsfrage, F3
+    Bedarfsanalyse, F4 Lösungspräsentation, F5 Abschluss) the Skript/Agent Sales Guide
+    already documents elsewhere in this app, 2 points/phase = 10 max. The broader monthly
+    50-point KPI scorecard from the same document is a natural v2, not built now.
+
+    New `agent_evaluations` table (admin-only RLS, same HR-adjacent reasoning as
+    `agent_daily_performance` §4.11 — Anis is the sole admin/TL account for now, §14 item
+    10): one row per reviewed call (agent, call date/duration/reference, 5 phase scores +
+    per-phase observation notes, total /10, overall comment). `/admin/qa-bewertungen` shows
+    a per-agent monthly-compliance overview (evaluated this month: yes/no, based on
+    `created_at`, not the reviewed call's date) plus the full evaluation history;
+    `/admin/qa-bewertungen/neu` is the scoring form; `/admin/qa-bewertungen/[id]` a
+    read-only detail view. No edit/delete in v1, matching how other v1 features here
+    started minimal (e.g. Fokus lists). Verified live end-to-end: created a real evaluation,
+    confirmed the compliance badge flipped to "Erledigt", confirmed the detail view renders
+    all 5 phases correctly — then deleted the test data.
 
 ---
 
