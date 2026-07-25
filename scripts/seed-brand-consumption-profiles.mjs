@@ -132,6 +132,17 @@ const ROWS = [
     weight: 3,
     note: "Peugeot/Citroën-Dieselmotoren mit Partikelfilter-Additiv-System (Eolys/Cerine) benötigen regelmäßiges Nachfüllen der Additiv-Flüssigkeit - spezifischer Wartungsbedarf.",
   },
+  // Anis, 2026-07-26: "add Peugeot/Citroen like 1 brand, should be same tho" -
+  // same PSA/Stellantis diesel platform and identical Eolys/Cerine additive
+  // system, so same category/note as Peugeot, just under the Citroën brand
+  // name so it can match companies whose brand_focus comes through as
+  // "Citroën" rather than "Peugeot".
+  {
+    brand: "Citroën",
+    category: "Inspektion & Wartung",
+    weight: 3,
+    note: "Peugeot/Citroën-Dieselmotoren mit Partikelfilter-Additiv-System (Eolys/Cerine) benötigen regelmäßiges Nachfüllen der Additiv-Flüssigkeit - spezifischer Wartungsbedarf.",
+  },
   // "Japaner" - grouped as individual real brand rows (brand_consumption_profiles
   // has one brand string per row, and company_enrichment.brand_focus_guess
   // stores individual brand names like "Toyota", not a collective label) so
