@@ -473,7 +473,28 @@ Verified with real data, not just a passing function call: `seasonal_push`/
 `new_product_match` still return 0 rows after this fix — checked directly and confirmed
 it's a *different*, pre-existing gap (`products.season`/`launched_at` are 0% populated,
 zero rows in either column — the workshop-seed prerequisite noted above, unrelated to
-this affinity change). `cross_sell` verified working end-to-end via a throwaway test:
+this affinity change).
+
+**`products.season` filled (2026-07-25, Anis: "products.season, see if you can do own
+research"):** `seasonal_push` was permanently dead regardless of feedback/enrichment
+affinity volume since `season` was 0% populated. Filled via
+`scripts/backfill-product-season.mjs` — deliberately narrow, only genuinely
+well-established, generic automotive seasonality (never a brand/model-specific claim):
+tire changeover (entire `Reifenmontage` category, 142 products, season `3,4,9,10,11` —
+spring + autumn changeover windows), antifreeze/de-icer (name-keyword match, 9 products,
+`9,10,11,12,1,2`), AC service (name+subcategory match, 63 products, `3,4,5,6,7`), and
+cold-weather battery failure (name-keyword match, 14 products, `10,11,12,1,2`) — 228
+products total. A wiper-blade rule was drafted and dropped before running: the catalog
+has zero real wiper-blade products, and its only keyword hit was a wiper-**arm-removal
+tool**, not a genuinely seasonal item. Two rules (Frostschutz, Batterie) were narrowed to
+name-only matching after a sanity check found their natural subcategory buckets mix in
+unrelated products (a leak-detection spray sharing a "Vereiserspray" bucket; a generic
+distribution box sharing a "Batterieklemmen" bucket) — kept to name-only to avoid tagging
+those. Verified end-to-end, not just inserted: re-ran `fn_refresh_signals()` afterward —
+`seasonal_push` went from 0 to **2,835 real signal rows** (July falls inside the AC-service
+window, so `Klima`-category affinity fired immediately). `new_product_match` remains at 0
+— separate, still-unaddressed gap (`products.launched_at` is 0% populated; unlike season,
+there's no generic-knowledge way to backfill real launch dates without a data source). `cross_sell` verified working end-to-end via a throwaway test:
 temporarily attached a matched-product opportunity to a real company's enrichment row,
 confirmed the signal fired correctly (`origin='enrichment'`, discounted score, correctly
 labeled reason), then reverted the test data and re-ran the refresh to restore the true
@@ -764,6 +785,21 @@ background):** every item checked against the real codebase/project, not assumed
 - ✅ **RLS CI-asserted** — `.github/workflows/ci.yml` runs the full `supabase/tests/rls.test.ts`
   suite (35+ tests covering every table's policies) against the real project on every
   push/PR, with typecheck+lint gating first.
+  **Real regression found + fixed (2026-07-25):** a routine perf sweep re-ran the suite
+  and found 2 of the `signals RLS + fn_refresh_signals` tests newly failing (previously
+  green) — not the documented `chat_log` flakiness, a genuinely different issue.
+  Root-caused with `EXPLAIN ANALYZE` (via `npx supabase db query --linked`, not guessed):
+  `fn_refresh_signals()`'s `cross_sell` block now legitimately produces **~17,600 real
+  signal rows (up from 0)**, a direct, expected consequence of the webshop cross-sell
+  merge (§13 M4: `product_relations` grew 21,794 → 141,794 rows same week) finally giving
+  the `cross_sell` type real data to fire on — not a bug in the signal logic itself. The
+  bigger join + bigger insert simply now takes longer than the 5s vitest default. Added
+  `idx_product_relations_product_id_type` (composite `(product_id, relation_type)`,
+  migration `20260725070000_product_relations_type_index.sql`) since the join filters on
+  both columns and only a single-column `product_id` index existed; bumped the two
+  affected tests' timeouts to 15s (real cost after the index: ~2.8s / ~4.4s for the
+  idempotency test's two back-to-back full refreshes). Verified: full suite green again,
+  40/40 passing.
   **Two real bugs found + fixed in the test file itself (2026-07-24)**, surfaced while
   re-running the suite after the day's data changes: the `chat_log RLS` describe block's
   `beforeAll` picked a company via `select("id, name").limit(1)` with no `order by` and no
@@ -805,13 +841,17 @@ background):** every item checked against the real codebase/project, not assumed
   `scripts/backfill-places-contact-data.mjs`'s own console output rather than a persisted
   log — real audit infrastructure still feels like premature scope for 2 narrow features.
   Revisit if a third master-data-fill feature shows up, or before an actual go-live.
-- ⚠️ **CI migration dry-run — documented but not built.** §3.3's tech-stack table promises
-  "migration dry-run" as a CI step; `ci.yml` only runs typecheck/lint/test. Not added this
-  pass: `supabase db push --dry-run --linked` would need a `SUPABASE_ACCESS_TOKEN` GitHub
-  secret I can't confirm is configured, and given migrations in this solo workflow are
-  applied by hand immediately after being written (not deferred to CI), its practical value
-  here is genuinely unclear — a PR rarely has un-pushed migrations sitting in it. Anis to
-  decide: add the secret + step, or drop the promise from §3.3.
+- ⚠️ **CI migration dry-run — workflow step shipped (2026-07-25), blocked on one manual
+  Anis step.** Anis: "do CI migration if you can solo, i did in supabase the keys if
+  thats the same" — checked directly: what he did (generating a token in the Supabase
+  dashboard) is only half of it. The missing half is a **GitHub Actions repository
+  secret**, which needs a token *value* pasted into GitHub's own secret store
+  (`Settings -> Secrets and variables -> Actions`) — something I have no `gh` CLI or
+  GitHub write access to do myself in this environment. Added the actual workflow step
+  (`.github/workflows/ci.yml`: `npx supabase link --project-ref ethykzocikyirmoztrtq &&
+  npx supabase db push --dry-run`, reading `SUPABASE_ACCESS_TOKEN` from `secrets`) so my
+  half is done; it will simply fail until Anis adds that one GitHub secret (token value
+  from Supabase Dashboard -> Account -> Access Tokens).
 - 🔴 **PITR / backups — NOT enabled, zero backups exist. Explicitly deferred (2026-07-23).**
   Checked directly via the Supabase Management API
   (`GET /v1/projects/{ref}/database/backups`): `pitr_enabled: false`, `backups: []`. Real
@@ -1344,6 +1384,32 @@ explicitly labeled "laut Agent-Feedback", or says no data).
    corrected if not): `brand_consumption_profiles` has **0 rows** — the workshop has not
    happened yet. This is why `brand_profile_match` still doesn't fire (§6 M4 build note) —
    not just missing `companies.brand_focus`, but the curated table itself is empty too.
+   **Preliminary fill + editor shipped (2026-07-25), workshop still not done — Anis:
+   "do your own research for each specific brand and use this information as
+   preliminary, i will give some input afterwards with sanin and agents".** Added
+   `verified boolean default false` + `source text` columns (migration
+   `20260725080000_brand_consumption_profiles_verified.sql`) so a preliminary,
+   Claude-researched claim about a real brand is never silently presented as
+   confirmed — same honesty pattern as `image_is_representative`/
+   `description_is_generated` (§13 M4/M3). `scripts/seed-brand-consumption-profiles.mjs`
+   seeded 10 rows across the brands that actually show up most in real
+   `company_enrichment.brand_focus_guess` data (Audi 24x, BMW 20x, Mercedes 12-16x,
+   VW 13x, etc.) — restricted to genuinely well-documented trade knowledge only (EA888
+   TSI/TFSI oil consumption, BMW N47 timing-chain wear, common NFZ van models per
+   brand, Tesla → pure EV), never a fabricated specific. New `/admin/brand-profiles`
+   screen (linked under Settings in the sidebar) lists all rows with a
+   Vorläufig/Bestätigt badge, inline note/weight edit, a verified-toggle, delete, and
+   an add-new form (manually-added rows default `verified=true`,
+   `source='Manuell erfasst (Admin)'`). Verified live end-to-end (throwaway admin
+   account): add, edit, verified-toggle, and delete all confirmed working against the
+   real table, test row cleaned up after. **Still not built:** the `brand_profile_match`
+   signal block itself in `fn_refresh_signals()` — that's separate, bigger work blocked
+   on `companies.brand_focus` being populated (still 0% - needs M5 enrichment
+   verification flow to actually run), not on this table being empty. Also worth noting
+   for whoever builds that block later: this table's `brand` values (e.g.
+   "Mercedes-Benz") aren't yet normalized against the variant spellings that show up in
+   real `brand_focus_guess` data ("Mercedes", "VW" vs "Volkswagen", "SEAT" vs "Seat") -
+   that join-normalization is real future work, not solved here.
 6. **Team Dashboard data source — RESOLVED 2026-07-23:** confirmed manual (agents
    type in each sale as it happens), so the Excel hand-off is now replaced by the
    in-app `fn_log_sale` entry (§4.11) — no dialer/CRM export integration needed.
@@ -1557,6 +1623,70 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     started minimal (e.g. Fokus lists). Verified live end-to-end: created a real evaluation,
     confirmed the compliance badge flipped to "Erledigt", confirmed the detail view renders
     all 5 phases correctly — then deleted the test data.
+
+    **Edit/delete added (2026-07-25).** `AgentEvaluationForm` gained an `initial` prop —
+    when present it pre-fills every field from the existing row and switches the submit
+    from insert to update, redirecting to the detail page instead of the list afterward;
+    new `/admin/qa-bewertungen/[id]/bearbeiten` reuses the same form in this edit mode.
+    New `EvaluationDeleteButton` (confirm-gated, same pattern as `FocusListManage`'s
+    delete) added to both the detail page (redirects to the list after) and each list
+    row. No new RLS needed — `agent_evaluations_admin_all` already grants admin
+    update/delete. Verified live end-to-end: created a real test evaluation (3/10),
+    edited it through the real edit page (scores changed, total recalculated to 9/10,
+    confirmed on the detail page after redirect), then deleted it via the detail page's
+    delete button (native `confirm()` is suppressed in this sandboxed browser, so verified
+    by overriding `window.confirm` to return true — the same limitation that applied to
+    every other confirm-gated delete tested this session) and confirmed it was gone from
+    the DB.
+
+15. **Katalog dedup detection + review UI — shipped (2026-07-25), P6 of the M8 follow-up
+    plan.** Per the earlier decision (§13 M4, "solo or by hand?"): detection stays
+    automated and read-only, the actual merge/delete decision stays with Anis.
+
+    New `product_duplicate_candidates` staging table (migration
+    `20260725090000_product_duplicate_candidates.sql`, admin-only RLS) +
+    `scripts/detect-catalog-duplicates.mjs` — reuses the same Jaccard word-overlap
+    approach already proven in `scripts/fill-representative-images.mjs`, restricted to
+    cross-source pairs (one `catalog_pdf` + one `webshop` product) within the same
+    `category_code` at similarity ≥0.6, keeping only each PDF product's single best
+    webshop match, capped to the top 300 by score. **Real run result: only 30
+    candidates found** across the full 11,909-product catalog — consistent with the
+    already-documented finding (webshop cross-sell mining attempt, §13 M4) that most of
+    the catalog genuinely isn't cross-represented between the two sources, not a
+    detection-threshold problem. Spot-checked the full list directly before trusting
+    it: several genuine 100%-name-match pairs (e.g. "Benzin-Additiv OT 100",
+    SKU `2897-371` vs `100-2897-371`) alongside real one-to-many cases worth flagging to
+    Anis specifically — 7 different `Blindnietmuttern-Sortiment Aluminium` size variants
+    all fuzzy-matching the same one generic webshop `Blindnietmuttern-Sortiment` listing
+    (67% similarity) — a real product-family-vs-generic-assortment ambiguity, exactly why
+    this needs a human per pair, not an auto-merge.
+
+    New `fn_merge_duplicate_products(keep_id, remove_id)` RPC (security definer,
+    admin-gated inside the function body since security definer bypasses RLS — same
+    reasoning as `fn_dismiss_signal`) atomically re-points every real FK reference
+    (`sales_feedback`, `signals`, `signal_dismissals`, `focus_list_products`,
+    `webshop_products_staging.matched_product_id`, `product_relations` on both
+    `product_id` and `related_product_id`, deduping any would-be unique-constraint
+    collision first) from the removed product to the kept one, then deletes the loser.
+    New `/admin/katalog-dedup` (linked under Settings) lists every pending candidate
+    side-by-side (SKU/name/category/source) with "Zusammenführen (PDF-Katalog
+    behalten)" / "Zusammenführen (Webshop behalten)" / "Kein Duplikat" per row — nothing
+    merges without an explicit click, and rejecting just marks the row (`status=
+    'rejected'`), it never touches `products`.
+
+    Verified live end-to-end with throwaway test products (never against real
+    candidates for the merge path): created two fake products with a real
+    `product_relations` row pointing at the "loser," ran the actual merge through the
+    real UI, confirmed via direct DB query that the loser was deleted, the survivor
+    intact, and the `product_relations` row correctly re-pointed to the survivor.
+    Separately verified the reject path on one real candidate through the real UI, then
+    restored it to `pending` immediately after (rejecting a real candidate was only to
+    prove the button works — the actual call on that pair belongs to Anis, not a test
+    click). **Known trade-off, not a bug:** `product_duplicate_candidates`'s FKs are
+    `on delete cascade`, so a merged candidate's row disappears entirely rather than
+    surviving with `status='merged'` as a historical record — acceptable for v1 since
+    the safety-critical part (nothing merges without a click) is intact, but means there's
+    currently no audit trail of past merges beyond `products`' own history.
 
 ---
 

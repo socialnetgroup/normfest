@@ -214,6 +214,8 @@ export type Database = {
           category: string
           id: string
           note: string
+          source: string | null
+          verified: boolean
           weight: number
         }
         Insert: {
@@ -221,6 +223,8 @@ export type Database = {
           category: string
           id?: string
           note: string
+          source?: string | null
+          verified?: boolean
           weight?: number
         }
         Update: {
@@ -228,6 +232,8 @@ export type Database = {
           category?: string
           id?: string
           note?: string
+          source?: string | null
+          verified?: boolean
           weight?: number
         }
         Relationships: []
@@ -877,6 +883,61 @@ export type Database = {
           },
         ]
       }
+      product_duplicate_candidates: {
+        Row: {
+          created_at: string
+          id: string
+          product_a_id: string
+          product_b_id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          similarity: number
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          product_a_id: string
+          product_b_id: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          similarity: number
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          product_a_id?: string
+          product_b_id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          similarity?: number
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_duplicate_candidates_product_a_id_fkey"
+            columns: ["product_a_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_duplicate_candidates_product_b_id_fkey"
+            columns: ["product_b_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_duplicate_candidates_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_relations: {
         Row: {
           created_at: string
@@ -1498,6 +1559,10 @@ export type Database = {
           p_value_net?: number
         }
         Returns: string
+      }
+      fn_merge_duplicate_products: {
+        Args: { p_keep_id: string; p_remove_id: string }
+        Returns: undefined
       }
       fn_refresh_signals: { Args: never; Returns: undefined }
       fn_set_day_off: {
