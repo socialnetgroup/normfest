@@ -1415,20 +1415,50 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     filled `telefon` on 44 companies and `website` on 705, out of 889 companies with
     Places phone/website data (166 already had both fields from VIS). Website now also
     shown as a clickable link on the Firmenprofil (`/firmen/[id]`).
-12. **Rebuild/extend Katalog from the live webshop (added 2026-07-24, backlog — not
-    started):** normfest-shop.com (the real customer-facing storefront) has a much larger
-    range than our 4,011-product PDF extract (~14,700 sitemap URLs vs. the 800-page
-    catalog PDF this app ingested for M3) and its own real "Könnte Sie auch interessieren"
-    cross-sell merchandising. Anis wants to eventually import from it directly into
-    Katalog (as its own endpoint/source, login-acceptable for price though price isn't
-    very relevant here) rather than relying solely on the PDF extract. Explicitly
-    deferred — "vratićemo se na webshop kasnije" — Anis's specified approach when picked
-    up: (1) full extraction of the shop's own product range (crawl its own category/
-    sitemap structure, not search backward from our existing SKUs — see §6/§13 M4 for why
-    that direction had ~1% yield), (2) compare the extracted set against our existing
-    4,011 products, (3) delete/merge duplicates. Scoped down for now to just mining
-    cross-sell pairs from what already exists (§6/§13 M4). Not scoped further — revisit
-    when picked up.
+12. **Rebuild/extend Katalog from the live webshop — DONE (2026-07-25).** Followed
+    exactly the approach specified when this was deferred: (1) full extraction of the
+    shop's own category/sitemap structure (§6/§13 M4: 9,735 products crawled, not
+    search-backward from our SKUs), (2) compared against the existing 4,011 (§13 M4:
+    1,837 exact-SKU matches, 7,898 genuinely new/unique), (3) merge. Anis: "compile now
+    everything in the final form of the katalog with full products from webshop and
+    catalogue pdf and finish it."
+
+    `scripts/merge-webshop-products.mjs` inserted all 7,898 new products into the live
+    `products` table (new `products.source` column, `'catalog_pdf' | 'webshop'` —
+    genuine provenance distinction, §3.2.7, defaults existing rows to `'catalog_pdf'`
+    accurately). Each new product needed a category assignment the webshop crawl never
+    captured (`category_breadcrumb` confirmed 0% populated across all 7,898) — classified
+    via a cheap Haiku bulk-tier pass into the 17 real catalog categories (closed
+    `json_schema` enum, never invented). HTML entities in webshop names (e.g.
+    `R&uuml;ckstell-Profil`) decoded before insert. 6 of 7,898 had only a generic
+    Normfest-CI-logo "photo" (not a real product photo) — detected via the image URL and
+    dropped rather than shown as if it were the product's own image.
+
+    **Ran into the same Anthropic billing wall as the M5 enrichment backlog (§10/§13 M5),
+    mid-classification (~93 of 99 batches).** Anis: "can you finish without the missing
+    few, then we refill" — rather than block the whole merge on billing, made the
+    classification step resilient (a failed batch leaves those SKUs uncategorized,
+    `category_code`/`category_name` are nullable, rather than crashing the run) and
+    inserted all 7,898 regardless. Because the account was actually at zero (not just low)
+    at insert time, every classification batch failed and **all 7,898 new products
+    currently have no category** — still fully searchable/browsable via the Katalog's
+    "Alle" view and name/SKU search, just not filterable by category tab until backfilled.
+    `scripts/backfill-webshop-categories.mjs` (+ migration `20260725040000_fn_bulk_set_
+    product_category.sql`, same safe bulk-UPDATE pattern as `fn_bulk_set_image_path` —
+    PostgREST upsert would trip NOT NULL on a partial payload) is ready to run the moment
+    billing is topped up — targets exactly `source='webshop' AND category_code IS NULL`,
+    so it's safely re-runnable and only ever touches what's still missing.
+
+    Also re-resolved cross-sell across the full, now much larger SKU universe (old 4,011 +
+    new 7,898) — **141,794 cross-sell pairs total, up from 21,794** before the merge, since
+    many pairs previously had one side in the "new" bucket that couldn't resolve.
+
+    **Result: Katalog is now 11,909 products** (4,011 PDF-origin + 7,898 webshop-origin),
+    up from 4,011. Verified live in a real browser (throwaway admin test account, deleted
+    after): searched and opened a real merged product (`2026-0000-094`, "Backofen- und
+    Grillreiniger WM 2026") — real photo, real cross-sell tiles linking to other real
+    products, category filter tabs still show the correct original 17 (view is
+    `category_code is not null`, unaffected by the uncategorized rows).
 
 ---
 

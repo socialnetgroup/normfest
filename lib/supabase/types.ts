@@ -862,6 +862,7 @@ export type Database = {
           pack_rank: number | null
           season: string | null
           sku: string
+          source: string
           source_page: number | null
           subcategory: string | null
           tech_specs: Json
@@ -884,6 +885,7 @@ export type Database = {
           pack_rank?: number | null
           season?: string | null
           sku: string
+          source?: string
           source_page?: number | null
           subcategory?: string | null
           tech_specs?: Json
@@ -906,6 +908,7 @@ export type Database = {
           pack_rank?: number | null
           season?: string | null
           sku?: string
+          source?: string
           source_page?: number | null
           subcategory?: string | null
           tech_specs?: Json
@@ -1277,6 +1280,10 @@ export type Database = {
     Functions: {
       fn_bulk_set_image_path: { Args: { pairs: Json }; Returns: undefined }
       fn_bulk_set_matched_product: { Args: { pairs: Json }; Returns: undefined }
+      fn_bulk_set_product_category: {
+        Args: { pairs: Json }
+        Returns: undefined
+      }
       fn_chat_get_brand_profile: {
         Args: { p_brand: string }
         Returns: {
