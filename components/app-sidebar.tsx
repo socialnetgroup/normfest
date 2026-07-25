@@ -20,6 +20,8 @@ import {
   Headphones,
   Phone,
   ClipboardCheck,
+  Tags,
+  Copy,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +42,8 @@ const NAV_ITEMS = [
 const SETTINGS_ITEMS = [
   { href: "/admin/enrichment", label: "Enrichment", icon: Wand2 },
   { href: "/admin/vis-import", label: "VIS Import", icon: Upload },
+  { href: "/admin/brand-profiles", label: "Marken-Profile", icon: Tags },
+  { href: "/admin/katalog-dedup", label: "Katalog-Dedup", icon: Copy },
 ];
 
 function isActive(pathname: string, href: string) {
