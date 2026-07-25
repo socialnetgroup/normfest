@@ -731,6 +731,41 @@ output.
    full, correctly-grounded, quote-accurate answer citing the real 5-phase Skript structure
    in one pass.
 
+**Acceptance-set re-run at current catalog scale (2026-07-26), Anis: "re-run the chat
+acceptance test set" (my own suggestion when he asked what could be improved).**
+Motivation: the catalog and `product_relations` have grown enormously since the last run
+(4,011 → 11,909 products, 21,794 → 141,794 relations, from the webshop merge §13 M4) —
+worth confirming grounding still holds at this scale rather than assuming it does.
+Re-ran `chat-acceptance-test.mjs --admin` (24 questions + 1 admin case, real cost
+~$0.74 at Sonnet-5 intro pricing, 284,789 input / 17,214 output tokens).
+
+**Result: same strong pass as before** — every correctness-critical rule held across
+all 25 answers: no fabricated facts/dates/SKUs, every "no data" case (unmatched brand
+"Lamborghini", no-match products "Bremsenquietschen"/aircraft parts, tier-2 order dates,
+total-company-count) answered honestly, every enrichment claim carried its literal
+quote, both confirm-gated tools behaved correctly (agent refusal + admin proposal, no
+premature execution), context injection worked. The 2026-07-24 objection-card
+language-mirroring fix (lead with the agent's own language) is now confirmed live too —
+the BS objection question got a BS-first response. One nice emergent behavior not seen
+before: asked `get_brand_profile('VW')` and got no match, the model retried with the
+full name `Volkswagen` on its own and found the real profile — a good sign the "VW" vs
+"Volkswagen" naming-variant gap (flagged as future work in §13 M4/M5's brand-profiles
+note) is partially self-healing at the LLM layer, though the underlying data-normalization
+gap is still real and unaddressed.
+
+**One real anomaly investigated, confirmed not a code bug:** question 1 (DE) failed to
+find "Autohandel "An der Schmiede"" ("keine Firma gefunden"), but question 2 (BS, same
+company, one turn later) found it correctly with a full, accurate brief. Checked the
+underlying `fn_chat_search_companies` directly rather than assuming: it's a simple
+`ilike '%query%' order by name limit 10` — verified every plausible substring the model
+could have reasonably sent (`Autohandel` → the real company ranks 7th of 51 matches,
+well inside the limit; `Schmiede` → ranks 2nd of 15; `An der Schmiede` → the *only*
+match) all correctly return the company well within the 10-row cap. Since the search
+function itself can't produce a false negative for any reasonable substring here, this
+was very likely a one-off model-level miss (the LLM either skipped or malformed the tool
+call that turn) — the same class of variance already documented above (item 2,
+2026-07-24), not a reproducible system defect. No code change made.
+
 **Still open:** real per-turn latency (p95 profile <2s / chat first-token <3s, §2.2) —
 the CLI harness bypasses the SSE-streaming path entirely, so it can't measure real
 first-token latency. That needs a browser-based check through `/assistent`, which this
