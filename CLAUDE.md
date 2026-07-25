@@ -841,17 +841,30 @@ background):** every item checked against the real codebase/project, not assumed
   `scripts/backfill-places-contact-data.mjs`'s own console output rather than a persisted
   log — real audit infrastructure still feels like premature scope for 2 narrow features.
   Revisit if a third master-data-fill feature shows up, or before an actual go-live.
-- ⚠️ **CI migration dry-run — workflow step shipped (2026-07-25), blocked on one manual
-  Anis step.** Anis: "do CI migration if you can solo, i did in supabase the keys if
-  thats the same" — checked directly: what he did (generating a token in the Supabase
-  dashboard) is only half of it. The missing half is a **GitHub Actions repository
-  secret**, which needs a token *value* pasted into GitHub's own secret store
-  (`Settings -> Secrets and variables -> Actions`) — something I have no `gh` CLI or
-  GitHub write access to do myself in this environment. Added the actual workflow step
-  (`.github/workflows/ci.yml`: `npx supabase link --project-ref ethykzocikyirmoztrtq &&
-  npx supabase db push --dry-run`, reading `SUPABASE_ACCESS_TOKEN` from `secrets`) so my
-  half is done; it will simply fail until Anis adds that one GitHub secret (token value
-  from Supabase Dashboard -> Account -> Access Tokens).
+- ✅ **CI migration dry-run — working (2026-07-25).** Anis: "do CI migration if you can
+  solo, i did in supabase the keys if thats the same" — checked directly: what he did
+  (generating a token in the Supabase dashboard) was only half of it. The missing half
+  was a **GitHub Actions repository secret**, which needs a token *value* pasted into
+  GitHub's own secret store (`Settings -> Secrets and variables -> Actions`) — something
+  I have no `gh` CLI or GitHub write access to do myself in this environment. Added the
+  workflow step (`.github/workflows/ci.yml`: `npx supabase link --project-ref
+  ethykzocikyirmoztrtq && npx supabase db push --dry-run`, reading
+  `SUPABASE_ACCESS_TOKEN` from `secrets`); Anis added the `normfest-cli` token
+  (distinct from his personal one, which was already authenticating my local CLI
+  session all along) as that secret same day.
+
+  **Real bug found + fixed after the secret was added, run still failed:** Anis shared
+  the actual failed-run log (CI #76) — `link` itself succeeded ("Finished supabase
+  link.") but the step still exited 1, with only a `Timeout while shutting down
+  PostHog. Some events may not have been sent.` line before the generic error. Root
+  cause confirmed by local repro (`SUPABASE_TELEMETRY_DISABLED=1 npx supabase link
+  --project-ref ...` vs. without it): the Supabase CLI's own exit-time telemetry flush
+  to PostHog can't reach it from this CI runner's network and the CLI treats that as a
+  fatal error on exit, even though the actual command had already completed
+  successfully — a real CLI rough edge, not anything wrong with our command or
+  credentials. Fixed by adding `SUPABASE_TELEMETRY_DISABLED: "1"` to the step's `env`
+  block (confirmed locally: exit code drops to 0 and the PostHog line disappears
+  entirely with the var set).
 - 🔴 **PITR / backups — NOT enabled, zero backups exist. Explicitly deferred (2026-07-23).**
   Checked directly via the Supabase Management API
   (`GET /v1/projects/{ref}/database/backups`): `pitr_enabled: false`, `backups: []`. Real
