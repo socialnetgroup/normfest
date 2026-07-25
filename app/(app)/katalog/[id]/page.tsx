@@ -102,7 +102,18 @@ export default async function ProductPage({
       {product.description ? (
         <Card>
           <CardHeader>
-            <CardTitle>Produktbeschreibung</CardTitle>
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle>Produktbeschreibung</CardTitle>
+              {product.description_is_generated ? (
+                <Badge
+                  variant="secondary"
+                  className="text-[10px]"
+                  title="KI-generiert auf Basis von Produktkategorie-Wissen - kein offizieller Normfest-Text. Technische Details vor Kundenaussage prüfen."
+                >
+                  KI-generiert
+                </Badge>
+              ) : null}
+            </div>
           </CardHeader>
           <CardContent>
             <p className="text-sm whitespace-pre-line">{product.description}</p>
@@ -113,10 +124,7 @@ export default async function ProductPage({
       {relations && relations.length > 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle>Könnte auch interessieren</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Laut normfest-shop.com &ldquo;Könnte Sie auch interessieren&rdquo;.
-            </p>
+            <CardTitle>Könnte auch interessant sein</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">

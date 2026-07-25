@@ -89,6 +89,87 @@ export type Database = {
           },
         ]
       }
+      agent_evaluations: {
+        Row: {
+          agent_id: string
+          call_date: string
+          call_duration_minutes: number | null
+          call_reference: string | null
+          comment: string | null
+          created_at: string
+          evaluated_by: string | null
+          f1_note: string | null
+          f1_score: number
+          f2_note: string | null
+          f2_score: number
+          f3_note: string | null
+          f3_score: number
+          f4_note: string | null
+          f4_score: number
+          f5_note: string | null
+          f5_score: number
+          id: string
+          total_score: number
+        }
+        Insert: {
+          agent_id: string
+          call_date: string
+          call_duration_minutes?: number | null
+          call_reference?: string | null
+          comment?: string | null
+          created_at?: string
+          evaluated_by?: string | null
+          f1_note?: string | null
+          f1_score: number
+          f2_note?: string | null
+          f2_score: number
+          f3_note?: string | null
+          f3_score: number
+          f4_note?: string | null
+          f4_score: number
+          f5_note?: string | null
+          f5_score: number
+          id?: string
+          total_score: number
+        }
+        Update: {
+          agent_id?: string
+          call_date?: string
+          call_duration_minutes?: number | null
+          call_reference?: string | null
+          comment?: string | null
+          created_at?: string
+          evaluated_by?: string | null
+          f1_note?: string | null
+          f1_score?: number
+          f2_note?: string | null
+          f2_score?: number
+          f3_note?: string | null
+          f3_score?: number
+          f4_note?: string | null
+          f4_score?: number
+          f5_note?: string | null
+          f5_score?: number
+          id?: string
+          total_score?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_evaluations_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_evaluations_evaluated_by_fkey"
+            columns: ["evaluated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agents: {
         Row: {
           active: boolean
@@ -851,6 +932,7 @@ export type Database = {
           category_name: string | null
           created_at: string
           description: string | null
+          description_is_generated: boolean
           extraction_confidence: number | null
           id: string
           image_is_representative: boolean
@@ -874,6 +956,7 @@ export type Database = {
           category_name?: string | null
           created_at?: string
           description?: string | null
+          description_is_generated?: boolean
           extraction_confidence?: number | null
           id?: string
           image_is_representative?: boolean
@@ -897,6 +980,7 @@ export type Database = {
           category_name?: string | null
           created_at?: string
           description?: string | null
+          description_is_generated?: boolean
           extraction_confidence?: number | null
           id?: string
           image_is_representative?: boolean
@@ -1281,6 +1365,10 @@ export type Database = {
       fn_bulk_set_image_path: { Args: { pairs: Json }; Returns: undefined }
       fn_bulk_set_matched_product: { Args: { pairs: Json }; Returns: undefined }
       fn_bulk_set_product_category: {
+        Args: { pairs: Json }
+        Returns: undefined
+      }
+      fn_bulk_set_product_description: {
         Args: { pairs: Json }
         Returns: undefined
       }
