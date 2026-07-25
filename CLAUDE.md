@@ -1440,14 +1440,26 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     classification step resilient (a failed batch leaves those SKUs uncategorized,
     `category_code`/`category_name` are nullable, rather than crashing the run) and
     inserted all 7,898 regardless. Because the account was actually at zero (not just low)
-    at insert time, every classification batch failed and **all 7,898 new products
-    currently have no category** — still fully searchable/browsable via the Katalog's
-    "Alle" view and name/SKU search, just not filterable by category tab until backfilled.
-    `scripts/backfill-webshop-categories.mjs` (+ migration `20260725040000_fn_bulk_set_
-    product_category.sql`, same safe bulk-UPDATE pattern as `fn_bulk_set_image_path` —
-    PostgREST upsert would trip NOT NULL on a partial payload) is ready to run the moment
-    billing is topped up — targets exactly `source='webshop' AND category_code IS NULL`,
-    so it's safely re-runnable and only ever touches what's still missing.
+    at insert time, every classification batch failed and all 7,898 new products briefly
+    had no category — still fully searchable/browsable via the Katalog's "Alle" view and
+    name/SKU search, just not filterable by category tab in the meantime.
+
+    **Backfilled the same day, right after Anis topped up billing** (his call on amount:
+    asked what was needed, given a real token-based estimate of well under $1 for this
+    specific pass — not a measured number, the crashed run never got far enough to log
+    real billing — and told $5 was a comfortable, shared-with-everything-else top-up, not
+    a per-task minimum; he added $5). `scripts/backfill-webshop-categories.mjs` (+
+    migration `20260725040000_fn_bulk_set_product_category.sql`, same safe bulk-UPDATE
+    pattern as `fn_bulk_set_image_path` — PostgREST upsert would trip NOT NULL on a
+    partial payload) ran clean: **7,897 of 7,898 classified, 0 failed batches.** The one
+    exception (`270-01`, "Hoodie weiß") is genuine merch, not a real automotive-parts
+    product — none of the 17 categories actually fit it, so the model reasonably left it
+    out rather than force a wrong category; left as the one honest gap, matching the same
+    "don't fabricate" principle as everywhere else. Distribution is real, not a
+    default-bucket artifact — spot-checked the largest category (`15 Werkzeuge`, 5,095 of
+    7,898 = 65%) directly: genuine full hand-tool ranges (socket sets, wrench sets, Torx
+    screwdrivers) that our narrower 4,011-product PDF extract never carried at all, so the
+    skew reflects the webshop's real broader assortment, not a classification defect.
 
     Also re-resolved cross-sell across the full, now much larger SKU universe (old 4,011 +
     new 7,898) — **141,794 cross-sell pairs total, up from 21,794** before the merge, since
