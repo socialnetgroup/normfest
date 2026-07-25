@@ -997,7 +997,31 @@ images use `next/image` with `unoptimized` (avoids needing `next.config.ts`
 `images.remotePatterns` changes for the Supabase Storage host). Verified live end-to-end
 in a real browser (throwaway admin test account, deleted after): a real product
 ("Schneidezange für Polyamidrohre") renders its own photo plus 12 real cross-sell tiles
-with their own photos, names, and SKUs, matching the DB exactly.
+with their own photos, names, and SKUs, matching the DB exactly — confirmed the whole
+tile (image included) is one `<Link>`, so clicking the photo navigates too.
+
+**Fuzzy image recovery for the remaining 2,174 imageless products (2026-07-25):** Anis
+asked to close this gap now rather than leave it, but explicitly not via blind web image
+search — real risk of a wrong product's photo with no way to verify 2,000+ matches, same
+"don't fabricate" principle as the rest of the project (§11.5 already restricts external
+data sourcing to official APIs/exports). Instead: `scripts/match-webshop-images-fuzzy.mjs`
+name-matches (Jaccard word-overlap on normalized German product names) each imageless
+product against the 7,884 already-crawled webshop products that didn't exact-SKU-match
+(root cause of the original miss: our PDF SKU sometimes differs from the webshop's SKU
+for the same real product) — reuses images already sitting in the `product-images`
+storage bucket, zero new requests/downloads. Two thresholds, chosen after inspecting real
+output: `>= 0.6` auto-write (e.g. "Alu-Dichtring DIN 7603 Form A" ← "Alu-Dichtring DIN
+7603", a real same-family match at different dimensions, same photo-reuse pattern already
+accepted in the exact-match case), `0.4–0.6` logged but never written — spot-checked this
+band and confirmed it's genuinely risky (e.g. "Kupfer-Fülldichtring **Form C**" would have
+matched a "Form A" product's photo — different shape, wrong photo), so holding it back was
+the right call, not overcaution. **Result: 115 more products got a real photo** (now 2,059
+still without). The much larger remainder (154 held-back + 1,905 with zero name overlap at
+all) confirms the same finding as the earlier cross-sell mining attempt (above): a large
+share of our catalog — DIN/hardware parts, dimension variants — genuinely isn't
+independently represented on the retail storefront, not a matching-algorithm limitation.
+For that true remainder, PDF crop remains the one source guaranteed correct per-product;
+not run this pass (targeted, smaller-scope job vs. the ~2,000-wide gap here).
 
 ### M5 — Enrichment (week 6–8)
 Places resolver + ambiguous queue; website fetch/distill; analyze + guardrails; Brief-
