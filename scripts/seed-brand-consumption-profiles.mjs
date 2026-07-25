@@ -95,6 +95,85 @@ const ROWS = [
     weight: 2,
     note: "Hochleistungsmotoren erfordern häufig hochwertigere Ölspezifikationen und entsprechend engmaschigere Wartungsintervalle.",
   },
+  // Added 2026-07-26, Anis: Aston Martin, Rolls-Royce, Bentley, Jaguar,
+  // Peugeot + "Japaner" (Hyundai, Toyota, Mitsubishi, Honda usw.). The four
+  // exotic/ultra-luxury brands realistically have near-zero match volume
+  // against Normfest's real customer base (independent Kfz-Werkstätten -
+  // these mostly go to authorized luxury dealers), so weight is kept low (2)
+  // and notes stay to genuinely safe, non-technical claims rather than
+  // fabricating a specific defect I'm not confident about.
+  {
+    brand: "Aston Martin",
+    category: "Elektrik",
+    weight: 2,
+    note: "Geringe Jahreslaufleistung bei Liebhaberfahrzeugen führt häufig zu Batterie-Tiefentladung durch lange Standzeiten - Bedarf an Batterieerhaltungsgeräten und Starthilfe-Zubehör.",
+  },
+  {
+    brand: "Rolls-Royce",
+    category: "Fahrzeugaufbereitung",
+    weight: 2,
+    note: "Höchste Ansprüche an Lack- und Innenraumpflege in dieser Fahrzeugklasse - überdurchschnittlicher Bedarf an hochwertigen Pflege- und Aufbereitungsprodukten.",
+  },
+  {
+    brand: "Bentley",
+    category: "Fahrzeugaufbereitung",
+    weight: 2,
+    note: "Höchste Ansprüche an Lack- und Innenraumpflege in dieser Fahrzeugklasse - überdurchschnittlicher Bedarf an hochwertigen Pflege- und Aufbereitungsprodukten.",
+  },
+  {
+    brand: "Jaguar",
+    category: "Elektrik",
+    weight: 2,
+    note: "Ältere Jaguar-Modelle sind in der Kfz-Branche traditionell für elektrische Probleme bekannt - erhöhter Bedarf an Elektrik-Diagnose und Ersatzteilen.",
+  },
+  {
+    brand: "Peugeot",
+    category: "Inspektion & Wartung",
+    weight: 3,
+    note: "Peugeot/Citroën-Dieselmotoren mit Partikelfilter-Additiv-System (Eolys/Cerine) benötigen regelmäßiges Nachfüllen der Additiv-Flüssigkeit - spezifischer Wartungsbedarf.",
+  },
+  // "Japaner" - grouped as individual real brand rows (brand_consumption_profiles
+  // has one brand string per row, and company_enrichment.brand_focus_guess
+  // stores individual brand names like "Toyota", not a collective label) so
+  // this can actually join later. Hyundai is technically Korean, not Japanese,
+  // but kept as named/spelled by Anis (typo "Hiunday" corrected). Added Nissan
+  // + Mazda as reasonable "usw." coverage beyond the 4 literally named.
+  {
+    brand: "Toyota",
+    category: "Inspektion & Wartung",
+    weight: 2,
+    note: "Japanische/koreanische Marken werden oft wegen ihrer Langlebigkeit von Vielfahrern und Flotten gewählt - entsprechend hoher Bedarf an Standard-Verschleiß- und Wartungsteilen durch überdurchschnittliche Laufleistung.",
+  },
+  {
+    brand: "Honda",
+    category: "Inspektion & Wartung",
+    weight: 2,
+    note: "Japanische/koreanische Marken werden oft wegen ihrer Langlebigkeit von Vielfahrern und Flotten gewählt - entsprechend hoher Bedarf an Standard-Verschleiß- und Wartungsteilen durch überdurchschnittliche Laufleistung.",
+  },
+  {
+    brand: "Mitsubishi",
+    category: "Inspektion & Wartung",
+    weight: 2,
+    note: "Japanische/koreanische Marken werden oft wegen ihrer Langlebigkeit von Vielfahrern und Flotten gewählt - entsprechend hoher Bedarf an Standard-Verschleiß- und Wartungsteilen durch überdurchschnittliche Laufleistung.",
+  },
+  {
+    brand: "Hyundai",
+    category: "Inspektion & Wartung",
+    weight: 2,
+    note: "Japanische/koreanische Marken werden oft wegen ihrer Langlebigkeit von Vielfahrern und Flotten gewählt - entsprechend hoher Bedarf an Standard-Verschleiß- und Wartungsteilen durch überdurchschnittliche Laufleistung.",
+  },
+  {
+    brand: "Nissan",
+    category: "Inspektion & Wartung",
+    weight: 2,
+    note: "Japanische/koreanische Marken werden oft wegen ihrer Langlebigkeit von Vielfahrern und Flotten gewählt - entsprechend hoher Bedarf an Standard-Verschleiß- und Wartungsteilen durch überdurchschnittliche Laufleistung.",
+  },
+  {
+    brand: "Mazda",
+    category: "Inspektion & Wartung",
+    weight: 2,
+    note: "Japanische/koreanische Marken werden oft wegen ihrer Langlebigkeit von Vielfahrern und Flotten gewählt - entsprechend hoher Bedarf an Standard-Verschleiß- und Wartungsteilen durch überdurchschnittliche Laufleistung.",
+  },
 ];
 
 async function main() {
