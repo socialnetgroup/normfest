@@ -18,6 +18,8 @@ import {
   Upload,
   Wand2,
   Headphones,
+  Phone,
+  ClipboardCheck,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +29,7 @@ import { cn } from "@/lib/utils";
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/firmen", label: "Firmen", icon: Building2 },
+  { href: "/dialer", label: "Dialer", icon: Phone, badge: "Bald" },
   { href: "/katalog", label: "Katalog", icon: Package },
   { href: "/fokus", label: "Fokus", icon: Target },
   { href: "/wissen", label: "Wissen", icon: BookOpen },
@@ -108,6 +111,12 @@ export function AppSidebar({
               Admin
             </div>
             <NavItem href="/admin/team" label="Team" icon={Users} active={isActive(pathname, "/admin/team")} />
+            <NavItem
+              href="/admin/qa-bewertungen"
+              label="QA-Bewertungen"
+              icon={ClipboardCheck}
+              active={isActive(pathname, "/admin/qa-bewertungen")}
+            />
             <NavItem
               href="/admin/qa-anrufe"
               label="QA-Anrufe"
