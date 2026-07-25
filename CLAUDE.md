@@ -131,7 +131,7 @@ UI German labels; assistant mirrors DE/BS.
 | External | Google Places (Text Search + Details incl. ≤5 reviews); server-side website fetch | |
 | KB search | German FTS first; pgvector hybrid Phase B | |
 | Data | supabase-js v2 + generated types; zod everywhere | |
-| Files | SheetJS (VIS list, exports); PDF parse (pdfjs/poppler) + LLM for catalog & KB | |
+| Files | SheetJS (VIS list, exports); PDF text via `pdftotext` CLI + LLM for catalog & KB; PDF page-to-image rendering via `pdfjs-dist` + `@napi-rs/canvas` (added 2026-07-25 for catalog photo crops - no poppler render tools/Python available in this environment) | |
 | Hosting | Vercel + custom domain | |
 | CI | GitHub Actions: typecheck, lint, vitest, migration dry-run | |
 | PM | pnpm | |
@@ -1056,6 +1056,48 @@ detail page and the cross-sell tiles on other products' pages.
 webshop SKU match) + 2,090 representative/borrowed photos (115 fuzzy webshop name-match +
 1,975 in-catalog similar-product fallback) = 3,927 of 4,011 (97.9%) now show a photo; 84
 (2.1%) still show none.**
+
+**PDF crop for the true remainder (2026-07-25):** Anis asked to close the last 84 by
+cropping each product's own real photo out of the catalog PDF itself (rather than
+relying only on the webshop/similar-product fallbacks above) - no PDF-rendering tool was
+available in this environment (no poppler/`pdftoppm`, no working Python), so
+`pdfjs-dist` + `@napi-rs/canvas` were added as dev dependencies and
+`scripts/render-catalog-page.mjs` renders any PDF page to PNG directly in Node.
+`scripts/crop-catalog-images.mjs` groups the 83 real products (excludes SKU 1957-001-0,
+a table-of-contents cross-reference entry, not a physical product) by their recorded
+`source_page`, renders that page plus neighbors (confirmed during this same pass that
+`source_page` is occasionally off by 1-2 pages - not just the ±1 already known from the
+M3 QA note, above), and sends the page image(s) to Sonnet (vision, §3.2.9 "analyze" tier)
+to locate each product's own photo as a normalized bounding box, with an automatic
+±2-page-window retry for anything not found on the first pass.
+
+**Real, load-bearing finding: the vision bounding-box call is meaningfully
+non-deterministic run-to-run on identical input** - re-running the exact same script
+against the exact same pages flipped several results between "correctly finds the real
+photo" and "confidently returns a text/table fragment instead" (e.g. SKU `07`'s
+Sicherheitsmesser knife photo vs. an unrelated replacement-blade order table; `7101-005-
+004`'s Wandverankerungs-Set photo vs. just its own section heading with no image). This
+was only caught because every crop was spot-checked visually via a generated contact
+sheet (`scripts/make-contact-sheet.mjs`, tiles crops into labeled grids so ~80 images can
+be reviewed in a few screens instead of one file at a time) before any upload - a
+byte-size-based sanity check alone (reject anything under ~1.5KB) caught the fully-blank
+crops but not these confident-but-wrong ones. **Fix that also closed the reliability gap
+for future runs:** `scripts/upload-verified-crops.mjs` uploads the exact, already-
+reviewed crop files sitting on disk from one specific dry run rather than re-invoking the
+LLM at upload time - once a batch is visually approved, nothing about it can silently
+change between review and going live.
+
+**Result: 76 of 83 got a real, own, PDF-cropped photo** (bringing total catalog photo
+coverage to 4,003 of 4,011 = 99.8%). 7 genuinely could not be resolved to a real photo
+and were left with none rather than guessed: 2 confirmed cases where the product simply
+has no distinct photo anywhere near its recorded page after a wide search (`3555-999-1`
+Feuerzeugpistole, `3558-952-4` Drahtstifthülsen - both only ever return unrelated text/
+diagram fragments), and 5 more found only as low-confidence/degenerate crops across
+multiple runs (`07`, `6429`, `6590-103`, `7101-005-004`, `7101-010`) - rejected after
+direct visual inspection rather than trusted. Verified live in a real browser (throwaway
+admin test account, deleted after): a cropped product (`6057-10-20`, one of the shared-
+photo `Gewindestift`/hex-bolt family) renders correctly with no "Beispielbild" badge,
+confirming it's correctly tracked as the product's own photo, not a borrowed one.
 
 ### M5 — Enrichment (week 6–8)
 Places resolver + ambiguous queue; website fetch/distill; analyze + guardrails; Brief-
