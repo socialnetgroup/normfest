@@ -1139,6 +1139,7 @@ export type Database = {
       webshop_products_staging: {
         Row: {
           category_breadcrumb: string | null
+          cross_sell_candidates: Json | null
           id: string
           image_hotlink_url: string | null
           image_stored_path: string | null
@@ -1150,6 +1151,7 @@ export type Database = {
         }
         Insert: {
           category_breadcrumb?: string | null
+          cross_sell_candidates?: Json | null
           id?: string
           image_hotlink_url?: string | null
           image_stored_path?: string | null
@@ -1161,6 +1163,7 @@ export type Database = {
         }
         Update: {
           category_breadcrumb?: string | null
+          cross_sell_candidates?: Json | null
           id?: string
           image_hotlink_url?: string | null
           image_stored_path?: string | null
