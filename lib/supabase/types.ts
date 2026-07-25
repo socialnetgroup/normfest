@@ -853,6 +853,7 @@ export type Database = {
           description: string | null
           extraction_confidence: number | null
           id: string
+          image_path: string | null
           launched_at: string | null
           name: string
           pack_content: string | null
@@ -873,6 +874,7 @@ export type Database = {
           description?: string | null
           extraction_confidence?: number | null
           id?: string
+          image_path?: string | null
           launched_at?: string | null
           name: string
           pack_content?: string | null
@@ -893,6 +895,7 @@ export type Database = {
           description?: string | null
           extraction_confidence?: number | null
           id?: string
+          image_path?: string | null
           launched_at?: string | null
           name?: string
           pack_content?: string | null
@@ -1269,6 +1272,8 @@ export type Database = {
       }
     }
     Functions: {
+      fn_bulk_set_image_path: { Args: { pairs: Json }; Returns: undefined }
+      fn_bulk_set_matched_product: { Args: { pairs: Json }; Returns: undefined }
       fn_chat_get_brand_profile: {
         Args: { p_brand: string }
         Returns: {

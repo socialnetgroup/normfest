@@ -927,6 +927,78 @@ with itself). Not deleted; just not worth ~30-40 min of crawling today for an es
 ~30-40 real pairs. `scripts/seed-product-relations.mjs`'s manual/curated pairs (above)
 remain the practical near-term path for `product_relations`.
 
+**Full webshop catalog crawl (2026-07-24/25) — the deferred item above, done properly.**
+Anis decided to go ahead with a real crawl of the shop's own sitemap/category structure
+(not search-backward from our SKUs) rather than more one-off mining, specifically to (1)
+get real cross-sell coverage at scale and (2) source real product photos instead of
+re-cropping the PDF. Also decided: skip the free name/branche-only enrichment shortcut
+entirely (real Places-based enrichment for the 1000+ backlog stays queued behind an
+explicit internal GO, not started this session) — the webshop crawl was the actual
+priority.
+
+`scripts/crawl-webshop-catalog.mjs` (rewritten to v2 after a v1 stall — see below) fetches
+`https://www.normfest-shop.com/shop/sitemaps/de_DE/sitemap-de_DE.xml` (gzip, decompressed
+via `zlib.gunzipSync`): 14,238 total `/produkte/` URLs, split by regex on whether the slug
+ends in a real numeric SKU (`/-([0-9]{3,}(?:-[0-9]+)*)$/`) into 9,630 direct product pages
+and 4,608 category-hub pages. **v1 bug (caught before any DB writes via `TaskStop`):**
+treated every `/produkte/` URL as a category and ran tile-extraction against direct
+product pages too, scraping an unrelated bestseller widget instead of the page's own
+product — unique-product count stalled at 243 after 2,200+ pages. v2's 3-phase design:
+Phase A fetches all 9,630 direct product pages directly (own name + image + cross-sell
+tiles from each page); Phase B scans the 4,608 category hubs for any additional product
+tiles not already covered; Phase C fetches those extras (116 found). Each product page's
+cross-sell section (`<!-- G16_Crossseller Anfang/Ende -->`, same delimiter pattern as
+`mine-shop-crosssell.mjs`) is captured into a new `cross_sell_candidates jsonb` column
+alongside name/image, in the same page fetch — no extra requests. Politeness: 250ms
+delay, concurrency 5, 20s timeout per request, resumable (skips SKUs already staged).
+Staged into `webshop_products_staging` (new table, `matched_product_id` nullable FK to
+`products`) — mirrors the established PDF-pipeline STAGE→QA→COMMIT pattern (§11.1);
+nothing in the crawl/match scripts ever inserts, deletes, or renames rows in the live
+`products` table itself. **Full run result: 9,735 products staged (9,630 direct + 116
+extra-from-category), 0 errors**, 9,732 with an image (99.97%).
+
+`scripts/match-webshop-staging.mjs` then does the actual comparison + write-back, exact-
+SKU matched:
+- **1,837 of the 9,735 staged products already exist in our 4,011-product PDF catalog**
+  (same Art.-Nr.) — **7,898 are genuinely new/unique**, not in our catalog at all. (Merging
+  those 7,898 into the live `products` table is intentionally NOT done here — a separate,
+  later, Anis-reviewed step per the existing §14 item 12 backlog plan, same as before.)
+- **1,837 of our 4,011 existing products now have a real photo** (`products.image_path`,
+  new column — `alter table products add column image_path text`, migration
+  `20260724130000_products_image_path.sql`; CLAUDE.md §4.3 had already documented this
+  column but it was never actually migrated in before now). The other 2,174 have no image
+  from this crawl — no PDF re-crawl needed to get these 1,837 (the webshop match is a
+  strictly better source than re-cropping the PDF: real product photography vs. a PDF
+  page crop), but the remaining 2,174 are a real, still-open gap; possible future recovery
+  path is fuzzy name-matching against the 7,898 new products (not built).
+- **Cross-sell**: 27,521 candidate pairs found across all staged products' crossseller
+  sections; 21,789 resolved to real matched-product pairs (both sides existing in our
+  catalog) and written into `product_relations` (`origin='curated'`, `relation_type=
+  'cross_sell'`, weight 2, `note` cites the source) — pushing this well past the 5
+  hand-picked pairs from the earlier manual seed. Real, already-curated Normfest
+  merchandising data, not invented.
+
+**PostgREST partial-upsert bug found + fixed while building the matcher**: `.upsert(rows,
+{onConflict})` with a partial-column payload (e.g. just `{id, matched_product_id}`) always
+issues an INSERT-shaped statement under the hood even when every row already exists, so it
+trips NOT NULL on every column not included — confirmed directly (`23502`, "null value in
+column sku violates not-null constraint"). Fixed with two dedicated SQL bulk-UPDATE RPC
+functions instead (migration `20260724140000_fn_bulk_update_helpers.sql`:
+`fn_bulk_set_matched_product`, `fn_bulk_set_image_path`, both `language sql`, one
+`UPDATE ... FROM jsonb_array_elements(pairs)` per batch of 500) — a real UPDATE has no such
+issue. Caught via a proactive 3-row dry-run before committing to the full ~1,800-row batch.
+
+**Katalog product page (`app/(app)/katalog/[id]/page.tsx`) now shows both**: the product's
+own photo (from `image_path`, resolved via `supabase.storage.from("product-images").
+getPublicUrl()`) in the header, and a "Könnte auch interessieren" grid (up to 12, from
+`product_relations` joined to `products`) with each related product's own photo, name, and
+SKU, linking to that product's own Katalog page — labeled "Laut normfest-shop.com". Both
+images use `next/image` with `unoptimized` (avoids needing `next.config.ts`
+`images.remotePatterns` changes for the Supabase Storage host). Verified live end-to-end
+in a real browser (throwaway admin test account, deleted after): a real product
+("Schneidezange für Polyamidrohre") renders its own photo plus 12 real cross-sell tiles
+with their own photos, names, and SKUs, matching the DB exactly.
+
 ### M5 — Enrichment (week 6–8)
 Places resolver + ambiguous queue; website fetch/distill; analyze + guardrails; Brief-
 Karte; external_opportunity + brand_focus verification chain; admin enrichment panel;
