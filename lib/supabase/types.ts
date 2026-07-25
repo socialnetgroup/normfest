@@ -853,6 +853,7 @@ export type Database = {
           description: string | null
           extraction_confidence: number | null
           id: string
+          image_is_representative: boolean
           image_path: string | null
           launched_at: string | null
           name: string
@@ -874,6 +875,7 @@ export type Database = {
           description?: string | null
           extraction_confidence?: number | null
           id?: string
+          image_is_representative?: boolean
           image_path?: string | null
           launched_at?: string | null
           name: string
@@ -895,6 +897,7 @@ export type Database = {
           description?: string | null
           extraction_confidence?: number | null
           id?: string
+          image_is_representative?: boolean
           image_path?: string | null
           launched_at?: string | null
           name?: string
@@ -1343,6 +1346,7 @@ export type Database = {
         Args: { p_company_id: string; p_product_id?: string; p_type: string }
         Returns: undefined
       }
+      fn_flag_representative_images: { Args: never; Returns: undefined }
       fn_is_admin: { Args: never; Returns: boolean }
       fn_log_call: {
         Args: never

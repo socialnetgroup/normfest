@@ -40,7 +40,7 @@ export default async function ProductPage({
 
   const { data: relations } = await supabase
     .from("product_relations")
-    .select("weight, related_product_id, products!product_relations_related_product_id_fkey(id, sku, name, image_path, category_name)")
+    .select("weight, related_product_id, products!product_relations_related_product_id_fkey(id, sku, name, image_path, image_is_representative, category_name)")
     .eq("product_id", id)
     .order("weight", { ascending: false })
     .limit(12);
@@ -53,15 +53,22 @@ export default async function ProductPage({
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-4 rounded-xl border bg-card p-5 sm:flex-row sm:items-start">
         {imageUrl ? (
-          <div className="flex size-32 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-white">
-            <Image
-              src={imageUrl}
-              alt={product.name}
-              width={128}
-              height={128}
-              className="size-full object-contain p-2"
-              unoptimized
-            />
+          <div className="flex shrink-0 flex-col gap-1.5">
+            <div className="flex size-32 items-center justify-center overflow-hidden rounded-lg border bg-white">
+              <Image
+                src={imageUrl}
+                alt={product.name}
+                width={128}
+                height={128}
+                className="size-full object-contain p-2"
+                unoptimized
+              />
+            </div>
+            {product.image_is_representative ? (
+              <Badge variant="secondary" className="justify-center text-[10px]" title="Kein eigenes Foto vorhanden - Beispielbild eines ähnlichen Produkts.">
+                Beispielbild
+              </Badge>
+            ) : null}
           </div>
         ) : null}
         <div className="flex flex-col gap-2">
@@ -119,6 +126,7 @@ export default async function ProductPage({
                   sku: string;
                   name: string;
                   image_path: string | null;
+                  image_is_representative: boolean;
                   category_name: string | null;
                 } | null;
                 if (!related) return null;
@@ -131,7 +139,7 @@ export default async function ProductPage({
                     href={`/katalog/${related.id}`}
                     className="flex flex-col gap-2 rounded-lg border p-2.5 transition-colors hover:bg-accent"
                   >
-                    <div className="flex aspect-square items-center justify-center overflow-hidden rounded-md border bg-white">
+                    <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-md border bg-white">
                       {relatedImageUrl ? (
                         <Image
                           src={relatedImageUrl}
@@ -144,6 +152,14 @@ export default async function ProductPage({
                       ) : (
                         <span className="text-xs text-muted-foreground">Kein Bild</span>
                       )}
+                      {related.image_is_representative ? (
+                        <span
+                          className="absolute right-1 bottom-1 rounded bg-secondary/90 px-1 py-0.5 text-[9px] leading-none text-secondary-foreground"
+                          title="Beispielbild eines ähnlichen Produkts"
+                        >
+                          Beispiel
+                        </span>
+                      ) : null}
                     </div>
                     <div className="min-w-0">
                       <div className="truncate text-xs font-medium">{related.name}</div>

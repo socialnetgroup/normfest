@@ -1023,6 +1023,40 @@ independently represented on the retail storefront, not a matching-algorithm lim
 For that true remainder, PDF crop remains the one source guaranteed correct per-product;
 not run this pass (targeted, smaller-scope job vs. the ~2,000-wide gap here).
 
+**Representative-image fallback for the rest (2026-07-25):** Anis wanted the gap closed
+now rather than deferred to a PDF crop, explicitly ruling out blind web image search but
+fine with a same-category "similar product" photo standing in so the Katalog isn't empty.
+Added `products.image_is_representative boolean` (migration
+`20260725010000_products_image_representative.sql`, fixed same day in
+`20260725020000_fix_fn_flag_representative_images.sql` — Supabase's safe-update guard
+rejects an UPDATE with no WHERE clause even inside a `security invoker` SQL function,
+needed an explicit `where true`) so a borrowed photo is never silently presented as the
+product's own — same "never silently mixed" provenance rule as everywhere else (§3.2.6).
+
+`scripts/fill-representative-images.mjs` picks the closest match by name-word-overlap
+(Jaccard) within the same subcategory first, falling back to the same top-level category
+only if the subcategory has no photographed member at all. **Critical guardrail added
+after spot-checking the first pass:** a same-category-only match was accepted even at
+0.00 name overlap, and inspection caught real bad matches this way — e.g. a specific
+paint-color spray can ("MB 9147 arktikweiss") matched to a generic spray-nozzle
+accessory just because both sit under "Lackierung", and worse, "Ringzunge" (ring-terminal
+electrical connectors) matched to "Flachstecker" (a visually different spade connector)
+purely on category, not actual similarity. Fixed: a candidate is only ever accepted if it
+shares at least one real word with the product's own name (score > 0) at either tier;
+zero-overlap candidates are refused and the product is left with no image rather than a
+wrong one. Real result: **1,975 more products got a real (borrowed) photo, 84 were
+honestly left with none** (no name-similar product exists anywhere in their category —
+mostly `Gewindestift` grub-screw variants, whose only category-mates are unrelated
+threadlocker/sealant products). Verified live in a real browser (throwaway admin test
+account, deleted after): a representative photo renders with a small "Beispielbild" badge
+(tooltip explains it's a similar product's photo, not the item's own) on both the Katalog
+detail page and the cross-sell tiles on other products' pages.
+
+**Final photo coverage across the 4,011-product catalog: 1,837 own real photos (exact
+webshop SKU match) + 2,090 representative/borrowed photos (115 fuzzy webshop name-match +
+1,975 in-catalog similar-product fallback) = 3,927 of 4,011 (97.9%) now show a photo; 84
+(2.1%) still show none.**
+
 ### M5 — Enrichment (week 6–8)
 Places resolver + ambiguous queue; website fetch/distill; analyze + guardrails; Brief-
 Karte; external_opportunity + brand_focus verification chain; admin enrichment panel;
