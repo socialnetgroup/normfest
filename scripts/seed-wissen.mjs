@@ -78,10 +78,72 @@ const DOCUMENTS = [
       },
     ],
   },
+  // Added 2026-07-26 (Anis, Wissen redesign pass): a genuine screen-by-screen
+  // walkthrough of this app itself, distinct from "Werkzeuge im Arbeitsalltag"
+  // above (which only briefly places this tool next to Speedy/Dialer). Every
+  // claim here describes real, currently-shipped screens/behavior - nothing
+  // aspirational or planned-but-not-built.
+  {
+    title: "So nutzt du dieses Tool",
+    chunks: [
+      {
+        heading: "Dashboard — dein Ausgangspunkt",
+        content:
+          "Das Dashboard zeigt auf einen Blick: das Team-Ziel für den Monat (Minimum/Ziel/Stretch) mit Rangliste, wie viel Feedback diese Woche schon erfasst wurde (Flywheel-Widget), wie viele Empfehlungen aktuell offen sind, und wie viele Firmen seit 3+ Monaten nicht kontaktiert wurden. Der letzte Wert ist bewusst ehrlich - er zeigt, wie viel vom Kundenbestand noch nicht regelmäßig bearbeitet wird.",
+      },
+      {
+        heading: "Firmen — die Kundendatenbank",
+        content:
+          "Suche nach Name, Kundennummer, Ort, PLZ oder Gebiet. Ein Firmenprofil zeigt Stammdaten, Segmentierung, Umsatzverlauf und Aktivität aus der VIS-Liste, dazu - wenn vorhanden - einen Firmenbrief mit KI-Anreicherung (Stärken/Schwächen/externe Chancen aus Google-Bewertungen und Website, immer mit Original-Zitat) sowie aktuelle Empfehlungen (Signale) und den Feedback-Verlauf. Alles, was nicht aus echten Daten oder einem Zitat belegt ist, wird als unverifiziert gekennzeichnet - nichts wird als sicherer Fakt dargestellt, wenn es das nicht ist.",
+      },
+      {
+        heading: "Katalog — der Produktkatalog",
+        content:
+          "Durchsuchbar nach Name oder Artikelnummer. Jede Produktseite zeigt Foto (eigenes, wenn vorhanden), technische Details und eine \"Könnte auch interessant sein\"-Liste mit echten Cross-Sell-Vorschlägen aus dem Webshop-Sortiment.",
+      },
+      {
+        heading: "Fokus — die aktuelle Fokusliste",
+        content:
+          "Zeigt zuerst die Produkte, die das ganze Team diese Runde pushen soll - mit laufendem \"N× verkauft\"-Zähler und einer schnellen Verkauft-Eintragung direkt daneben. Firmen in der Liste stehen als zweiter, optionaler Abschnitt darunter.",
+      },
+      {
+        heading: "Feedback erfassen — der wichtigste Schritt",
+        content:
+          "Nach jedem Anruf: Ergebnis eintragen (verkauft/interessiert/abgelehnt/nicht relevant), entweder direkt im Firmenprofil oder über die eigene Feedback-Seite - in unter 10 Sekunden. Das ist kein Verwaltungsakt, sondern der Treibstoff des ganzen Tools: je mehr echtes Feedback im System ist, desto besser werden die Empfehlungen, die alle bekommen.",
+      },
+      {
+        heading: "Empfehlungen (Signale)",
+        content:
+          "Jede Empfehlung nennt einen konkreten Grund - z.B. ein bereits verkauftes Produkt mit passendem Cross-Sell, ein saisonaler Anlass, oder ein Umsatzrückgang laut VIS-Vergleich. Wurde eine Empfehlung schon telefonisch geklärt, kann sie direkt als \"erledigt\" ausgeblendet werden, ohne auf den nächsten Datenimport zu warten.",
+      },
+      {
+        heading: "Assistent — dein KI-Assistent",
+        content:
+          "Über die eigene Seite oder das Sprechblasen-Symbol unten rechts auf jeder Seite erreichbar. Beantwortet Fragen zu Firmen, Produkten, Skript und Wissen ausschließlich mit echten Daten aus diesem Tool - sagt ehrlich \"dazu habe ich keine Daten\", statt etwas zu erfinden. Kann eine Verkaufs-Eintragung vorschlagen, führt sie aber nie ohne deine Bestätigung im Chat aus.",
+      },
+      {
+        heading: "Wissen & Skript — wo finde ich was?",
+        content:
+          "Skript ist der verbindliche Gesprächsleitfaden inkl. Einwandkarten - hier im Wissen-Bereich findest du stattdessen Hintergrundwissen: Firmeninformationen, die Haltung hinter der Gesprächsführung, und diese Übersicht über das Tool selbst.",
+      },
+    ],
+  },
 ];
 
 async function main() {
   for (const doc of DOCUMENTS) {
+    const { data: existing } = await admin
+      .from("kb_documents")
+      .select("id")
+      .eq("collection", "wissen")
+      .eq("title", doc.title)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (existing) {
+      console.log(`Skipped "${doc.title}" - already exists (${existing.id})`);
+      continue;
+    }
+
     const { data: created, error: docErr } = await admin
       .from("kb_documents")
       .insert({ title: doc.title, collection: "wissen", source_path: doc.source_path ?? null })

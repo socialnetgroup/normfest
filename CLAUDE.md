@@ -566,6 +566,30 @@ stays out of the app and Wissen for good, not pending a later curation pass — 
 background context for Claude Code sessions only ("više tebi kao intel, a ne za app i
 wissen, to smo riješili drukčije").
 
+**Visual redesign + new "how to use this tool" document (2026-07-26), Anis: "graphicaly
+update the Wissen part like we did for the script and focus... if you happen to find
+some knowledge for example how to use the app could be added as a separate part."**
+`/wissen` reused the exact same `ChunkContent` component already proven on `/skript`
+(paragraph spacing instead of one dense blob, bullet detection, "WORD: rest" lead-in
+bolding) instead of its own separate rendering, so both knowledge areas read
+consistently. Each document in the browse view now gets an icon in its `CardTitle`, a
+chunk-count badge, and each chunk section gets the same `border-l-4 border-l-primary/30`
+accent already used on Skript's full-guide sections. Added a document-level TOC nav
+(anchor links) at the top, matching Skript's section TOC, since Wissen now has 4
+documents instead of 3. Search results get the same accent-bordered treatment instead of
+a plain `Card`.
+
+New document **"So nutzt du dieses Tool"** (8 chunks: Dashboard, Firmen, Katalog, Fokus,
+Feedback erfassen, Empfehlungen, Assistent, Wissen & Skript) — a genuine screen-by-screen
+walkthrough of the app itself, distinct from "Werkzeuge im Arbeitsalltag"'s one brief
+paragraph placing the tool next to Speedy/the dialer. Every claim describes a real,
+currently-shipped screen/behavior, not anything planned-but-not-built. `scripts/seed-wissen.mjs`
+was made idempotent (checks for an existing title before inserting) so it's now safely
+re-runnable — running it again correctly skipped the 3 pre-existing documents and
+inserted only the new one. Verified live end-to-end (throwaway test account): browse
+view renders all 4 documents with the new TOC, search correctly finds and highlights a
+chunk from the new document with its document badge.
+
 ---
 
 ## 9. LLM Enrichment ("Show me you know me", flagship #3) — as v2.2 (pipeline, worked
