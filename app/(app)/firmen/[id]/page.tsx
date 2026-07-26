@@ -73,7 +73,18 @@ export default async function CompanyProfilePage({
 
   const [{ data: company, error }, { user: currentUser, profile: currentProfile }, { data: feedbackHistory }, { data: signals }, { data: enrichment }] =
     await Promise.all([
-      supabase.from("companies").select("*").eq("id", id).single(),
+      supabase
+        .from("companies")
+        .select(
+          `id, name, call_priority, do_not_contact, kundennummer, branche_name, plz, ort, brand_focus, name_2,
+          strasse, land, telefon, email, website, gebiet, gebiet_agent_name, legacy_gebiet, branche_code,
+          cluster, verband, gruppe, size_class, potential_value, potential_utilization_pct, dunning_level,
+          revenue_prior_prior_year, revenue_prior_year, revenue_current_year, revenue_current_year_ds_cod,
+          revenue_forecast, revenue_delta, order_count, article_count, last_visit_date, last_contact_date,
+          last_invoice_period, last_review_date`,
+        )
+        .eq("id", id)
+        .single(),
       getCurrentUser(),
       supabase
         .from("sales_feedback")
@@ -88,7 +99,14 @@ export default async function CompanyProfilePage({
         .select("id, type, score, reason, tier, origin, product_id, products(name)")
         .eq("company_id", id)
         .order("score", { ascending: false }),
-      supabase.from("company_enrichment").select("*").eq("company_id", id).maybeSingle(),
+      supabase
+        .from("company_enrichment")
+        .select(
+          `places_place_id, strengths, weaknesses, places_website, places_rating, places_review_count,
+          brand_focus_guess, verified, external_opportunities`,
+        )
+        .eq("company_id", id)
+        .maybeSingle(),
     ]);
 
   if (error || !company) {

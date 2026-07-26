@@ -12,7 +12,29 @@ import type { Database } from "@/lib/supabase/types";
 
 type Agent = { id: string; full_name: string; gebiet: string };
 type EvaluationInsert = Database["public"]["Tables"]["agent_evaluations"]["Insert"];
-type EvaluationRow = Database["public"]["Tables"]["agent_evaluations"]["Row"];
+// Only the fields this form actually reads from an existing row (edit mode)
+// - the write path below builds its own fully-named EvaluationInsert object,
+// so `initial` never needs the full Row type (e.g. evaluated_by, total_score,
+// created_at aren't read here).
+type EvaluationRow = Pick<
+  Database["public"]["Tables"]["agent_evaluations"]["Row"],
+  | "id"
+  | "agent_id"
+  | "call_date"
+  | "call_duration_minutes"
+  | "call_reference"
+  | "comment"
+  | "f1_score"
+  | "f1_note"
+  | "f2_score"
+  | "f2_note"
+  | "f3_score"
+  | "f3_note"
+  | "f4_score"
+  | "f4_note"
+  | "f5_score"
+  | "f5_note"
+>;
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);

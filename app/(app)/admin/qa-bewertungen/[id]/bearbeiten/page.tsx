@@ -13,7 +13,14 @@ export default async function BewertungBearbeitenPage({ params }: { params: Prom
   const supabase = await createClient();
   const [{ data: agents }, { data: evaluation }] = await Promise.all([
     supabase.from("agents").select("id, full_name, gebiet").eq("active", true).order("full_name"),
-    supabase.from("agent_evaluations").select("*").eq("id", id).single(),
+    supabase
+      .from("agent_evaluations")
+      .select(
+        `id, agent_id, call_date, call_duration_minutes, call_reference, comment,
+        f1_score, f1_note, f2_score, f2_note, f3_score, f3_note, f4_score, f4_note, f5_score, f5_note`,
+      )
+      .eq("id", id)
+      .single(),
   ]);
 
   if (!evaluation) notFound();

@@ -13,7 +13,11 @@ export default async function BrandProfilesPage() {
 
   const supabase = await createClient();
   const [{ data: rows }, { data: categoryRows }] = await Promise.all([
-    supabase.from("brand_consumption_profiles").select("*").order("brand").order("category"),
+    supabase
+      .from("brand_consumption_profiles")
+      .select("id, brand, category, note, weight, verified, source")
+      .order("brand")
+      .order("category"),
     supabase.from("products").select("category_name").not("category_name", "is", null),
   ]);
 
