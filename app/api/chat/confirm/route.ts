@@ -26,7 +26,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const body = await request.json();
+  let body: { action?: string; payload?: unknown };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
+  }
+
   if (body.action !== "log_sales_feedback") {
     return NextResponse.json({ error: "unsupported action" }, { status: 400 });
   }

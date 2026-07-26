@@ -38,7 +38,13 @@ export async function POST(request: NextRequest) {
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
   const isAdmin = profile?.role === "admin";
 
-  const parsedBody = chatRequestSchema.safeParse(await request.json());
+  let rawBody: unknown;
+  try {
+    rawBody = await request.json();
+  } catch {
+    return new Response("Bad request: invalid JSON body", { status: 400 });
+  }
+  const parsedBody = chatRequestSchema.safeParse(rawBody);
   if (!parsedBody.success) {
     return new Response("Bad request: invalid body", { status: 400 });
   }
@@ -50,32 +56,22 @@ export async function POST(request: NextRequest) {
     return new Response("Bad request: last message must be a non-empty user message", { status: 400 });
   }
 
-  const { data: budgetSetting } = await supabase
-    .from("settings")
-    .select("value")
-    .eq("key", "chat_daily_token_budget")
-    .maybeSingle();
-  const dailyBudget = typeof budgetSetting?.value === "number" ? budgetSetting.value : 200000;
-
-  const startOfDay = new Date();
-  startOfDay.setUTCHours(0, 0, 0, 0);
-  const { data: usageRows } = await supabase
-    .from("chat_log")
-    .select("input_tokens, output_tokens")
-    .eq("agent_id", user.id)
-    .gte("created_at", startOfDay.toISOString());
-  const usedToday = (usageRows ?? []).reduce(
-    (sum, r) => sum + (r.input_tokens ?? 0) + (r.output_tokens ?? 0),
-    0,
-  );
-  if (usedToday >= dailyBudget) {
+  // Checks today's usage and inserts the user's chat_log row in one
+  // statement inside a per-agent advisory lock, so two near-simultaneous
+  // requests from the same agent can't both read the same stale "under
+  // budget" snapshot (2026-07-26 audit finding) - see the migration's
+  // comment for the real, bounded scope of what this does and doesn't fix.
+  const { data: budgetCheck, error: budgetErr } = await supabase.rpc("fn_chat_check_budget_and_log", {
+    p_agent_id: user.id,
+    p_content: lastMessage.content,
+  });
+  const budgetResult = budgetCheck?.[0];
+  if (budgetErr || !budgetResult?.allowed) {
     return new Response(JSON.stringify({ error: "daily_budget_exceeded" }), {
       status: 429,
       headers: { "Content-Type": "application/json" },
     });
   }
-
-  await supabase.from("chat_log").insert({ agent_id: user.id, role: "user", content: lastMessage.content });
 
   const anthropic = getAnthropicClient() as Anthropic;
   const model = getModel("chat") as string;

@@ -6,3 +6,9 @@ onlyBuiltDependencies:
   - esbuild
   - sharp
   - unrs-resolver
+# Forces sharp past Next 16.2.11's own ^0.34.5 pin, which excludes 0.35.x
+# under strict semver caret rules on a 0.x version. Fixes known libvips
+# CVEs (2026-07-26 audit) - sharp is what actually processes every product
+# image through next/image now that optimization is enabled (P1a).
+overrides:
+  sharp: 0.35.3

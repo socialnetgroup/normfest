@@ -27,13 +27,37 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const parsedBody = enrichRequestSchema.safeParse(await request.json());
+  let rawBody: unknown;
+  try {
+    rawBody = await request.json();
+  } catch {
+    return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
+  }
+  const parsedBody = enrichRequestSchema.safeParse(rawBody);
   if (!parsedBody.success) {
     return NextResponse.json({ error: "companyId (uuid) required" }, { status: 400 });
   }
   const { companyId } = parsedBody.data;
 
   const admin = createAdminClient();
+
+  const { data: budgetSetting } = await admin
+    .from("settings")
+    .select("value")
+    .eq("key", "enrichment_daily_call_budget")
+    .maybeSingle();
+  const dailyBudget = typeof budgetSetting?.value === "number" ? budgetSetting.value : 30;
+
+  const startOfDay = new Date();
+  startOfDay.setUTCHours(0, 0, 0, 0);
+  const { count: usedToday } = await admin
+    .from("enrichment_jobs")
+    .select("id", { count: "exact", head: true })
+    .gte("created_at", startOfDay.toISOString());
+  if ((usedToday ?? 0) >= dailyBudget) {
+    return NextResponse.json({ error: "daily_budget_exceeded" }, { status: 429 });
+  }
+
   const { data: company, error: companyErr } = await admin
     .from("companies")
     .select("id, name, strasse, plz, ort, branche_name")
@@ -42,6 +66,12 @@ export async function POST(request: Request) {
   if (companyErr || !company) {
     return NextResponse.json({ error: "company not found" }, { status: 404 });
   }
+
+  const { data: job } = await admin
+    .from("enrichment_jobs")
+    .insert({ company_id: companyId, status: "pending", requested_by: user.id })
+    .select("id")
+    .single();
 
   try {
     const placesResult = await resolvePlaceForCompany(admin, company, process.env.GOOGLE_PLACES_API_KEY!);
@@ -62,8 +92,19 @@ export async function POST(request: Request) {
       analysisResult = await analyzeCompanyEnrichment(admin, anthropic, companyId);
     }
 
+    if (job) {
+      const finalStatus = analysisResult ? "analyzed" : placesResult.status === "ambiguous" ? "ambiguous" : "places_resolved";
+      await admin.from("enrichment_jobs").update({ status: finalStatus, updated_at: new Date().toISOString() }).eq("id", job.id);
+    }
+
     return NextResponse.json({ places: placesResult, website: websiteResult, analysis: analysisResult });
   } catch (err) {
+    if (job) {
+      await admin
+        .from("enrichment_jobs")
+        .update({ status: "failed", error: (err as Error).message, updated_at: new Date().toISOString() })
+        .eq("id", job.id);
+    }
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
 }
