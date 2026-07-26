@@ -1433,6 +1433,14 @@ export type Database = {
         Args: { pairs: Json }
         Returns: undefined
       }
+      fn_chat_check_budget_and_log: {
+        Args: { p_agent_id: string; p_content: string }
+        Returns: {
+          allowed: boolean
+          daily_budget: number
+          used_today: number
+        }[]
+      }
       fn_chat_get_brand_profile: {
         Args: { p_brand: string }
         Returns: {
@@ -1587,6 +1595,8 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
     }
     Enums: {
       [_ in never]: never

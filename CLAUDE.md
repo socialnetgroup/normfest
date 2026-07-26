@@ -900,6 +900,95 @@ background):** every item checked against the real codebase/project, not assumed
   credentials. Fixed by adding `SUPABASE_TELEMETRY_DISABLED: "1"` to the step's `env`
   block (confirmed locally: exit code drops to 0 and the PostHog line disappears
   entirely with the var set).
+- ✅ **Full code + security audit, all findings fixed (2026-07-26).** Anis asked for a
+  detailed audit "with knowledge of the actual code" then "fix everything... even if
+  small impact." Read the real RLS policies, ran `pnpm audit`, checked real index
+  coverage against real table sizes (not assumptions) before writing anything up.
+
+  **Dependencies (2 real runtime CVEs, not dev-tooling noise):**
+  1. `xlsx` (SheetJS) pinned at `^0.18.5` had known ReDoS + prototype-pollution CVEs.
+     npm's registry stalled at 0.18.5 years ago — SheetJS ships patched releases only
+     via their own CDN now. Repointed `package.json` to
+     `https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz` (the officially documented
+     distribution method). Verified by dry-running `parseVisWorkbook` against the real
+     `input/VIS.xlsx` and a real Team Dashboard file — identical parse results
+     (13,573/1 skipped) to the pre-patch baseline.
+  2. `sharp` 0.34.5 (pulled in transitively by `next@16.2.11`, `^0.34.5`) has known
+     libvips CVEs fixed in 0.35+ — directly relevant since P1a (this session) turned on
+     `next/image` optimization, so sharp now actively processes every product photo
+     request. No stable Next patch exists yet that bumps it, so added a `pnpm-workspace.yaml`
+     override forcing `sharp: 0.35.3`. Verified via a real `/_next/image` request against
+     a real product photo (200 OK, correctly optimized output) after reinstalling.
+  `pnpm audit`: 13 → 10 vulnerabilities; the remaining 10 are dev-only build tooling
+  (vitest/vite/esbuild/postcss/`@hono/node-server` via the `shadcn` CLI) with zero
+  runtime exposure in the deployed app.
+
+  **Security:**
+  3. `/api/enrich` had no daily cost cap, unlike `/api/chat`'s existing per-agent token
+     budget — admin-gated, but a careless/compromised admin session could trigger
+     unlimited real-money Places + Anthropic calls. Added `enrichment_daily_call_budget`
+     setting (default 30/day) + wired up the previously-unused `enrichment_jobs` table
+     (existed in schema since M5, never actually written to) as the real per-day counter.
+     Verified live: temporarily zeroed the budget, confirmed a real request got a clean
+     429 with zero `enrichment_jobs` rows written (no side effects from a blocked call),
+     restored the real budget.
+  4. All 4 API routes (`/api/chat`, `/api/chat/confirm`, `/api/enrich`,
+     `/api/admin/vis-import`) had an unguarded `request.json()`/`request.formData()` call
+     — malformed input threw an unhandled exception instead of a clean 400. Wrapped all
+     four in try/catch. Verified live: malformed JSON to `/api/chat` and
+     `/api/chat/confirm` both now return clean 400s with zero server errors logged.
+  5. The chat daily-token-budget check had a real TOCTOU race: two near-simultaneous
+     requests from the same agent could both read the same stale "under budget"
+     snapshot before either's `chat_log` row landed. New `fn_chat_check_budget_and_log()`
+     RPC does the check-and-insert in one statement inside a per-agent
+     `pg_advisory_xact_lock`, closing that specific window (real, bounded scope, not
+     silently overclaimed — the migration's own comment spells out what this does and
+     doesn't fix, since exact token counts still aren't known until the Anthropic call
+     completes). Verified live end-to-end: a real chat message still flows through
+     correctly with real token counts recorded, and a zeroed-budget test still gets a
+     clean 429 with no `chat_log` row written.
+
+  **Performance:**
+  6. Firmen search (13,573 companies) and Katalog search (11,909 products, tripled this
+     session) both use leading-wildcard `ilike '%query%'` — plain btree indexes can't
+     serve that pattern, so every search was a full sequential scan, masked only by
+     table size. Added `pg_trgm` + GIN trigram indexes on every searched column.
+     Verified via `EXPLAIN ANALYZE` on the real search queries: rare search terms now
+     correctly use `Bitmap Index Scan` on the new trigram indexes (91 buffer reads,
+     ~4ms) instead of a sequential scan; common terms still correctly use whichever
+     plan Postgres finds cheapest — confirmed this is healthy query planning, not a
+     sign the fix didn't work.
+
+  **Code quality:**
+  7. Replaced `select("*")` with explicit columns in 4 single-row detail pages
+     (`firmen/[id]`, `katalog/[id]`, `admin/brand-profiles`,
+     `admin/qa-bewertungen/[id]/bearbeiten`) — read each file fully to enumerate every
+     field actually used before narrowing, since guessing wrong on `firmen/[id]`
+     (485 lines, the largest page in the app) would have silently broken a UI section.
+     One real gotcha hit along the way: Supabase's typed query builder needs the
+     `select()` string to be a single literal (template literal is fine, string
+     concatenation with `+` is not — TypeScript widens a concatenated string to plain
+     `string`, and the client falls back to an untyped `GenericStringError` result).
+     Verified all 4 pages live afterward — every section renders identically to before.
+
+  **New admin tools (audit's "what to add" suggestions):**
+  8. `/admin/reviews` ("Offene Reviews") — consolidates the three separate
+     pending-human-decision queues (ambiguous enrichment matches, unverified brand
+     profiles, Katalog dedup candidates) that previously lived on three unconnected
+     pages into one landing page with live counts, each linking to its real screen.
+     Nothing merges/verifies/dismisses from here — purely a navigation aid. Verified
+     live: real counts (4/22/30 = 56 open) matched each source page exactly.
+  9. `/admin/katalog-qualitaet` — data-quality overview across all 11,909 products
+     (photo/description/season/category completeness, own-vs-borrowed-vs-generated
+     breakdown). Verified live: every figure matched already-documented real numbers
+     exactly (228 products with season - the exact count from this session's
+     `products.season` backfill; the one uncategorized "Hoodie weiß" merch item; ~9,540
+     generated descriptions).
+
+  All 9 items verified with real data via throwaway admin test accounts (created and
+  deleted each time, per this session's established pattern) — nothing here is
+  "typechecks, therefore done." Full test suite (40/40), typecheck, and lint stayed
+  green throughout.
 - 🔴 **PITR / backups — NOT enabled, zero backups exist. Explicitly deferred (2026-07-23).**
   Checked directly via the Supabase Management API
   (`GET /v1/projects/{ref}/database/backups`): `pitr_enabled: false`, `backups: []`. Real

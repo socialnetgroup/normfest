@@ -22,6 +22,8 @@ import {
   ClipboardCheck,
   Tags,
   Copy,
+  ListChecks,
+  BarChart3,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -44,6 +46,7 @@ const SETTINGS_ITEMS = [
   { href: "/admin/vis-import", label: "VIS Import", icon: Upload },
   { href: "/admin/brand-profiles", label: "Marken-Profile", icon: Tags },
   { href: "/admin/katalog-dedup", label: "Katalog-Dedup", icon: Copy },
+  { href: "/admin/katalog-qualitaet", label: "Katalog-Qualität", icon: BarChart3 },
 ];
 
 function isActive(pathname: string, href: string) {
@@ -114,6 +117,12 @@ export function AppSidebar({
             <div className="mt-4 mb-1 px-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
               Admin
             </div>
+            <NavItem
+              href="/admin/reviews"
+              label="Offene Reviews"
+              icon={ListChecks}
+              active={isActive(pathname, "/admin/reviews")}
+            />
             <NavItem href="/admin/team" label="Team" icon={Users} active={isActive(pathname, "/admin/team")} />
             <NavItem
               href="/admin/qa-bewertungen"
