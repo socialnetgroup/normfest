@@ -107,7 +107,7 @@ export default async function DashboardPage() {
     isAdmin
       ? supabase
           .from("company_gebiet_coverage")
-          .select("gebiet, total, uncontacted, contacted_this_month, contacted_last_2_months, contacted_last_3_months")
+          .select("gebiet, total, not_contacted_this_month, not_contacted_last_2_months, not_contacted_last_3_months")
       : Promise.resolve({ data: null }),
   ]);
 
@@ -139,27 +139,24 @@ export default async function DashboardPage() {
   // cap on an unpaginated select and silently undercounted.
   type CoverageStats = {
     total: number;
-    uncontacted: number;
-    contactedThisMonth: number;
-    contactedLast2Months: number;
-    contactedLast3Months: number;
+    notContactedThisMonth: number;
+    notContactedLast2Months: number;
+    notContactedLast3Months: number;
   };
   const emptyCoverage: CoverageStats = {
     total: 0,
-    uncontacted: 0,
-    contactedThisMonth: 0,
-    contactedLast2Months: 0,
-    contactedLast3Months: 0,
+    notContactedThisMonth: 0,
+    notContactedLast2Months: 0,
+    notContactedLast3Months: 0,
   };
   const byGebiet = new Map<string, CoverageStats>();
   for (const row of coverageStats ?? []) {
     if (!row.gebiet) continue;
     byGebiet.set(row.gebiet, {
       total: row.total ?? 0,
-      uncontacted: row.uncontacted ?? 0,
-      contactedThisMonth: row.contacted_this_month ?? 0,
-      contactedLast2Months: row.contacted_last_2_months ?? 0,
-      contactedLast3Months: row.contacted_last_3_months ?? 0,
+      notContactedThisMonth: row.not_contacted_this_month ?? 0,
+      notContactedLast2Months: row.not_contacted_last_2_months ?? 0,
+      notContactedLast3Months: row.not_contacted_last_3_months ?? 0,
     });
   }
 
@@ -170,17 +167,16 @@ export default async function DashboardPage() {
       agentId: a.id as string | null,
       ...(byGebiet.get(a.gebiet) ?? emptyCoverage),
     })),
-  ].sort((a, b) => b.uncontacted - a.uncontacted);
+  ].sort((a, b) => b.notContactedLast3Months - a.notContactedLast3Months);
 
   const unassignedTotals = [...byGebiet.entries()]
     .filter(([gebiet]) => !assignedGebiete.has(gebiet))
     .reduce(
       (sum, [, v]) => ({
         total: sum.total + v.total,
-        uncontacted: sum.uncontacted + v.uncontacted,
-        contactedThisMonth: sum.contactedThisMonth + v.contactedThisMonth,
-        contactedLast2Months: sum.contactedLast2Months + v.contactedLast2Months,
-        contactedLast3Months: sum.contactedLast3Months + v.contactedLast3Months,
+        notContactedThisMonth: sum.notContactedThisMonth + v.notContactedThisMonth,
+        notContactedLast2Months: sum.notContactedLast2Months + v.notContactedLast2Months,
+        notContactedLast3Months: sum.notContactedLast3Months + v.notContactedLast3Months,
       }),
       emptyCoverage,
     );
@@ -349,8 +345,8 @@ export default async function DashboardPage() {
           <CardHeader>
             <CardTitle>Kontakt-Abdeckung nach Agent</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Firmen je Gebiet und wie viele davon seit 3+ Monaten nicht kontaktiert wurden - laut{" "}
-              <span className="font-medium">Dat.l.Kontakt</span> (last_contact_date) aus der VIS-Liste.
+              Firmen je Gebiet, aufgeschlüsselt danach wie viele seit unterschiedlich langer Zeit nicht kontaktiert
+              wurden - laut <span className="font-medium">Dat.l.Kontakt</span> (last_contact_date) aus der VIS-Liste.
             </p>
           </CardHeader>
           <CardContent>
@@ -360,16 +356,15 @@ export default async function DashboardPage() {
                   <tr>
                     <th className="px-2 py-2 font-medium">Agent</th>
                     <th className="px-2 py-2 font-medium">Firmen gesamt</th>
+                    <th className="px-2 py-2 font-medium">Nicht kontaktiert diesen Monat ({dayOfMonth}. Tag)</th>
+                    <th className="px-2 py-2 font-medium">Nicht kontaktiert (2+ Mon.)</th>
                     <th className="px-2 py-2 font-medium">Nicht kontaktiert (3+ Mon.)</th>
-                    <th className="px-2 py-2 font-medium">Anteil</th>
-                    <th className="px-2 py-2 font-medium">Kontaktiert diesen Monat ({dayOfMonth}. Tag)</th>
-                    <th className="px-2 py-2 font-medium">Kontaktiert letzte 2 Monate</th>
-                    <th className="px-2 py-2 font-medium">Kontaktiert letzte 3 Monate</th>
+                    <th className="px-2 py-2 font-medium">Anteil (3+ Mon.)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
                   {coverage.map((row) => {
-                    const pct = row.total > 0 ? row.uncontacted / row.total : 0;
+                    const pct = row.total > 0 ? row.notContactedLast3Months / row.total : 0;
                     return (
                       <tr key={row.label} className={row.label === "Nicht zugeordnet" ? "opacity-60" : undefined}>
                         <td className="px-2 py-2 font-medium">
@@ -382,7 +377,9 @@ export default async function DashboardPage() {
                           )}
                         </td>
                         <td className="px-2 py-2 tabular-nums">{row.total}</td>
-                        <td className="px-2 py-2 tabular-nums">{row.uncontacted}</td>
+                        <td className="px-2 py-2 tabular-nums">{row.notContactedThisMonth}</td>
+                        <td className="px-2 py-2 tabular-nums">{row.notContactedLast2Months}</td>
+                        <td className="px-2 py-2 tabular-nums">{row.notContactedLast3Months}</td>
                         <td className="px-2 py-2">
                           <span
                             className={cn(
@@ -393,9 +390,6 @@ export default async function DashboardPage() {
                             {Math.round(pct * 100)}%
                           </span>
                         </td>
-                        <td className="px-2 py-2 tabular-nums">{row.contactedThisMonth}</td>
-                        <td className="px-2 py-2 tabular-nums">{row.contactedLast2Months}</td>
-                        <td className="px-2 py-2 tabular-nums">{row.contactedLast3Months}</td>
                       </tr>
                     );
                   })}

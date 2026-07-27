@@ -1341,12 +1341,11 @@ export type Database = {
     Views: {
       company_gebiet_coverage: {
         Row: {
-          contacted_last_2_months: number | null
-          contacted_last_3_months: number | null
-          contacted_this_month: number | null
           gebiet: string | null
+          not_contacted_last_2_months: number | null
+          not_contacted_last_3_months: number | null
+          not_contacted_this_month: number | null
           total: number | null
-          uncontacted: number | null
         }
         Relationships: []
       }
