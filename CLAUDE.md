@@ -1496,6 +1496,23 @@ exists for Places spend (unlike `/api/enrich`'s `enrichment_daily_call_budget` f
 Anthropic) — worth adding before any further large batches, since at ~$0.0155/company the
 remaining $103 covers roughly 6,600 more companies, not an unlimited runway.
 
+**Ongoing Places usage after this rollout, assuming no new companies get added (2026-07-27,
+Anis asked directly):** everything that still needs to happen from here — tomorrow's
+Anthropic analyze pass, resolving the ambiguous queue (manual merge or same-address
+auto-merge), retrying failed website fetches — touches zero Places credit; verified via
+the code (`resolveForCompany`/`fetchWebsiteForCompany` calls and the ambiguous-merge
+scripts don't call the Places API again). The one place that still genuinely calls Places
+every time it runs is the on-demand "Jetzt anreichern" button
+(`components/enrich-now-button.tsx` → `/api/enrich`) — it always re-resolves regardless of
+whether `places_resolved_at` is already set, by design (lets Anis intentionally refresh a
+company's Google data, e.g. new reviews, rather than being stuck with a stale snapshot
+forever). **Confirmed this is a non-issue, not a fix-it item:** the button only renders for
+`isAdmin` (`app/(app)/firmen/[id]/page.tsx`) — agents don't see it at all, today or once
+real agent accounts exist — so the only person who can trigger a redundant Places spend is
+Anis himself, deliberately. Decided not to add a skip-if-already-resolved guard: it would
+block the legitimate refresh use case for a cost risk (~$0.0155/click) that's already
+fully contained by the existing admin-only gate.
+
 ### M6 — KB + Skript (week 8–9)
 KB ingest of the material folder; objection_cards extraction; Wissen + Skript menus.
 **Done:** all supplied materials published; objection cards searchable.
