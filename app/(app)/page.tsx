@@ -104,7 +104,11 @@ export default async function DashboardPage() {
     isAdmin
       ? supabase.from("agents").select("id, full_name, gebiet").eq("active", true)
       : Promise.resolve({ data: null }),
-    isAdmin ? supabase.from("company_gebiet_coverage").select("gebiet, total, uncontacted") : Promise.resolve({ data: null }),
+    isAdmin
+      ? supabase
+          .from("company_gebiet_coverage")
+          .select("gebiet, total, uncontacted, contacted_this_month, contacted_last_2_months, contacted_last_3_months")
+      : Promise.resolve({ data: null }),
   ]);
 
   const byAgent = new Map<string, { name: string; revenue: number }>();
@@ -133,10 +137,30 @@ export default async function DashboardPage() {
   // company_gebiet_coverage view (GROUP BY gebiet) rather than client-side over
   // all 13.5k companies - an earlier version hit PostgREST's default 1000-row
   // cap on an unpaginated select and silently undercounted.
-  const byGebiet = new Map<string, { total: number; uncontacted: number }>();
+  type CoverageStats = {
+    total: number;
+    uncontacted: number;
+    contactedThisMonth: number;
+    contactedLast2Months: number;
+    contactedLast3Months: number;
+  };
+  const emptyCoverage: CoverageStats = {
+    total: 0,
+    uncontacted: 0,
+    contactedThisMonth: 0,
+    contactedLast2Months: 0,
+    contactedLast3Months: 0,
+  };
+  const byGebiet = new Map<string, CoverageStats>();
   for (const row of coverageStats ?? []) {
     if (!row.gebiet) continue;
-    byGebiet.set(row.gebiet, { total: row.total ?? 0, uncontacted: row.uncontacted ?? 0 });
+    byGebiet.set(row.gebiet, {
+      total: row.total ?? 0,
+      uncontacted: row.uncontacted ?? 0,
+      contactedThisMonth: row.contacted_this_month ?? 0,
+      contactedLast2Months: row.contacted_last_2_months ?? 0,
+      contactedLast3Months: row.contacted_last_3_months ?? 0,
+    });
   }
 
   const assignedGebiete = new Set((coverageAgents ?? []).map((a) => a.gebiet));
@@ -144,19 +168,27 @@ export default async function DashboardPage() {
     ...(coverageAgents ?? []).map((a) => ({
       label: a.full_name,
       agentId: a.id as string | null,
-      ...(byGebiet.get(a.gebiet) ?? { total: 0, uncontacted: 0 }),
+      ...(byGebiet.get(a.gebiet) ?? emptyCoverage),
     })),
   ].sort((a, b) => b.uncontacted - a.uncontacted);
 
   const unassignedTotals = [...byGebiet.entries()]
     .filter(([gebiet]) => !assignedGebiete.has(gebiet))
     .reduce(
-      (sum, [, v]) => ({ total: sum.total + v.total, uncontacted: sum.uncontacted + v.uncontacted }),
-      { total: 0, uncontacted: 0 },
+      (sum, [, v]) => ({
+        total: sum.total + v.total,
+        uncontacted: sum.uncontacted + v.uncontacted,
+        contactedThisMonth: sum.contactedThisMonth + v.contactedThisMonth,
+        contactedLast2Months: sum.contactedLast2Months + v.contactedLast2Months,
+        contactedLast3Months: sum.contactedLast3Months + v.contactedLast3Months,
+      }),
+      emptyCoverage,
     );
   if (unassignedTotals.total > 0) {
     coverage.push({ label: "Nicht zugeordnet", agentId: null, ...unassignedTotals });
   }
+
+  const dayOfMonth = new Date().getDate();
 
   return (
     <div className="flex flex-col gap-6">
@@ -330,6 +362,9 @@ export default async function DashboardPage() {
                     <th className="px-2 py-2 font-medium">Firmen gesamt</th>
                     <th className="px-2 py-2 font-medium">Nicht kontaktiert (3+ Mon.)</th>
                     <th className="px-2 py-2 font-medium">Anteil</th>
+                    <th className="px-2 py-2 font-medium">Kontaktiert diesen Monat ({dayOfMonth}. Tag)</th>
+                    <th className="px-2 py-2 font-medium">Kontaktiert letzte 2 Monate</th>
+                    <th className="px-2 py-2 font-medium">Kontaktiert letzte 3 Monate</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -358,6 +393,9 @@ export default async function DashboardPage() {
                             {Math.round(pct * 100)}%
                           </span>
                         </td>
+                        <td className="px-2 py-2 tabular-nums">{row.contactedThisMonth}</td>
+                        <td className="px-2 py-2 tabular-nums">{row.contactedLast2Months}</td>
+                        <td className="px-2 py-2 tabular-nums">{row.contactedLast3Months}</td>
                       </tr>
                     );
                   })}
