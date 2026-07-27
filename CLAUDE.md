@@ -1469,6 +1469,30 @@ analyze all ~939 Places-resolved-but-unanalyzed rows in his Gebiet (the original
 ~899-902 new ones from today), spending zero additional Places credit since that data is
 already saved.
 
+**Full whole-book Places rollout, same day (2026-07-27):** after Alan's pilot proved
+clean, Anis asked to run `--places-only` for the remaining 9 agents too (Emina Berilo,
+Lejla Piric, Maja Biso, Rijalda Halilovic, Elida Karovic, Arnela Orucevic, Muhamed Lepic,
+Merima Zulfic, Nejra Adzemovic), one Gebiet at a time with a go/no-go between each (two
+run concurrently once — Arnela + Muhamed — since they're fully independent). Each
+verified directly against the DB before moving to the next, same discipline as the Alan
+run. **Result: 13,546 of 13,573 active companies (99.8%) now have Places data**, 7,424
+with a successful website fetch, 494 already fully analyzed (the pre-existing backlog);
+the remaining ~13,050 are Places-resolved-only, waiting on the Anthropic analyze pass.
+Zero Anthropic spend across all 10 runs (confirmed `$0.0000` every time via the
+`--places-only` flag).
+
+**Real GCP cost correction (2026-07-27, Anis checked the actual billing console):**
+actual spend for this rollout was **~$180**, not the ~$3.50-scale rate the earlier
+1,078-company sample implied. Recomputed real rate: ~12,466 companies processed today
+(sum of each run's candidate count) ÷ $180 ≈ **$0.0144/company** — about 4.4x higher than
+the earlier $3.50/1,078 ≈ $0.00325/company estimate. Same class of correction as the
+Anthropic ANALYZE cost surprise (§13 M8: initial estimate from a small sample turned out
+~4x too low once measured at real scale) — small-batch extrapolations for external API
+costs keep underestimating here; trust a real bill over a small sample every time.
+Remaining GCP credit: roughly $120 of the original $300 project credit. No in-app budget
+cap exists for Places spend (unlike `/api/enrich`'s `enrichment_daily_call_budget` for
+Anthropic) — worth adding before any further large batches if that becomes a concern.
+
 ### M6 — KB + Skript (week 8–9)
 KB ingest of the material folder; objection_cards extraction; Wissen + Skript menus.
 **Done:** all supplied materials published; objection cards searchable.
