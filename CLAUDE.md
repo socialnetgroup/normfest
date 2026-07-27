@@ -1481,17 +1481,20 @@ the remaining ~13,050 are Places-resolved-only, waiting on the Anthropic analyze
 Zero Anthropic spend across all 10 runs (confirmed `$0.0000` every time via the
 `--places-only` flag).
 
-**Real GCP cost correction (2026-07-27, Anis checked the actual billing console):**
-actual spend for this rollout was **~$180**, not the ~$3.50-scale rate the earlier
-1,078-company sample implied. Recomputed real rate: ~12,466 companies processed today
-(sum of each run's candidate count) ÷ $180 ≈ **$0.0144/company** — about 4.4x higher than
-the earlier $3.50/1,078 ≈ $0.00325/company estimate. Same class of correction as the
-Anthropic ANALYZE cost surprise (§13 M8: initial estimate from a small sample turned out
-~4x too low once measured at real scale) — small-batch extrapolations for external API
-costs keep underestimating here; trust a real bill over a small sample every time.
-Remaining GCP credit: roughly $120 of the original $300 project credit. No in-app budget
-cap exists for Places spend (unlike `/api/enrich`'s `enrichment_daily_call_budget` for
-Anthropic) — worth adding before any further large batches if that becomes a concern.
+**Real GCP cost correction (2026-07-27, Anis checked the actual billing console, corrected
+twice same day as the real total came into focus):** total project-wide GCP spend to date
+is **$197 of the $300 credit** — first reported as ~$180, refined to the exact $197
+figure. Isolating today's rollout: $197 - the earlier ~$3.50 baseline (before today) ≈
+$193.50 for the ~12,466 companies processed today (sum of each run's candidate count) →
+real rate ≈ **$0.0155/company** — about 4.8x higher than the earlier $3.50/1,078 ≈
+$0.00325/company estimate. Same class of correction as the Anthropic ANALYZE cost
+surprise (§13 M8: initial estimate from a small sample turned out ~4x too low once
+measured at real scale) — small-batch extrapolations for external API costs keep
+underestimating here; trust a real bill over a small sample every time.
+**Remaining GCP credit: $103** of the original $300 project credit. No in-app budget cap
+exists for Places spend (unlike `/api/enrich`'s `enrichment_daily_call_budget` for
+Anthropic) — worth adding before any further large batches, since at ~$0.0155/company the
+remaining $103 covers roughly 6,600 more companies, not an unlimited runway.
 
 ### M6 — KB + Skript (week 8–9)
 KB ingest of the material folder; objection_cards extraction; Wissen + Skript menus.
