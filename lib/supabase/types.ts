@@ -39,6 +39,60 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_ai_reports: {
+        Row: {
+          agent_id: string
+          created_at: string
+          generated_by: string | null
+          id: string
+          input_tokens: number | null
+          output_tokens: number | null
+          period_end: string
+          period_start: string
+          stats_snapshot: Json
+          summary: string
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          generated_by?: string | null
+          id?: string
+          input_tokens?: number | null
+          output_tokens?: number | null
+          period_end: string
+          period_start: string
+          stats_snapshot: Json
+          summary: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          generated_by?: string | null
+          id?: string
+          input_tokens?: number | null
+          output_tokens?: number | null
+          period_end?: string
+          period_start?: string
+          stats_snapshot?: Json
+          summary?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_ai_reports_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_ai_reports_generated_by_fkey"
+            columns: ["generated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_daily_performance: {
         Row: {
           agent_id: string

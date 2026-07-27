@@ -87,7 +87,10 @@ export default async function AgentHistoryPage({ params }: { params: Promise<{ a
         <h1 className="font-heading mt-1 text-2xl font-semibold tracking-tight">{agent.full_name}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Gebiet {agent.gebiet}
-          {!agent.active ? " - inaktiv" : ""} · monatlicher Verlauf, jeder Monat mit Kalender-Drill-in.
+          {!agent.active ? " - inaktiv" : ""} · monatlicher Verlauf, jeder Monat mit Kalender-Drill-in. ·{" "}
+          <Link href={`/admin/team/${agentId}/kontrola`} className="underline">
+            Kontrolling →
+          </Link>
         </p>
       </div>
 
