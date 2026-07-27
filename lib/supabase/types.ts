@@ -1349,6 +1349,16 @@ export type Database = {
         }
         Relationships: []
       }
+      company_gebiet_enrichment_coverage: {
+        Row: {
+          ai_analyzed: number | null
+          gebiet: string | null
+          places_resolved: number | null
+          total: number | null
+          website_fetched: number | null
+        }
+        Relationships: []
+      }
       feedback_sales: {
         Row: {
           agent_id: string | null
