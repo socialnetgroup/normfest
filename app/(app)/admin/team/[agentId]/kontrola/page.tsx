@@ -6,6 +6,7 @@ import { StatTile } from "@/components/ui/stat-tile";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AgentReportButton } from "@/components/agent-report-button";
+import { MarkdownLite } from "@/components/markdown-lite";
 import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
@@ -150,7 +151,7 @@ export default async function AgentKontrolaPage({ params }: { params: Promise<{ 
                     </span>
                     <Badge variant="secondary">KI-generiert</Badge>
                   </div>
-                  <p className="text-sm whitespace-pre-line">{r.summary}</p>
+                  <MarkdownLite content={r.summary} className="flex flex-col gap-1.5 text-sm" />
                 </li>
               ))}
             </ul>

@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { MarkdownLite } from "@/components/markdown-lite";
 
 type Message = { role: "user" | "assistant"; content: string };
 type PendingAction =
@@ -179,11 +180,11 @@ export function ChatAssistant({ companyContext }: { companyContext: { id: string
             key={i}
             className={
               m.role === "user"
-                ? "self-end rounded-xl bg-primary px-3.5 py-2 text-sm text-primary-foreground"
-                : "self-start rounded-xl bg-muted px-3.5 py-2 text-sm whitespace-pre-line"
+                ? "self-end rounded-xl bg-primary px-3.5 py-2 text-sm whitespace-pre-line text-primary-foreground"
+                : "self-start rounded-xl bg-muted px-3.5 py-2 text-sm"
             }
           >
-            {m.content}
+            {m.role === "user" ? m.content : <MarkdownLite content={m.content} />}
           </div>
         ))}
       </div>

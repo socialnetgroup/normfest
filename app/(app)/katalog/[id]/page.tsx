@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
+import { MarkdownLite } from "@/components/markdown-lite";
 import {
   Card,
   CardContent,
@@ -117,7 +118,7 @@ export default async function ProductPage({
             </div>
           </CardHeader>
           <CardContent>
-            <p className="text-sm whitespace-pre-line">{product.description}</p>
+            <MarkdownLite content={product.description} className="flex flex-col gap-1.5 text-sm" />
           </CardContent>
         </Card>
       ) : null}
