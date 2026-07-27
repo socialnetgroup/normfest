@@ -1423,6 +1423,52 @@ Anis chose to pause enrichment here rather than top up billing immediately — n
 whenever resumed: top up Anthropic Console billing, then re-run analysis-only (no new
 Places calls needed) over the 856 backlog before doing more Places-resolution batches.
 
+**Full agent-book enrichment kickoff, Alan Sacic pilot (2026-07-27):** Anis secured real
+project funding; first real test is fully enriching one agent's entire book before
+scaling further. Alan Sacic (Gebiet `130023`): 980 companies, 78 already had some
+enrichment (39 fully analyzed, 37 Places-resolved-only), leaving **902 genuinely
+untouched**. GCP Places spend so far project-wide: a real, checked $3.50 across 1,078
+already-processed companies (~$0.00325/company) — Anis's own real billing-console number,
+not an estimate, and far cheaper than the earlier "low single-digit $ per 200" guess.
+Anthropic card top-up lands the next day, so the run was deliberately split along the
+pipeline's real cost boundary: Places resolution + website fetch (`lib/enrichment/
+places.mjs`, `website.mjs`) touch zero Anthropic — confirmed directly (`grep` for
+`anthropic`/`getAnthropicClient` in both files returns nothing) — only
+`analyzeCompanyEnrichment` (`lib/enrichment/analyze.mjs`) spends Anthropic credit.
+
+Added `--places-only` to `scripts/enrich-pilot.mjs` (skips the ANALYZE call entirely,
+leaving `places_resolved_at` set and `analyzed_at` null so `scripts/analyze-backlog.mjs`
+picks the row up later) and a `[gebiet]` filter to `analyze-backlog.mjs` (previously
+whole-book only) so tomorrow's Anthropic-only pass can stay scoped to just his Gebiet
+instead of pulling in every other agent's pending backlog too.
+
+**Two real bugs found during the 3-company smoke test (caught before the full run, per
+the established "test 2-3 companies before scaling" discipline):**
+1. `--places-only` was parsed in `main()` but never threaded into the `pool()` call site
+   — the flag existed but did nothing, so the first smoke-test batch ran the full
+   pipeline anyway and spent a real (small) $0.1279 in Anthropic credit a day early.
+   Fixed by passing `placesOnly` through to `processCompany`.
+2. **Separately, a real pre-existing bug**, same class as the earlier
+   `company_gebiet_coverage` 1000-row cap fix: the script's `alreadyEnriched` lookup
+   (`.from("company_enrichment").select("company_id")`) had no pagination and silently
+   capped at PostgREST's default 1000 rows — with 1,078 real rows, 78 were invisible to
+   the "already enriched" check, so up to 78 already-done companies could have been
+   reprocessed as if new during the full run (wasted spend, not data corruption, since
+   it's an upsert — but real money nonetheless). Fixed by paginating the same way the
+   companies query below it already does. Verified directly: before the fix the script
+   reported "1000 already enriched overall"; after, it correctly reports "1078".
+
+Verified both fixes live against real companies (not a dry run) before scaling: a
+follow-up 3-company `--places-only` batch showed `analyzeInputTokens: 0` /
+`analyzeOutputTokens: 0` / real cost `$0.0000`, and the candidate count matched the
+expected math exactly (899 remaining after 3 test companies, `978 eligible - 79 with any
+enrichment`). Full run then kicked off in the background for the real remaining 899
+companies: `node scripts/enrich-pilot.mjs 1000 130023 --places-only`. Plan: once
+Anthropic billing tops up, run `node scripts/analyze-backlog.mjs <limit> 130023` to
+analyze all ~939 Places-resolved-but-unanalyzed rows in his Gebiet (the original 37 + the
+~899-902 new ones from today), spending zero additional Places credit since that data is
+already saved.
+
 ### M6 — KB + Skript (week 8–9)
 KB ingest of the material folder; objection_cards extraction; Wissen + Skript menus.
 **Done:** all supplied materials published; objection cards searchable.

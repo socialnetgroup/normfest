@@ -3,11 +3,19 @@
 // concurrency to keep total runtime reasonable without hammering the
 // Places/Anthropic APIs.
 //
-// Usage: node scripts/enrich-pilot.mjs <limit> [gebiet]
+// Usage: node scripts/enrich-pilot.mjs <limit> [gebiet] [--places-only]
 // Omit gebiet to pull from across the whole eligible book instead of one
 // Gebiet — used for the post-pilot 1000/1800-company rollout-readiness
 // batches (2026-07-23, Anis: wants a broader sample before a real go-live
 // funding decision, not scoped to one Gebiet anymore).
+//
+// --places-only (2026-07-27): Places resolution + website fetch never touch
+// Anthropic (confirmed - neither lib/enrichment/places.mjs nor website.mjs
+// import the Anthropic client), only analyzeCompanyEnrichment does. This flag
+// skips the analyze call so Places/website spend (already-funded GCP credit)
+// can run ahead of Anthropic credit landing - scripts/analyze-backlog.mjs
+// picks up every row left with places_resolved_at set and analyzed_at null,
+// so nothing here is wasted or re-fetched later.
 import { createClient } from "@supabase/supabase-js";
 import { getAnthropicClient } from "../lib/ai/provider.mjs";
 import { resolvePlaceForCompany } from "../lib/enrichment/places.mjs";
@@ -38,6 +46,10 @@ const SONNET_5_INTRO_OUTPUT_PER_M = 10;
 
 const stats = {
   resolved: 0,
+  // resolvePlaceForCompany can also return "resolved_merged" (same-address
+  // auto-merge, §9) - was missing here, so it printed as NaN instead of a
+  // real count (cosmetic only, never affected what got written to the DB).
+  resolved_merged: 0,
   ambiguous: 0,
   no_match: 0,
   websiteFetched: 0,
@@ -48,7 +60,7 @@ const stats = {
   analyzeOutputTokens: 0,
 };
 
-async function processCompany(company, index, total) {
+async function processCompany(company, index, total, placesOnly) {
   try {
     const { status, record } = await resolvePlaceForCompany(admin, company, process.env.GOOGLE_PLACES_API_KEY);
     stats[status === "no_match" ? "no_match" : status]++;
@@ -68,6 +80,13 @@ async function processCompany(company, index, total) {
           // website fetch failures are expected (bot protection etc.) — not fatal
         }
       }
+    }
+
+    if (placesOnly) {
+      if ((index + 1) % 20 === 0 || index + 1 === total) {
+        console.log(`[${index + 1}/${total}] progress:`, stats);
+      }
+      return;
     }
 
     // Analyze regardless of Places outcome — company name + branche (real
@@ -105,15 +124,27 @@ function purchaseTier(c) {
 }
 
 async function main() {
-  const limit = Number(process.argv[2]);
-  const gebiet = process.argv[3];
+  const placesOnly = process.argv.includes("--places-only");
+  const positional = process.argv.slice(2).filter((a) => a !== "--places-only");
+  const limit = Number(positional[0]);
+  const gebiet = positional[1];
   if (!limit) {
-    console.error("Usage: node scripts/enrich-pilot.mjs <limit> [gebiet]");
+    console.error("Usage: node scripts/enrich-pilot.mjs <limit> [gebiet] [--places-only]");
     process.exit(1);
   }
 
-  const { data: alreadyEnriched } = await admin.from("company_enrichment").select("company_id");
-  const enrichedIds = new Set((alreadyEnriched ?? []).map((e) => e.company_id));
+  // Paginated the same way the companies query below already is - an
+  // unpaginated select here hits PostgREST's default 1000-row cap and
+  // silently drops rows once company_enrichment passes 1000 (real bug found
+  // 2026-07-27: with 1078 real rows, 78 were invisible to this check, so
+  // some already-enriched companies could be reprocessed as if new).
+  const enrichedIds = new Set();
+  for (let from = 0; ; from += 1000) {
+    const { data } = await admin.from("company_enrichment").select("company_id").range(from, from + 999);
+    if (!data || data.length === 0) break;
+    for (const row of data) enrichedIds.add(row.company_id);
+    if (data.length < 1000) break;
+  }
 
   let all = [];
   let from = 0;
@@ -152,7 +183,7 @@ async function main() {
   );
 
   const start = Date.now();
-  await pool(targets, (c, i) => processCompany(c, i, targets.length), 5);
+  await pool(targets, (c, i) => processCompany(c, i, targets.length, placesOnly), 5);
   const seconds = Math.round((Date.now() - start) / 1000);
 
   const analyzeCost =

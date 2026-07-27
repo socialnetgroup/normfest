@@ -7,8 +7,12 @@
 // backlog — it must never re-trigger Places/website fetches, since that
 // data is already saved and re-fetching would waste spend for nothing.
 //
-// Usage: node scripts/analyze-backlog.mjs [limit]
-// Omit limit to process the entire backlog.
+// Usage: node scripts/analyze-backlog.mjs [limit] [gebiet]
+// Omit limit to process the entire backlog. Omit gebiet to process the
+// backlog across the whole book. Gebiet filter added 2026-07-27 to let a
+// single agent's Places-only backlog (from enrich-pilot.mjs --places-only)
+// be analyzed on its own once Anthropic credit lands, without pulling in
+// every other agent's pending rows too.
 import { createClient } from "@supabase/supabase-js";
 import { getAnthropicClient } from "../lib/ai/provider.mjs";
 import { analyzeCompanyEnrichment } from "../lib/enrichment/analyze.mjs";
@@ -67,12 +71,15 @@ async function analyzeOne(target, index, total) {
 
 async function main() {
   const limit = process.argv[2] ? Number(process.argv[2]) : undefined;
+  const gebiet = process.argv[3];
 
-  const { data: backlog, error } = await admin
+  let query = admin
     .from("company_enrichment")
-    .select("company_id, companies(name, revenue_current_year, revenue_prior_year, revenue_prior_prior_year)")
+    .select("company_id, companies!inner(name, revenue_current_year, revenue_prior_year, revenue_prior_prior_year, gebiet)")
     .is("analyzed_at", null)
     .not("places_resolved_at", "is", null);
+  if (gebiet) query = query.eq("companies.gebiet", gebiet);
+  const { data: backlog, error } = await query;
   if (error) throw error;
 
   const targets = (backlog ?? []).map((row) => ({
