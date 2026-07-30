@@ -323,6 +323,16 @@ export default async function DashboardPage() {
                     >
                       {i + 1}
                     </span>
+                    {isAdmin ? (
+                      <Link
+                        href={`/admin/team/${row.agentId}`}
+                        className={cn("hover:underline", i === 0 ? "font-semibold" : undefined)}
+                      >
+                        {row.name}
+                      </Link>
+                    ) : (
+                      <span className={i === 0 ? "font-semibold" : undefined}>{row.name}</span>
+                    )}
                     {isAdmin
                       ? (() => {
                           const statusLabel =
@@ -334,35 +344,23 @@ export default async function DashboardPage() {
                                   ? "Konto erstellt, noch nie angemeldet"
                                   : "Noch kein Konto";
                           return (
-                            <>
-                              <span
-                                className={cn(
-                                  "size-2 rounded-full",
-                                  row.loginStatus.status === "online"
-                                    ? "bg-success"
-                                    : row.loginStatus.status === "idle"
-                                      ? "bg-primary/50"
-                                      : row.loginStatus.status === "created"
-                                        ? "bg-warning"
-                                        : "bg-muted-foreground/30",
-                                )}
-                                title={statusLabel}
-                              />
-                              <span className="text-xs text-muted-foreground">{statusLabel}</span>
-                            </>
+                            <span
+                              className={cn(
+                                "rounded-full px-2 py-0.5 text-xs font-medium",
+                                row.loginStatus.status === "online"
+                                  ? "bg-success/20 text-success-foreground"
+                                  : row.loginStatus.status === "idle"
+                                    ? "bg-primary/15 text-primary"
+                                    : row.loginStatus.status === "created"
+                                      ? "bg-warning/20 text-warning-foreground"
+                                      : "bg-muted text-muted-foreground",
+                              )}
+                            >
+                              {statusLabel}
+                            </span>
                           );
                         })()
                       : null}
-                    {isAdmin ? (
-                      <Link
-                        href={`/admin/team/${row.agentId}`}
-                        className={cn("hover:underline", i === 0 ? "font-semibold" : undefined)}
-                      >
-                        {row.name}
-                      </Link>
-                    ) : (
-                      <span className={i === 0 ? "font-semibold" : undefined}>{row.name}</span>
-                    )}
                   </span>
                   <span className={cn("tabular-nums", i === 0 ? "font-bold text-primary" : "font-medium")}>
                     {eur.format(row.revenue)}
