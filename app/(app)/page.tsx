@@ -71,6 +71,7 @@ export default async function DashboardPage() {
     { data: myToday },
     { data: coverageAgents },
     { data: coverageStats },
+    { data: loginStatusRows },
   ] = await Promise.all([
     supabase
       .from("agent_daily_performance")
@@ -109,6 +110,7 @@ export default async function DashboardPage() {
           .from("company_gebiet_coverage")
           .select("gebiet, total, not_contacted_this_month, not_contacted_last_2_months, not_contacted_last_3_months")
       : Promise.resolve({ data: null }),
+    isAdmin ? supabase.rpc("fn_get_agent_login_status") : Promise.resolve({ data: null }),
   ]);
 
   const byAgent = new Map<string, { name: string; revenue: number }>();
@@ -120,8 +122,18 @@ export default async function DashboardPage() {
     byAgent.set(row.agent_id, entry);
   }
 
+  // "Online/offline" is really "has this agent ever logged in" - true live
+  // presence would need a heartbeat/last-seen mechanism this doesn't have.
+  // fn_get_agent_login_status() reads auth.users.last_sign_in_at, which
+  // isn't selectable directly by the authenticated role (security definer
+  // RPC, admin-gated inside).
+  const loginStatusByAgent = new Map<string, "active" | "created" | "none">();
+  for (const row of loginStatusRows ?? []) {
+    loginStatusByAgent.set(row.agent_id, !row.has_account ? "none" : row.last_sign_in_at ? "active" : "created");
+  }
+
   const leaderboard = [...byAgent.entries()]
-    .map(([agentId, v]) => ({ agentId, ...v }))
+    .map(([agentId, v]) => ({ agentId, loginStatus: loginStatusByAgent.get(agentId) ?? "none", ...v }))
     .sort((a, b) => b.revenue - a.revenue);
 
   const teamRevenue = leaderboard.reduce((sum, a) => sum + a.revenue, 0);
@@ -283,6 +295,25 @@ export default async function DashboardPage() {
                     >
                       {i + 1}
                     </span>
+                    {isAdmin ? (
+                      <span
+                        className={cn(
+                          "size-2 rounded-full",
+                          row.loginStatus === "active"
+                            ? "bg-success"
+                            : row.loginStatus === "created"
+                              ? "bg-warning"
+                              : "bg-muted-foreground/30",
+                        )}
+                        title={
+                          row.loginStatus === "active"
+                            ? "Hat sich schon angemeldet"
+                            : row.loginStatus === "created"
+                              ? "Konto erstellt, noch nie angemeldet"
+                              : "Noch kein Konto"
+                        }
+                      />
+                    ) : null}
                     {isAdmin ? (
                       <Link
                         href={`/admin/team/${row.agentId}`}

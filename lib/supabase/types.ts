@@ -1577,6 +1577,14 @@ export type Database = {
         Returns: undefined
       }
       fn_flag_representative_images: { Args: never; Returns: undefined }
+      fn_get_agent_login_status: {
+        Args: never
+        Returns: {
+          agent_id: string
+          has_account: boolean
+          last_sign_in_at: string
+        }[]
+      }
       fn_is_admin: { Args: never; Returns: boolean }
       fn_log_call: {
         Args: never
