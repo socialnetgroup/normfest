@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { FloatingAssistant } from "@/components/floating-assistant";
+import { HeartbeatPing } from "@/components/heartbeat-ping";
 import { getCurrentUser } from "@/lib/auth";
 
 import { logout } from "./actions";
@@ -28,6 +29,7 @@ export default async function AppLayout({
         <div className="mx-auto w-full max-w-6xl">{children}</div>
       </main>
       <FloatingAssistant />
+      <HeartbeatPing />
     </div>
   );
 }

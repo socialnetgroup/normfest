@@ -1123,6 +1123,8 @@ export type Database = {
           full_name: string | null
           gebiet: string | null
           id: string
+          last_seen_at: string | null
+          last_seen_path: string | null
           role: string
           updated_at: string
         }
@@ -1133,6 +1135,8 @@ export type Database = {
           full_name?: string | null
           gebiet?: string | null
           id: string
+          last_seen_at?: string | null
+          last_seen_path?: string | null
           role?: string
           updated_at?: string
         }
@@ -1143,6 +1147,8 @@ export type Database = {
           full_name?: string | null
           gebiet?: string | null
           id?: string
+          last_seen_at?: string | null
+          last_seen_path?: string | null
           role?: string
           updated_at?: string
         }
@@ -1582,9 +1588,12 @@ export type Database = {
         Returns: {
           agent_id: string
           has_account: boolean
+          last_seen_at: string
+          last_seen_path: string
           last_sign_in_at: string
         }[]
       }
+      fn_heartbeat: { Args: { p_path: string }; Returns: undefined }
       fn_is_admin: { Args: never; Returns: boolean }
       fn_log_call: {
         Args: never

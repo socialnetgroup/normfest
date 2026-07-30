@@ -18,6 +18,23 @@ import { signalTypeLabel, signalTypeVariant } from "@/lib/signals";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 
+const ONLINE_THRESHOLD_MS = 90_000;
+
+function pathLabel(path: string | null): string {
+  if (!path) return "";
+  if (path === "/") return "Dashboard";
+  if (path.startsWith("/firmen/")) return "Firmenprofil";
+  if (path === "/firmen") return "Firmen";
+  if (path.startsWith("/katalog/")) return "Produktseite";
+  if (path === "/katalog") return "Katalog";
+  if (path.startsWith("/fokus")) return "Fokus";
+  if (path.startsWith("/wissen")) return "Wissen";
+  if (path.startsWith("/skript")) return "Skript";
+  if (path.startsWith("/assistent")) return "Assistent";
+  if (path.startsWith("/admin")) return "Admin";
+  return path;
+}
+
 const eur = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
 
 type SettingsMap = Record<string, number>;
@@ -122,18 +139,29 @@ export default async function DashboardPage() {
     byAgent.set(row.agent_id, entry);
   }
 
-  // "Online/offline" is really "has this agent ever logged in" - true live
-  // presence would need a heartbeat/last-seen mechanism this doesn't have.
-  // fn_get_agent_login_status() reads auth.users.last_sign_in_at, which
-  // isn't selectable directly by the authenticated role (security definer
-  // RPC, admin-gated inside).
-  const loginStatusByAgent = new Map<string, "active" | "created" | "none">();
+  // "Online/offline" combines two signals: has this agent ever logged in
+  // (auth.users.last_sign_in_at), and a real heartbeat (profiles.last_seen_at/
+  // last_seen_path, pinged every 30s by HeartbeatPing while a tab is open) -
+  // "online" means a heartbeat within the last 90s, not just "logged in once".
+  // Both come through fn_get_agent_login_status() (security definer, admin-
+  // gated - auth.users isn't selectable directly by the authenticated role).
+  type LoginStatus = "none" | "created" | "idle" | "online";
+  const loginStatusByAgent = new Map<string, { status: LoginStatus; path: string | null }>();
   for (const row of loginStatusRows ?? []) {
-    loginStatusByAgent.set(row.agent_id, !row.has_account ? "none" : row.last_sign_in_at ? "active" : "created");
+    const isOnline = row.last_seen_at ? now.getTime() - new Date(row.last_seen_at).getTime() < ONLINE_THRESHOLD_MS : false;
+    const status: LoginStatus = !row.has_account
+      ? "none"
+      : isOnline
+        ? "online"
+        : row.last_sign_in_at
+          ? "idle"
+          : "created";
+    loginStatusByAgent.set(row.agent_id, { status, path: isOnline ? row.last_seen_path : null });
   }
+  const emptyLoginStatus = { status: "none" as LoginStatus, path: null };
 
   const leaderboard = [...byAgent.entries()]
-    .map(([agentId, v]) => ({ agentId, loginStatus: loginStatusByAgent.get(agentId) ?? "none", ...v }))
+    .map(([agentId, v]) => ({ agentId, loginStatus: loginStatusByAgent.get(agentId) ?? emptyLoginStatus, ...v }))
     .sort((a, b) => b.revenue - a.revenue);
 
   const teamRevenue = leaderboard.reduce((sum, a) => sum + a.revenue, 0);
@@ -299,20 +327,27 @@ export default async function DashboardPage() {
                       <span
                         className={cn(
                           "size-2 rounded-full",
-                          row.loginStatus === "active"
+                          row.loginStatus.status === "online"
                             ? "bg-success"
-                            : row.loginStatus === "created"
-                              ? "bg-warning"
-                              : "bg-muted-foreground/30",
+                            : row.loginStatus.status === "idle"
+                              ? "bg-primary/50"
+                              : row.loginStatus.status === "created"
+                                ? "bg-warning"
+                                : "bg-muted-foreground/30",
                         )}
                         title={
-                          row.loginStatus === "active"
-                            ? "Hat sich schon angemeldet"
-                            : row.loginStatus === "created"
-                              ? "Konto erstellt, noch nie angemeldet"
-                              : "Noch kein Konto"
+                          row.loginStatus.status === "online"
+                            ? `Online${row.loginStatus.path ? ` - ${pathLabel(row.loginStatus.path)}` : ""}`
+                            : row.loginStatus.status === "idle"
+                              ? "Angemeldet, gerade nicht aktiv"
+                              : row.loginStatus.status === "created"
+                                ? "Konto erstellt, noch nie angemeldet"
+                                : "Noch kein Konto"
                         }
                       />
+                    ) : null}
+                    {isAdmin && row.loginStatus.status === "online" && row.loginStatus.path ? (
+                      <span className="text-xs text-muted-foreground">{pathLabel(row.loginStatus.path)}</span>
                     ) : null}
                     {isAdmin ? (
                       <Link
