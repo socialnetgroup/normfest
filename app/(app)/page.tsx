@@ -323,32 +323,36 @@ export default async function DashboardPage() {
                     >
                       {i + 1}
                     </span>
-                    {isAdmin ? (
-                      <span
-                        className={cn(
-                          "size-2 rounded-full",
-                          row.loginStatus.status === "online"
-                            ? "bg-success"
-                            : row.loginStatus.status === "idle"
-                              ? "bg-primary/50"
-                              : row.loginStatus.status === "created"
-                                ? "bg-warning"
-                                : "bg-muted-foreground/30",
-                        )}
-                        title={
-                          row.loginStatus.status === "online"
-                            ? `Online${row.loginStatus.path ? ` - ${pathLabel(row.loginStatus.path)}` : ""}`
-                            : row.loginStatus.status === "idle"
-                              ? "Angemeldet, gerade nicht aktiv"
-                              : row.loginStatus.status === "created"
-                                ? "Konto erstellt, noch nie angemeldet"
-                                : "Noch kein Konto"
-                        }
-                      />
-                    ) : null}
-                    {isAdmin && row.loginStatus.status === "online" && row.loginStatus.path ? (
-                      <span className="text-xs text-muted-foreground">{pathLabel(row.loginStatus.path)}</span>
-                    ) : null}
+                    {isAdmin
+                      ? (() => {
+                          const statusLabel =
+                            row.loginStatus.status === "online"
+                              ? `Online${row.loginStatus.path ? ` - ${pathLabel(row.loginStatus.path)}` : ""}`
+                              : row.loginStatus.status === "idle"
+                                ? "Angemeldet, gerade nicht aktiv"
+                                : row.loginStatus.status === "created"
+                                  ? "Konto erstellt, noch nie angemeldet"
+                                  : "Noch kein Konto";
+                          return (
+                            <>
+                              <span
+                                className={cn(
+                                  "size-2 rounded-full",
+                                  row.loginStatus.status === "online"
+                                    ? "bg-success"
+                                    : row.loginStatus.status === "idle"
+                                      ? "bg-primary/50"
+                                      : row.loginStatus.status === "created"
+                                        ? "bg-warning"
+                                        : "bg-muted-foreground/30",
+                                )}
+                                title={statusLabel}
+                              />
+                              <span className="text-xs text-muted-foreground">{statusLabel}</span>
+                            </>
+                          );
+                        })()
+                      : null}
                     {isAdmin ? (
                       <Link
                         href={`/admin/team/${row.agentId}`}
