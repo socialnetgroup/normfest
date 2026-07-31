@@ -1595,6 +1595,32 @@ export type Database = {
           uncontacted_count: number
         }[]
       }
+      fn_dashboard_signals: {
+        Args: { p_limit?: number }
+        Returns: {
+          company_id: string
+          company_name: string
+          id: string
+          product_id: string
+          reason: string
+          score: number
+          total_count: number
+          type: string
+        }[]
+      }
+      fn_dashboard_signals_count: { Args: never; Returns: number }
+      fn_dashboard_top_signals: {
+        Args: { p_limit?: number }
+        Returns: {
+          company_id: string
+          company_name: string
+          id: string
+          product_id: string
+          reason: string
+          score: number
+          type: string
+        }[]
+      }
       fn_dismiss_signal: {
         Args: { p_company_id: string; p_product_id?: string; p_type: string }
         Returns: undefined

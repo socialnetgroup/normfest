@@ -28,14 +28,19 @@ export default async function FirmenPage({
   // rule but evaluates it once and expresses the per-row check as a plain
   // column comparison, so Postgres can use the indexes (measured ~30-250ms
   // end to end). See migration 20260731020000_fn_search_companies_perf.sql.
-  const results =
-    query.length >= 2
-      ? await supabase.rpc("fn_search_companies", {
-          p_query: query,
-          p_limit: PAGE_SIZE,
-          p_offset: from,
-        })
-      : null;
+  //
+  // An empty query lists every company visible to the caller (admin sees
+  // all, an agent sees only their own Gebiet once visibility_mode='gebiet')
+  // instead of showing nothing until a search is typed -- p_query='' skips
+  // the ilike filter entirely inside the RPC (see 20260731050000).
+  const showList = query.length === 0 || query.length >= 2;
+  const results = showList
+    ? await supabase.rpc("fn_search_companies", {
+        p_query: query,
+        p_limit: PAGE_SIZE,
+        p_offset: from,
+      })
+    : null;
 
   const total = results?.data?.[0]?.total_count ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -83,7 +88,7 @@ export default async function FirmenPage({
         results.data.length > 0 ? (
           <>
             <p className="text-sm text-muted-foreground">
-              {total} {total === 1 ? "Treffer" : "Treffer"} - Seite {page} von {totalPages}
+              {query ? `${total} Treffer` : `${total} Firmen verfügbar`} - Seite {page} von {totalPages}
             </p>
             <div className="overflow-hidden rounded-xl border">
               <ul className="divide-y">
@@ -140,7 +145,11 @@ export default async function FirmenPage({
           </>
         ) : (
           <p className="text-sm text-muted-foreground">
-            Keine Firmen gefunden für &ldquo;{query}&rdquo;.
+            {query ? (
+              <>Keine Firmen gefunden für &ldquo;{query}&rdquo;.</>
+            ) : (
+              "Keine Firmen für dich verfügbar."
+            )}
           </p>
         )
       ) : null}

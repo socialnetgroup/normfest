@@ -2002,6 +2002,70 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     the safety-critical part (nothing merges without a click) is intact, but means there's
     currently no audit trail of past merges beyond `products`' own history.
 
+16. **Gebiet-scoped visibility flipped on for Alan's pilot (2026-07-31).** Anis: "Napravi
+    također, kad se uđe u Firmen da odmah stoji spisak firmi dostupnih (admin sve, alan
+    samo alanove)" + "treba agent vidjeti samo signale za svoje firme, ne tudje" —
+    `settings.visibility_mode` flipped from 'shared' to 'gebiet' for the first time since
+    the very first migration (§3.2.1 always documented this as "a setting, not a
+    migration", deliberately deferred until now).
+
+    **Real, blocking bug found before the flip could work at all:** every function that
+    reads the caller's own Gebiet (`fn_company_visible`, and the new RPCs below) did
+    `select gebiet from profiles where id = auth.uid()` — but `profiles.gebiet` is **NULL
+    for every real agent account** (confirmed directly for Alan and Elida both). The real,
+    authoritative Gebiet has always lived on `agents.gebiet` (populated from the VIS
+    import, linked via `agents.profile_id`, §4.11) — `profiles.gebiet` is a column that
+    exists in the schema but was never actually populated. Never caught earlier because
+    `visibility_mode` had been 'shared' this entire build, so the gebiet-comparison branch
+    never actually ran for a real request. Flipping the setting without this fix
+    (migration `20260731050000_fix_gebiet_visibility_source.sql`) would have locked every
+    single agent out of every company.
+
+    **Real performance work required before the flip, matching the Firmen-search/Dashboard
+    fixes above:** `signals` grew to ~97k rows this session (cross_sell alone ~85.5k) and
+    its RLS policy (`signals_select_authenticated`, previously `using (true)` — deliberate,
+    "whole team sees recommendations") needed to become Gebiet-aware too. A correct but
+    naive policy update (join to `companies`, check gebiet per row) measured ~3.7s for a
+    single Dashboard query at this scale. Fixed via two new security-definer RPCs,
+    `fn_dashboard_top_signals()` and `fn_dashboard_signals_count()`, same
+    evaluate-visibility-once pattern as `fn_search_companies()`/
+    `fn_dashboard_company_counts()` (migration `20260731060000_signals_gebiet_visibility.sql`).
+    Split into two separate calls rather than one with `count(*) over()`, since that
+    window function forced materializing and sorting the *entire* gebiet-filtered result
+    set before the LIMIT could apply (measured ~2.15s combined vs ~6ms + ~580ms split —
+    the count query is the remaining cost, acceptable for a once-per-Dashboard-load read).
+
+    `/firmen` with no search query now lists every company visible to the caller (via
+    `fn_search_companies('', ...)`, which skips the ilike filter entirely rather than
+    matching `'%%'` against every row — the latter measured ~800ms for the default list,
+    the former ~106ms) instead of showing nothing until a search is typed.
+
+    Signal reasoning text was also removed from agent-facing views the same day (see
+    §12/§13 M8 entries above) — combined, agents now see only their own companies, only
+    the signals tied to those companies, and only the signal type + any concrete
+    opportunity, never the underlying company-visibility mechanics or the "why this
+    fired" explanation.
+
+    Verified live end-to-end, not just via `EXPLAIN ANALYZE`: logged in as Alan's real
+    account, confirmed `/firmen` with no query lists only his own Gebiet's companies (down
+    from all 14,347), confirmed Dashboard signals only show his companies' signals, and
+    confirmed logging in as an admin still shows everything unfiltered.
+
+    **Test-suite fallout, all found and fixed the same session:** the whole RLS test file
+    was written assuming a fixed `visibility_mode='shared'` (fixture companies picked
+    arbitrarily, test agents with no linked `agents`/Gebiet row) — flipping production for
+    real broke three things: `fn_company_visible`'s own "defaults to true" test, the
+    "any authenticated user can read signals" assertion, and (had it not been isolated)
+    the M7 chat-tool tests' arbitrary fixture company. Fixed by adding a suite-wide
+    `beforeAll`/`afterAll` that saves the real value, forces `'shared'` for the whole test
+    run, and restores the real value after — the two tests that specifically exercise
+    `'gebiet'` mode save/restore around themselves individually. **Real, narrow
+    consequence worth knowing:** any `pnpm test`/CI run now briefly forces production's
+    `visibility_mode` to `'shared'` for its duration (a few minutes) before restoring it —
+    consistent with how other tests already mutate real settings temporarily, but a real
+    agent using the app mid-test-run would briefly see the shared-mode company list. Low
+    risk (agents aren't expected to be testing during a CI run), not eliminated.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

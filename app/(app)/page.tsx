@@ -83,7 +83,7 @@ export default async function DashboardPage() {
     { data: monthRows },
     { count: feedbackCountThisWeek },
     { data: topSignals },
-    { count: signalsTotal },
+    { data: signalsTotal },
     { data: companyCountsRows },
     { data: myToday },
     { data: coverageAgents },
@@ -98,12 +98,18 @@ export default async function DashboardPage() {
       .from("sales_feedback")
       .select("id", { count: "exact", head: true })
       .gte("created_at", weekStart.toISOString()),
-    supabase
-      .from("signals")
-      .select("id, type, score, reason, company_id, product_id, companies(name)")
-      .order("score", { ascending: false })
-      .limit(8),
-    supabase.from("signals").select("id", { count: "exact", head: true }),
+    // RPC instead of two direct .from("signals") queries -- signals grew to
+    // ~97k rows this session and its RLS policy now also needs to check
+    // Gebiet visibility (Anis: agents should only see signals for their own
+    // companies), which the same opaque-per-row-check problem would make
+    // catastrophically slow at this scale. fn_dashboard_top_signals()/
+    // fn_dashboard_signals_count() evaluate the visibility check once; also
+    // split into two calls rather than one with `count(*) over()`, since
+    // that window function forced materializing/sorting the whole
+    // gebiet-filtered set before the LIMIT could apply (measured ~2.15s
+    // combined vs ~6ms + ~580ms split). See 20260731060000_signals_gebiet_visibility.sql.
+    supabase.rpc("fn_dashboard_top_signals", { p_limit: 8 }),
+    supabase.rpc("fn_dashboard_signals_count"),
     // RPC instead of two direct .from("companies") counts -- a direct count
     // goes through RLS's companies_select_visible policy, whose
     // fn_company_visible() predicate forces a per-row function call on a
@@ -396,9 +402,7 @@ export default async function DashboardPage() {
                     <div>
                       <div className="flex items-center gap-2">
                         <Badge variant={signalTypeVariant(s.type)}>{signalTypeLabel(s.type)}</Badge>
-                        <span className="font-medium">
-                          {(s.companies as { name: string } | null)?.name}
-                        </span>
+                        <span className="font-medium">{s.company_name}</span>
                       </div>
                       {isAdmin ? <p className="mt-1 text-muted-foreground">{s.reason}</p> : null}
                     </div>

@@ -24,8 +24,21 @@ const password = `test-password-${stamp}!`;
 
 let agentId = "";
 let adminId = "";
+let realVisibilityMode: string | null = null;
 
 beforeAll(async () => {
+  // The whole suite (fixture companies picked arbitrarily, test agents with
+  // no linked `agents`/Gebiet row) was written assuming visibility_mode=
+  // 'shared', which was the only value this ever had until Anis's real
+  // Gebiet pilot (2026-07-31, CLAUDE.md §14 item 10) flipped production to
+  // 'gebiet'. Force 'shared' for the duration of this run and restore
+  // whatever the real value was after -- tests shouldn't depend on, or
+  // permanently mutate, a real production setting. The two tests that
+  // specifically exercise 'gebiet' mode save/restore around themselves.
+  const { data: modeRow } = await admin.from("settings").select("value").eq("key", "visibility_mode").single();
+  realVisibilityMode = modeRow?.value as string | null;
+  await admin.from("settings").update({ value: "shared" }).eq("key", "visibility_mode");
+
   const { data: agentUser, error: agentErr } = await admin.auth.admin.createUser({
     email: agentEmail,
     password,
@@ -52,6 +65,9 @@ beforeAll(async () => {
 afterAll(async () => {
   if (agentId) await admin.auth.admin.deleteUser(agentId);
   if (adminId) await admin.auth.admin.deleteUser(adminId);
+  if (realVisibilityMode !== null) {
+    await admin.from("settings").update({ value: realVisibilityMode }).eq("key", "visibility_mode");
+  }
 });
 
 describe("profiles RLS (fn_is_admin, on_auth_user_created)", () => {
@@ -186,15 +202,45 @@ describe("fn_is_admin / fn_company_visible RPCs", () => {
     expect(adminIsAdmin).toBe(true);
   });
 
-  it("fn_company_visible defaults to true in 'shared' mode regardless of gebiet", async () => {
+  // Bumped 2026-07-31: `visibility_mode` is now really 'gebiet' in production
+  // (Anis's Alan pilot -- CLAUDE.md §14 item 10 / the 2026-07-31 CLAUDE.md
+  // entries), so these tests can no longer assume a fixed setting. Both
+  // save and restore the real value around themselves.
+  it("fn_company_visible returns true regardless of gebiet when visibility_mode='shared'", async () => {
+    const { data: before } = await admin.from("settings").select("value").eq("key", "visibility_mode").single();
+    await admin.from("settings").update({ value: "shared" }).eq("key", "visibility_mode");
+
     const client = anonClient();
     await client.auth.signInWithPassword({ email: agentEmail, password });
 
     const { data, error } = await client.rpc("fn_company_visible", {
       p_gebiet: "some-other-gebiet",
     });
+
+    await admin.from("settings").update({ value: before!.value }).eq("key", "visibility_mode");
+
     expect(error).toBeNull();
     expect(data).toBe(true);
+  });
+
+  it("fn_company_visible rejects a mismatched gebiet when visibility_mode='gebiet'", async () => {
+    const { data: before } = await admin.from("settings").select("value").eq("key", "visibility_mode").single();
+    await admin.from("settings").update({ value: "gebiet" }).eq("key", "visibility_mode");
+
+    // The test agent has no linked `agents` row, so its own gebiet resolves
+    // to NULL -- any non-null p_gebiet must be rejected (`is not distinct
+    // from` treats NULL = NULL as a match, so this is the real negative case).
+    const client = anonClient();
+    await client.auth.signInWithPassword({ email: agentEmail, password });
+
+    const { data, error } = await client.rpc("fn_company_visible", {
+      p_gebiet: "some-other-gebiet",
+    });
+
+    await admin.from("settings").update({ value: before!.value }).eq("key", "visibility_mode");
+
+    expect(error).toBeNull();
+    expect(data).toBe(false);
   });
 });
 
@@ -500,9 +546,20 @@ describe("signals RLS + fn_refresh_signals", () => {
       const { error: rpcErr } = await adminClient.rpc("fn_refresh_signals");
       expect(rpcErr).toBeNull();
 
+      // Force 'shared' for this read: the test agent has no linked `agents`
+      // row (no Gebiet), so under production's real 'gebiet' mode (Anis's
+      // Alan pilot, 2026-07-31) it would legitimately see zero signals --
+      // this test's actual point ("any authenticated user can read
+      // signals") is about the base RLS grant, not Gebiet scoping.
+      const { data: modeBefore } = await admin.from("settings").select("value").eq("key", "visibility_mode").single();
+      await admin.from("settings").update({ value: "shared" }).eq("key", "visibility_mode");
+
       const agentClient = anonClient();
       await agentClient.auth.signInWithPassword({ email: agentEmail, password });
       const { data, error } = await agentClient.from("signals").select("id").limit(1);
+
+      await admin.from("settings").update({ value: modeBefore!.value }).eq("key", "visibility_mode");
+
       expect(error).toBeNull();
       expect(data!.length).toBeGreaterThan(0);
     },
