@@ -4,39 +4,258 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
 
-const LEAD_IN = /^([A-ZÄÖÜ][A-ZÄÖÜ\s]{2,20}):\s*(.+)/;
+const SUB_HEADING_STRUKTURA = /^Struktura\s+\d+:/i;
+const SUB_HEADING_ALLCAPS = /^[A-ZÄÖÜČĆĐŠŽ][A-ZÄÖÜČĆĐŠŽ0-9\s-]{3,44}!?$/;
+const SUB_HEADING_EXPLICIT = new Set(["Zlatno pravilo rasporeda", "Pravilo za cold call"]);
+const LANG_PREFIX = /^(DE|BS)\b\s*(.*)$/;
+const QUOTE_LINE = /^"(.+)"$/;
 const LIST_ITEM = /^[-•]\s+|^\d+[.)]\s+/;
+const LABEL_ONLY = /^([A-ZÄÖÜČĆĐŠŽ][^\n:]{1,40}):$/;
+const LEAD_IN = /^([A-ZÄÖÜČĆĐŠŽ][^\n:]{0,40}):\s*(.+)/;
 
-/** Renders a chunk's plain-text content with real paragraph spacing instead of
- * one dense whitespace-pre-line blob, plus light structure detection: list-like
- * lines get a bullet, "WORD: rest" lead-ins get the lead-in bolded. */
-function ChunkContent({ content }: { content: string }) {
-  const lines = content.split("\n").map((l) => l.trim()).filter(Boolean);
+/** Header-row -> repeating-row tables that were flattened to plain text during
+ * KB extraction. Matched by exact heading; header line sequence is searched
+ * for anywhere in the chunk (there's usually an intro sentence before it). */
+const TABLE_SPECS: Record<
+  string,
+  { headers: string[]; rowCount?: number; rowValidator?: (row: string[]) => boolean }
+> = {
+  "1. Tvoj radni dan - raspored": {
+    headers: ["Vrijeme", "Aktivnost"],
+    rowValidator: (row) => /^\d{2}:\d{2}/.test(row[0]),
+  },
+  "4. Prigovori kupaca i kako odgovoriti": {
+    headers: ["Prigovor (DE / BS)", "Tvoj odgovor - bosanski", "Tvoj odgovor - njemački"],
+  },
+  "5. Tehnike zaključivanja prodaje": {
+    headers: ["Tehnika", "Bosanski", "Njemacki"],
+    rowCount: 5,
+  },
+  "6. Prodajni vokabular - zamjena rijeci": {
+    headers: ["NE koristi", "KORISTI", "Primjer"],
+    rowCount: 17,
+  },
+  "7. Kodiranje poziva - obavezno nakon SVAKOG poziva": {
+    headers: ["Kod", "Znacenje", "Sta radis?"],
+  },
+};
+
+function findSequence(lines: string[], seq: string[]): number {
+  for (let i = 0; i <= lines.length - seq.length; i++) {
+    if (seq.every((s, j) => lines[i + j] === s)) return i;
+  }
+  return -1;
+}
+
+function extractTableRows(
+  body: string[],
+  colCount: number,
+  opts: { rowCount?: number; rowValidator?: (row: string[]) => boolean },
+): { rows: string[][]; rest: string[] } {
+  const rows: string[][] = [];
+  let idx = 0;
+  while (idx + colCount <= body.length) {
+    if (opts.rowCount !== undefined && rows.length >= opts.rowCount) break;
+    const group = body.slice(idx, idx + colCount);
+    if (opts.rowValidator && !opts.rowValidator(group)) break;
+    rows.push(group);
+    idx += colCount;
+  }
+  return { rows, rest: body.slice(idx) };
+}
+
+function TableBlock({ headers, rows }: { headers: string[]; rows: string[][] }) {
   return (
-    <div className="flex flex-col gap-2">
-      {lines.map((line, i) => {
-        const leadIn = line.match(LEAD_IN);
-        const isListItem = LIST_ITEM.test(line);
-        if (isListItem) {
-          return (
-            <p key={i} className="pl-4 text-sm leading-relaxed text-muted-foreground before:mr-2 before:-ml-4 before:text-primary before:content-['•']">
-              {line.replace(LIST_ITEM, "")}
-            </p>
-          );
-        }
-        if (leadIn) {
-          return (
-            <p key={i} className="text-sm leading-relaxed text-muted-foreground">
-              <span className="font-semibold text-foreground">{leadIn[1]}:</span> {leadIn[2]}
-            </p>
-          );
-        }
+    <div className="overflow-x-auto rounded-lg ring-1 ring-foreground/10">
+      <table className="w-full border-collapse text-sm">
+        <thead>
+          <tr className="bg-muted/60">
+            {headers.map((h, i) => (
+              <th
+                key={i}
+                className="border-b border-foreground/10 px-3 py-2 text-left text-xs font-bold tracking-wide text-muted-foreground uppercase"
+              >
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, ri) => (
+            <tr key={ri} className={ri % 2 === 1 ? "bg-muted/20" : undefined}>
+              {row.map((cell, ci) => (
+                <td key={ci} className="border-b border-foreground/5 px-3 py-2 align-top leading-relaxed">
+                  {cell.replace(QUOTE_LINE, "$1")}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** Renders a flat list of lines with structure detection: sub-heading
+ * dividers, DE/BS example-script labels, quoted script lines as blockquotes,
+ * bullet lists, and "Label: rest" lead-ins get the label bolded. */
+function renderLines(lines: string[], keyPrefix: string) {
+  return lines.map((line, i) => {
+    const key = `${keyPrefix}-${i}`;
+    const isSubHeading =
+      SUB_HEADING_STRUKTURA.test(line) || SUB_HEADING_ALLCAPS.test(line) || SUB_HEADING_EXPLICIT.has(line);
+    if (isSubHeading) {
+      return (
+        <p
+          key={key}
+          className="mt-2.5 border-t border-border pt-2.5 text-sm font-bold text-foreground first:mt-0 first:border-t-0 first:pt-0"
+        >
+          {line}
+        </p>
+      );
+    }
+    const langMatch = line.match(LANG_PREFIX);
+    if (langMatch) {
+      const [, lang, rest] = langMatch;
+      return (
+        <div key={key} className="flex items-center gap-2">
+          <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-primary uppercase">
+            {lang}
+          </span>
+          {rest ? <span className="text-xs font-semibold text-muted-foreground">{rest}</span> : null}
+        </div>
+      );
+    }
+    if (QUOTE_LINE.test(line)) {
+      return (
+        <blockquote
+          key={key}
+          className="rounded-md border-l-2 border-l-primary bg-muted/40 px-3 py-2 text-sm italic text-foreground"
+        >
+          {line.replace(QUOTE_LINE, "$1")}
+        </blockquote>
+      );
+    }
+    if (LIST_ITEM.test(line)) {
+      return (
+        <p
+          key={key}
+          className="pl-4 text-sm leading-relaxed text-muted-foreground before:mr-2 before:-ml-4 before:text-primary before:content-['•']"
+        >
+          {line.replace(LIST_ITEM, "")}
+        </p>
+      );
+    }
+    if (LABEL_ONLY.test(line)) {
+      return (
+        <p key={key} className="mt-1 text-sm font-semibold text-foreground">
+          {line}
+        </p>
+      );
+    }
+    const leadIn = line.match(LEAD_IN);
+    if (leadIn) {
+      return (
+        <p key={key} className="text-sm leading-relaxed text-muted-foreground">
+          <span className="font-semibold text-foreground">{leadIn[1]}:</span> {leadIn[2]}
+        </p>
+      );
+    }
+    return (
+      <p key={key} className="text-sm leading-relaxed text-muted-foreground">
+        {line}
+      </p>
+    );
+  });
+}
+
+function ChunkContent({ heading, content }: { heading: string; content: string }) {
+  const lines = content
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const spec = TABLE_SPECS[heading];
+  if (spec) {
+    const start = findSequence(lines, spec.headers);
+    if (start !== -1) {
+      const intro = lines.slice(0, start);
+      const body = lines.slice(start + spec.headers.length);
+      const { rows, rest } = extractTableRows(body, spec.headers.length, spec);
+      if (rows.length > 0) {
         return (
-          <p key={i} className="text-sm leading-relaxed text-muted-foreground">
-            {line}
-          </p>
+          <div className="flex flex-col gap-3">
+            {renderLines(intro, "intro")}
+            <TableBlock headers={spec.headers} rows={rows} />
+            {renderLines(rest, "rest")}
+          </div>
         );
-      })}
+      }
+    }
+  }
+
+  return <div className="flex flex-col gap-2">{renderLines(lines, "l")}</div>;
+}
+
+/** "9. Quick Reference" is a paired title/content cheat-sheet layout, not a
+ * table or flowing text - rendered as its own dedicated block. */
+function QuickReferenceContent({ content }: { content: string }) {
+  const lines = content
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const [intro, title1, title2, content1, content2, title3, title4, content3, content4, zapamtiTitle, ...zapamtiRest] =
+    lines;
+
+  const splitNumbered = (s: string) =>
+    s
+      .split(/\s*(?=\d+\.\s)/)
+      .map((s2) => s2.trim())
+      .filter(Boolean);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-sm leading-relaxed text-muted-foreground">{intro}</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-lg bg-success/10 p-3 ring-1 ring-success/20">
+          <p className="mb-1.5 text-xs font-bold tracking-wide text-success uppercase">{title1}</p>
+          <ul className="flex flex-col gap-1">
+            {splitNumbered(content1).map((item, i) => (
+              <li key={i} className="text-sm text-foreground">
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="rounded-lg bg-destructive/10 p-3 ring-1 ring-destructive/20">
+          <p className="mb-1.5 text-xs font-bold tracking-wide text-destructive uppercase">{title2}</p>
+          <ul className="flex flex-col gap-1">
+            {splitNumbered(content2).map((item, i) => (
+              <li key={i} className="text-sm text-foreground">
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="rounded-lg bg-muted/50 p-3 ring-1 ring-foreground/10">
+          <p className="mb-1.5 text-xs font-bold tracking-wide text-muted-foreground uppercase">{title3}</p>
+          <p className="text-sm leading-relaxed text-foreground">{content3}</p>
+        </div>
+        <div className="rounded-lg bg-muted/50 p-3 ring-1 ring-foreground/10">
+          <p className="mb-1.5 text-xs font-bold tracking-wide text-muted-foreground uppercase">{title4}</p>
+          <p className="text-sm leading-relaxed text-foreground">{content4}</p>
+        </div>
+      </div>
+      <div className="rounded-lg border-l-4 border-l-primary bg-primary/5 p-3">
+        <p className="mb-1.5 text-xs font-bold tracking-wide text-primary uppercase">{zapamtiTitle}</p>
+        <ul className="flex flex-col gap-1">
+          {zapamtiRest.map((line, i) => (
+            <li key={i} className="text-sm font-medium text-foreground">
+              {line}
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }
@@ -76,7 +295,7 @@ export default async function SkriptPage() {
               Einwandbehandlung
             </CardTitle>
             <p className="text-sm text-muted-foreground">
-              Häufige Einwände mit sofort einsetzbaren Antworten (BS + DE).
+              Häufige Einwände mit sofort einsetzbaren Antworten (DE + BS).
             </p>
           </CardHeader>
           <CardContent>
@@ -88,12 +307,12 @@ export default async function SkriptPage() {
                   </div>
                   <div className="mt-2.5 grid gap-3 sm:grid-cols-2">
                     <div className="rounded-md bg-card p-2.5 ring-1 ring-foreground/10">
-                      <p className="mb-1 text-xs font-bold tracking-wide text-primary uppercase">BS</p>
-                      <p className="text-sm">{o.response_bs}</p>
+                      <p className="mb-1 text-xs font-bold tracking-wide text-primary uppercase">DE</p>
+                      <p className="text-sm">{o.response_de}</p>
                     </div>
                     <div className="rounded-md bg-card p-2.5 ring-1 ring-foreground/10">
-                      <p className="mb-1 text-xs font-bold tracking-wide text-muted-foreground uppercase">DE</p>
-                      <p className="text-sm">{o.response_de}</p>
+                      <p className="mb-1 text-xs font-bold tracking-wide text-muted-foreground uppercase">BS</p>
+                      <p className="text-sm">{o.response_bs}</p>
                     </div>
                   </div>
                 </li>
@@ -123,7 +342,11 @@ export default async function SkriptPage() {
               {chunks.map((c) => (
                 <section key={c.id} id={c.id} className="scroll-mt-20 border-l-4 border-l-primary/30 pl-4">
                   <h3 className="mb-3 font-heading text-lg font-bold tracking-tight">{c.heading}</h3>
-                  <ChunkContent content={c.content} />
+                  {c.heading === "9. Quick Reference" ? (
+                    <QuickReferenceContent content={c.content} />
+                  ) : (
+                    <ChunkContent heading={c.heading ?? ""} content={c.content} />
+                  )}
                 </section>
               ))}
             </div>
