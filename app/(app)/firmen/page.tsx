@@ -17,23 +17,27 @@ export default async function FirmenPage({
   const query = q?.trim() ?? "";
   const page = Math.max(1, Number(pageParam) || 1);
   const from = (page - 1) * PAGE_SIZE;
-  const to = from + PAGE_SIZE - 1;
 
   const supabase = await createClient();
 
+  // RPC instead of a direct .from("companies") query -- a direct query goes
+  // through RLS's companies_select_visible policy, whose fn_company_visible()
+  // predicate defeats the trigram-index plan entirely (opaque per-row
+  // function call under RLS's security barrier forces a near-full scan --
+  // measured ~3-9s). fn_search_companies() replicates the same visibility
+  // rule but evaluates it once and expresses the per-row check as a plain
+  // column comparison, so Postgres can use the indexes (measured ~30-250ms
+  // end to end). See migration 20260731020000_fn_search_companies_perf.sql.
   const results =
     query.length >= 2
-      ? await supabase
-          .from("companies")
-          .select("id, kundennummer, name, ort, plz, gebiet, do_not_contact, call_priority", { count: "exact" })
-          .or(
-            `name.ilike.%${query}%,kundennummer.ilike.%${query}%,ort.ilike.%${query}%,plz.ilike.%${query}%,gebiet.ilike.%${query}%`,
-          )
-          .order("name")
-          .range(from, to)
+      ? await supabase.rpc("fn_search_companies", {
+          p_query: query,
+          p_limit: PAGE_SIZE,
+          p_offset: from,
+        })
       : null;
 
-  const total = results?.count ?? 0;
+  const total = results?.data?.[0]?.total_count ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const pageHref = (p: number) => `/firmen?q=${encodeURIComponent(query)}&page=${p}`;
 

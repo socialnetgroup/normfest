@@ -776,28 +776,38 @@ describe("chat_log RLS + chat tool RPCs (M7)", () => {
     await admin.from("sales_feedback").delete().eq("id", newId as string);
   });
 
-  it("fn_chat_search_companies and fn_chat_get_company_brief return real data under RLS", async () => {
-    const client = anonClient();
-    await client.auth.signInWithPassword({ email: agentEmail, password });
+  it(
+    "fn_chat_search_companies and fn_chat_get_company_brief return real data under RLS",
+    async () => {
+      const client = anonClient();
+      await client.auth.signInWithPassword({ email: agentEmail, password });
 
-    const { data: company } = await admin.from("companies").select("kundennummer").eq("id", companyId).single();
+      const { data: company } = await admin.from("companies").select("kundennummer").eq("id", companyId).single();
 
-    // Search by kundennummer (unique), not a name prefix: fn_chat_search_companies
-    // caps results at 10 ordered by name, so a name-prefix search can miss the
-    // target company whenever >10 real companies share that prefix — not
-    // reproducible with a fixed test fixture since `companyId` is picked
-    // arbitrarily (any company in the real, 13k+-row dataset) rather than a
-    // company created by this test.
-    const { data: searchResults, error: searchErr } = await client.rpc("fn_chat_search_companies", {
-      p_query: company!.kundennummer,
-    });
-    expect(searchErr).toBeNull();
-    expect(searchResults!.some((r) => r.id === companyId)).toBe(true);
+      // Search by kundennummer (unique), not a name prefix: fn_chat_search_companies
+      // caps results at 10 ordered by name, so a name-prefix search can miss the
+      // target company whenever >10 real companies share that prefix — not
+      // reproducible with a fixed test fixture since `companyId` is picked
+      // arbitrarily (any company in the real, 13k+-row dataset) rather than a
+      // company created by this test.
+      const { data: searchResults, error: searchErr } = await client.rpc("fn_chat_search_companies", {
+        p_query: company!.kundennummer,
+      });
+      expect(searchErr).toBeNull();
+      expect(searchResults!.some((r) => r.id === companyId)).toBe(true);
 
-    const { data: brief, error: briefErr } = await client.rpc("fn_chat_get_company_brief", {
-      p_company_id: companyId,
-    });
-    expect(briefErr).toBeNull();
-    expect((brief as { company: { id: string } }).company.id).toBe(companyId);
-  });
+      const { data: brief, error: briefErr } = await client.rpc("fn_chat_get_company_brief", {
+        p_company_id: companyId,
+      });
+      expect(briefErr).toBeNull();
+      expect((brief as { company: { id: string } }).company.id).toBe(companyId);
+    },
+    // Bumped 2026-07-31: this describe block has a documented (CLAUDE.md §12),
+    // not-yet-root-caused intermittent auth.uid()-timing quirk right after a
+    // fresh signInWithPassword -- this exact test has been observed timing
+    // out at just over the 5000ms default (5004ms in one real CI run) purely
+    // from that variance, not from doing expensive work. Giving it real
+    // headroom instead of letting it flake CI red on unrelated pushes.
+    15000,
+  );
 });

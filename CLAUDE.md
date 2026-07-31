@@ -1014,6 +1014,37 @@ background):** every item checked against the real codebase/project, not assumed
      ~4ms) instead of a sequential scan; common terms still correctly use whichever
      plan Postgres finds cheapest — confirmed this is healthy query planning, not a
      sign the fix didn't work.
+     **Real regression on top of this, found 2026-07-31 (Anis: "taj search request
+     traje malo više"):** the trigram indexes above were real and correct, but
+     `/firmen` search was still measured at ~3-9s end to end, both in production and
+     locally — confirmed via direct `EXPLAIN ANALYZE` this was NOT the indexes
+     (33ms without RLS on the identical query) but RLS itself: once
+     `companies_select_visible`'s `fn_company_visible(gebiet)` predicate is ANDed in
+     (as it always is for a direct client query against `companies` as
+     `authenticated`), Postgres abandons the `BitmapOr`-across-trigram-indexes plan
+     entirely and falls back to a near-full scan evaluating the opaque per-row
+     function on nearly every one of the 14k+ rows — reproduced with `set local role
+     authenticated` + a real `request.jwt.claims`, confirmed independent of
+     `ORDER BY`/`LIMIT` shape. Fixed via a new `security definer` RPC,
+     `fn_search_companies()` (migration `20260731020000_fn_search_companies_perf.sql`),
+     that replicates the exact same visibility rule (`soft_deleted_at is null` +
+     the same shared/gebiet/admin logic as `fn_company_visible`) but evaluates the
+     admin-check/visibility-mode/caller's-own-gebiet once into plain variables
+     instead of an opaque per-row function call — since there's no RLS security
+     barrier and no per-row function opacity, the planner uses the trigram indexes
+     normally again. Measured with the same harness: 8.5ms (vs ~2.9s) at the SQL
+     level; ~170-250ms end to end via a real RPC call (network + auth included);
+     ~500-800ms full page load in the actual browser (vs ~8-9s before). `/firmen`
+     now calls this RPC instead of `.from("companies").select()...or()`. Re-verified
+     live: search results, total count, and pagination (25/page) all still correct,
+     including the Gebiet-code search path from the July 24 fix above (1,307 hits
+     for a real Gebiet code, unchanged). This RPC also happens to be the right
+     foundation for the Gebiet-scoped visibility Anis is planning to pilot with one
+     agent (§14 item 10 context) — the per-row check is a plain column comparison,
+     not an opaque function call, so flipping `settings.visibility_mode` to 'gebiet'
+     later will stay fast, unlike the RLS-policy path which would hit this exact
+     regression again for gebiet-scoped agents. Not flipped yet — still 'shared' for
+     everyone, per Anis's explicit "not ready yet" on the Alan pilot.
 
   **Code quality:**
   7. Replaced `select("*")` with explicit columns in 4 single-row detail pages

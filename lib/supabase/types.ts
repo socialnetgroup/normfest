@@ -1656,6 +1656,20 @@ export type Database = {
         Returns: undefined
       }
       fn_refresh_signals: { Args: never; Returns: undefined }
+      fn_search_companies: {
+        Args: { p_limit?: number; p_offset?: number; p_query: string }
+        Returns: {
+          call_priority: boolean
+          do_not_contact: boolean
+          gebiet: string
+          id: string
+          kundennummer: string
+          name: string
+          ort: string
+          plz: string
+          total_count: number
+        }[]
+      }
       fn_set_day_off: {
         Args: { p_agent_id: string; p_date: string; p_off: boolean }
         Returns: {
