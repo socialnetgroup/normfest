@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
   Building2,
@@ -24,6 +24,8 @@ import {
   Copy,
   ListChecks,
   BarChart3,
+  Menu,
+  X,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -60,16 +62,19 @@ function NavItem({
   icon: Icon,
   active,
   badge,
+  onNavigate,
 }: {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   active: boolean;
   badge?: string;
+  onNavigate?: () => void;
 }) {
   return (
     <Link
       href={href}
+      onClick={onNavigate}
       className={cn(
         "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
         active
@@ -100,79 +105,144 @@ export function AppSidebar({
   const pathname = usePathname();
   const settingsActive = SETTINGS_ITEMS.some((i) => isActive(pathname, i.href));
   const [settingsOpen, setSettingsOpen] = useState(settingsActive);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
+  const closeMobile = () => setMobileOpen(false);
 
   return (
-    <aside className="flex h-screen w-60 shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground">
-      <Link href="/" className="flex items-center gap-2.5 px-5 py-5">
-        <Image src="/logo.png" alt="Social Net" width={28} height={28} priority />
-        <span className="font-heading text-[15px] font-semibold tracking-tight">Normfest</span>
-      </Link>
-
-      <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3">
-        {NAV_ITEMS.map((item) => (
-          <NavItem key={item.href} {...item} active={isActive(pathname, item.href)} />
-        ))}
-
-        {isAdmin ? (
-          <>
-            <div className="mt-4 mb-1 px-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-              Admin
-            </div>
-            <NavItem
-              href="/admin/reviews"
-              label="Offene Reviews"
-              icon={ListChecks}
-              active={isActive(pathname, "/admin/reviews")}
-            />
-            <NavItem href="/admin/team" label="Team" icon={Users} active={isActive(pathname, "/admin/team")} />
-            <NavItem
-              href="/admin/qa-bewertungen"
-              label="QA-Bewertungen"
-              icon={ClipboardCheck}
-              active={isActive(pathname, "/admin/qa-bewertungen")}
-            />
-            <NavItem
-              href="/admin/qa-anrufe"
-              label="QA-Anrufe"
-              icon={Headphones}
-              active={isActive(pathname, "/admin/qa-anrufe")}
-              badge="Bald"
-            />
-            <button
-              type="button"
-              onClick={() => setSettingsOpen((v) => !v)}
-              className={cn(
-                "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                settingsActive
-                  ? "text-primary"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
-              )}
-            >
-              <Settings className="size-4 shrink-0" />
-              Settings
-              <ChevronDown
-                className={cn("ml-auto size-3.5 shrink-0 transition-transform", settingsOpen && "rotate-180")}
-              />
-            </button>
-            {settingsOpen ? (
-              <div className="ml-4 flex flex-col gap-0.5 border-l pl-3">
-                {SETTINGS_ITEMS.map((item) => (
-                  <NavItem key={item.href} {...item} active={isActive(pathname, item.href)} />
-                ))}
-              </div>
-            ) : null}
-          </>
-        ) : null}
-      </nav>
-
-      <div className="flex flex-col gap-2 border-t px-4 py-4">
-        <span className="truncate text-xs text-muted-foreground">{userLabel}</span>
-        <form action={logoutAction}>
-          <Button type="submit" variant="outline" size="sm" className="w-full">
-            Abmelden
-          </Button>
-        </form>
+    <>
+      <div className="flex shrink-0 items-center justify-between border-b bg-sidebar px-4 py-3 text-sidebar-foreground md:hidden">
+        <Link href="/" className="flex items-center gap-2.5" onClick={closeMobile}>
+          <Image src="/logo.png" alt="Social Net" width={24} height={24} priority />
+          <span className="font-heading text-sm font-semibold tracking-tight">Normfest</span>
+        </Link>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label="Menü öffnen"
+          onClick={() => setMobileOpen(true)}
+        >
+          <Menu className="size-5" />
+        </Button>
       </div>
-    </aside>
+
+      {mobileOpen ? (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 md:hidden"
+          onClick={closeMobile}
+          aria-hidden="true"
+        />
+      ) : null}
+
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 flex h-screen w-72 max-w-[85vw] flex-col border-r bg-sidebar text-sidebar-foreground transition-transform duration-200 ease-in-out",
+          "md:static md:z-auto md:w-60 md:max-w-none md:!translate-x-0",
+          mobileOpen ? "translate-x-0" : "-translate-x-full",
+        )}
+      >
+        <div className="flex items-center justify-between px-5 py-5">
+          <Link href="/" className="flex items-center gap-2.5" onClick={closeMobile}>
+            <Image src="/logo.png" alt="Social Net" width={28} height={28} priority />
+            <span className="font-heading text-[15px] font-semibold tracking-tight">Normfest</span>
+          </Link>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="Menü schließen"
+            className="md:hidden"
+            onClick={closeMobile}
+          >
+            <X className="size-5" />
+          </Button>
+        </div>
+
+        <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3">
+          {NAV_ITEMS.map((item) => (
+            <NavItem key={item.href} {...item} active={isActive(pathname, item.href)} onNavigate={closeMobile} />
+          ))}
+
+          {isAdmin ? (
+            <>
+              <div className="mt-4 mb-1 px-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                Admin
+              </div>
+              <NavItem
+                href="/admin/reviews"
+                label="Offene Reviews"
+                icon={ListChecks}
+                active={isActive(pathname, "/admin/reviews")}
+                onNavigate={closeMobile}
+              />
+              <NavItem
+                href="/admin/team"
+                label="Team"
+                icon={Users}
+                active={isActive(pathname, "/admin/team")}
+                onNavigate={closeMobile}
+              />
+              <NavItem
+                href="/admin/qa-bewertungen"
+                label="QA-Bewertungen"
+                icon={ClipboardCheck}
+                active={isActive(pathname, "/admin/qa-bewertungen")}
+                onNavigate={closeMobile}
+              />
+              <NavItem
+                href="/admin/qa-anrufe"
+                label="QA-Anrufe"
+                icon={Headphones}
+                active={isActive(pathname, "/admin/qa-anrufe")}
+                badge="Bald"
+                onNavigate={closeMobile}
+              />
+              <button
+                type="button"
+                onClick={() => setSettingsOpen((v) => !v)}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                  settingsActive
+                    ? "text-primary"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+              >
+                <Settings className="size-4 shrink-0" />
+                Settings
+                <ChevronDown
+                  className={cn("ml-auto size-3.5 shrink-0 transition-transform", settingsOpen && "rotate-180")}
+                />
+              </button>
+              {settingsOpen ? (
+                <div className="ml-4 flex flex-col gap-0.5 border-l pl-3">
+                  {SETTINGS_ITEMS.map((item) => (
+                    <NavItem
+                      key={item.href}
+                      {...item}
+                      active={isActive(pathname, item.href)}
+                      onNavigate={closeMobile}
+                    />
+                  ))}
+                </div>
+              ) : null}
+            </>
+          ) : null}
+        </nav>
+
+        <div className="flex flex-col gap-2 border-t px-4 py-4">
+          <span className="truncate text-xs text-muted-foreground">{userLabel}</span>
+          <form action={logoutAction}>
+            <Button type="submit" variant="outline" size="sm" className="w-full">
+              Abmelden
+            </Button>
+          </form>
+        </div>
+      </aside>
+    </>
   );
 }
