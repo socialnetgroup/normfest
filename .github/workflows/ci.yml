@@ -5,6 +5,20 @@ on:
     branches: [main]
   pull_request:
 
+# Serialize runs on the same ref instead of letting them overlap (2026-07-31
+# real incident: the RLS test suite temporarily forces settings.visibility_mode
+# to 'shared' for its duration and restores the real value in afterAll — two
+# overlapping runs (a local test run racing a CI run triggered moments apart)
+# each captured "the current value" as their own restore target, and the
+# later-finishing run restored the wrong (already-forced) value, leaving
+# production stuck on 'shared' after both runs completed successfully).
+# Deliberately NOT cancel-in-progress: cancelling a running job kills it
+# before its afterAll cleanup can run, which would leave the same stuck
+# 'shared' value -- queuing (the default when cancel-in-progress is omitted)
+# ensures every run's afterAll actually completes before the next one starts.
+concurrency:
+  group: ci-${{ github.ref }}
+
 jobs:
   ci:
     runs-on: ubuntu-latest

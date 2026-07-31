@@ -1,11 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MonthCalendar, type DayEntry } from "@/components/team/month-calendar";
-import { computeBonusByDate, type BonusThreshold } from "@/lib/team/bonus";
 import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
 const eur = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
-const eurCents = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", minimumFractionDigits: 2 });
 const pct = new Intl.NumberFormat("de-DE", { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 function monthLabel(month: string) {
@@ -15,10 +13,13 @@ function monthLabel(month: string) {
   );
 }
 
-// Same structure as /admin/team/[agentId] (month cards + calendar drill-in,
-// real per-day bonus), just scoped to the logged-in agent's own data instead
-// of admin-only access to any agent — Anis, 2026-07-31: agents should see
-// their own historical results the same way admin sees the team's.
+// Same structure as /admin/team/[agentId] (month cards + calendar drill-in),
+// just scoped to the logged-in agent's own data instead of admin-only access
+// to any agent — Anis, 2026-07-31: agents should see their own historical
+// results the same way admin sees the team's. Bonus is deliberately not
+// shown here (Anis, 2026-07-31: "Bonus regelung bei agenten momentan
+// abschalten") -- no bonus computation is done on this page at all, so
+// there's nothing left over to accidentally leak.
 export default async function MeineErgebnissePage() {
   const { user, profile } = await getCurrentUser();
   const supabase = await createClient();
@@ -40,18 +41,11 @@ export default async function MeineErgebnissePage() {
     );
   }
 
-  const [{ data: rows, error }, { data: allRows }, { data: bonusSettings }] = await Promise.all([
-    supabase
-      .from("agent_daily_performance")
-      .select("date, revenue, sales_count, calls_count, day_off")
-      .eq("agent_id", myAgent.id)
-      .order("date"),
-    supabase.from("agent_daily_performance").select("agent_id, date, revenue, day_off"),
-    supabase
-      .from("settings")
-      .select("key, value")
-      .in("key", ["bonus_thresholds", "bonus_min_contribution_pct", "bonus_min_qualifying_agents"]),
-  ]);
+  const { data: rows, error } = await supabase
+    .from("agent_daily_performance")
+    .select("date, revenue, sales_count, calls_count, day_off")
+    .eq("agent_id", myAgent.id)
+    .order("date");
 
   if (error) {
     return (
@@ -60,19 +54,6 @@ export default async function MeineErgebnissePage() {
       </p>
     );
   }
-
-  const bonusSettingsMap: Record<string, unknown> = {};
-  for (const row of bonusSettings ?? []) bonusSettingsMap[row.key] = row.value;
-  const thresholds = (bonusSettingsMap.bonus_thresholds as BonusThreshold[] | undefined) ?? [];
-  const minContributionPct = Number(bonusSettingsMap.bonus_min_contribution_pct ?? 5);
-  const minQualifyingAgents = Number(bonusSettingsMap.bonus_min_qualifying_agents ?? 7);
-
-  const bonusByDate = computeBonusByDate(
-    (allRows ?? []).map((r) => ({ agentId: r.agent_id, date: r.date, revenue: r.revenue, dayOff: r.day_off })),
-    thresholds,
-    minContributionPct,
-    minQualifyingAgents,
-  );
 
   const byMonth = new Map<string, DayEntry[]>();
   for (const r of rows ?? []) {
@@ -84,7 +65,7 @@ export default async function MeineErgebnissePage() {
       salesCount: r.sales_count,
       callsCount: r.calls_count,
       dayOff: r.day_off,
-      bonusKm: bonusByDate.get(r.date)?.get(myAgent.id) ?? 0,
+      bonusKm: 0,
     });
   }
   const months = [...byMonth.keys()].sort().reverse();
@@ -107,7 +88,6 @@ export default async function MeineErgebnissePage() {
           const revenue = worked.reduce((sum, d) => sum + d.revenue, 0);
           const sales = worked.reduce((sum, d) => sum + d.salesCount, 0);
           const calls = worked.reduce((sum, d) => sum + (d.callsCount ?? 0), 0);
-          const bonusKm = worked.reduce((sum, d) => sum + d.bonusKm, 0);
 
           return (
             <Card key={month}>
@@ -131,14 +111,8 @@ export default async function MeineErgebnissePage() {
                       {calls > 0 ? pct.format(sales / calls) : "-"}
                     </span>
                   </span>
-                  <span>
-                    Bonus:{" "}
-                    <span className="font-medium text-success-foreground tabular-nums">
-                      {bonusKm > 0 ? `${eurCents.format(bonusKm).replace("€", "KM")}` : "-"}
-                    </span>
-                  </span>
                 </div>
-                <MonthCalendar month={month} days={days} />
+                <MonthCalendar month={month} days={days} showBonus={false} />
               </CardContent>
             </Card>
           );

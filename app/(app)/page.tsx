@@ -314,7 +314,12 @@ export default async function DashboardPage() {
             <div className="mb-1 text-sm font-medium">{eur.format(teamRevenue)}</div>
             <ProgressBar
               value={teamRevenue}
-              max={goals.team_monthly_goal_stretch}
+              // Deliberately more than the stretch goal (Anis, 2026-07-31:
+              // the stretch marker sitting right at the bar's own 100% edge
+              // clipped its label and made the bar read as "full"/capped).
+              // Headroom past stretch keeps the label inside the bar and
+              // visually signals there's still more to reach for.
+              max={goals.team_monthly_goal_stretch * 1.15}
               markers={[
                 { position: goals.team_monthly_goal_floor, label: eur.format(goals.team_monthly_goal_floor) },
                 { position: goals.team_monthly_goal_target, label: eur.format(goals.team_monthly_goal_target) },
@@ -411,18 +416,23 @@ export default async function DashboardPage() {
             <ul className="flex flex-col divide-y">
               {topSignals.map((s) => (
                 <li key={s.id} className="flex items-start gap-2 py-2.5 text-sm">
-                  <Link
-                    href={`/firmen/${s.company_id}`}
-                    className="flex flex-1 items-start justify-between gap-3 hover:underline"
-                  >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant={signalTypeVariant(s.type)}>{signalTypeLabel(s.type)}</Badge>
-                        <span className="font-medium">{s.company_name}</span>
-                      </div>
-                      {isAdmin ? <p className="mt-1 text-muted-foreground">{s.reason}</p> : null}
+                  <div className="flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant={signalTypeVariant(s.type)}>{signalTypeLabel(s.type)}</Badge>
+                      <Link href={`/firmen/${s.company_id}`} className="font-medium hover:underline">
+                        {s.company_name}
+                      </Link>
+                      {s.product_id && s.product_name ? (
+                        <>
+                          <span className="text-muted-foreground">→</span>
+                          <Link href={`/katalog/${s.product_id}`} className="font-medium text-primary hover:underline">
+                            {s.product_name}
+                          </Link>
+                        </>
+                      ) : null}
                     </div>
-                  </Link>
+                    {isAdmin ? <p className="mt-1 text-muted-foreground">{s.reason}</p> : null}
+                  </div>
                   <SignalDismissButton companyId={s.company_id} type={s.type} productId={s.product_id} />
                 </li>
               ))}

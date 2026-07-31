@@ -1618,6 +1618,7 @@ export type Database = {
           company_name: string
           id: string
           product_id: string
+          product_name: string
           reason: string
           score: number
           type: string

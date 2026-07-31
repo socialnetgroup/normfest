@@ -89,12 +89,12 @@ const DOCUMENTS = [
       {
         heading: "Dashboard — dein Ausgangspunkt",
         content:
-          "Das Dashboard zeigt auf einen Blick: das Team-Ziel für den Monat (Minimum/Ziel/Stretch) mit Rangliste, wie viel Feedback diese Woche schon erfasst wurde (Flywheel-Widget), wie viele Empfehlungen aktuell offen sind, und wie viele Firmen seit 3+ Monaten nicht kontaktiert wurden. Der letzte Wert ist bewusst ehrlich - er zeigt, wie viel vom Kundenbestand noch nicht regelmäßig bearbeitet wird.",
+          "Das Dashboard sieht für Agenten und Admin unterschiedlich aus. Als Agent siehst du zuerst: Firmen gesamt (nur deine, siehe unten), dann die gleiche Nicht-kontaktiert-Aufschlüsselung, die Admin pro Agent sieht (diesen Monat / 2+ Monate / 3+ Monate / Anteil in %), und wie viel Feedback diese Woche erfasst wurde. Darunter Team-Ziel und dein persönliches Ziel für den Monat, dann die Rangliste und deine offenen Empfehlungen (Signale).",
       },
       {
         heading: "Firmen — die Kundendatenbank",
         content:
-          "Suche nach Name, Kundennummer, Ort, PLZ oder Gebiet. Ein Firmenprofil zeigt Stammdaten, Segmentierung, Umsatzverlauf und Aktivität aus der VIS-Liste, dazu - wenn vorhanden - einen Firmenbrief mit KI-Anreicherung (Stärken/Schwächen/externe Chancen aus Google-Bewertungen und Website, immer mit Original-Zitat) sowie aktuelle Empfehlungen (Signale) und den Feedback-Verlauf. Alles, was nicht aus echten Daten oder einem Zitat belegt ist, wird als unverifiziert gekennzeichnet - nichts wird als sicherer Fakt dargestellt, wenn es das nicht ist.",
+          "Suche nach Name, Kundennummer, Ort, PLZ oder Gebiet - ohne Suchbegriff zeigt die Liste sofort alle für dich verfügbaren Firmen (Admin sieht alle, du siehst nur dein eigenes Gebiet). Ein Firmenprofil zeigt Stammdaten, Segmentierung, Umsatzverlauf und Aktivität aus der VIS-Liste, dazu - wenn vorhanden - einen Firmenbrief mit KI-Anreicherung (Stärken/Schwächen/externe Chancen aus Google-Bewertungen und Website, immer mit Original-Zitat) sowie aktuelle Empfehlungen (Signale) und den Feedback-Verlauf. Alles, was nicht aus echten Daten oder einem Zitat belegt ist, wird als unverifiziert gekennzeichnet - nichts wird als sicherer Fakt dargestellt, wenn es das nicht ist.",
       },
       {
         heading: "Katalog — der Produktkatalog",
@@ -114,7 +114,7 @@ const DOCUMENTS = [
       {
         heading: "Empfehlungen (Signale)",
         content:
-          "Jede Empfehlung nennt einen konkreten Grund - z.B. ein bereits verkauftes Produkt mit passendem Cross-Sell, ein saisonaler Anlass, oder ein Umsatzrückgang laut VIS-Vergleich. Wurde eine Empfehlung schon telefonisch geklärt, kann sie direkt als \"erledigt\" ausgeblendet werden, ohne auf den nächsten Datenimport zu warten.",
+          "Jede Empfehlung zeigt den Signal-Typ und - wenn vorhanden - ein konkretes Produkt, direkt anklickbar zur Katalogseite (z.B. bei Cross-Sell-Vorschlägen). Die interne Begründung (\"warum wurde dieses Signal erzeugt\") zeigt nur Admin an - als Agent siehst du direkt das Ergebnis: Signal und Produkt, ohne die Herleitung dahinter. Wurde eine Empfehlung schon telefonisch geklärt, kann sie direkt als \"erledigt\" ausgeblendet werden, ohne auf den nächsten Datenimport zu warten.",
       },
       {
         heading: "Assistent — dein KI-Assistent",
@@ -122,9 +122,14 @@ const DOCUMENTS = [
           "Über die eigene Seite oder das Sprechblasen-Symbol unten rechts auf jeder Seite erreichbar. Beantwortet Fragen zu Firmen, Produkten, Skript und Wissen ausschließlich mit echten Daten aus diesem Tool - sagt ehrlich \"dazu habe ich keine Daten\", statt etwas zu erfinden. Kann eine Verkaufs-Eintragung vorschlagen, führt sie aber nie ohne deine Bestätigung im Chat aus.",
       },
       {
+        heading: "Meine Ergebnisse",
+        content:
+          "Nur für Agenten sichtbar (Admin hat stattdessen das Team Dashboard für alle Agenten). Zeigt deine eigene Verkaufsleistung Monat für Monat: Umsatz, Sales, Anrufe, Conversion Rate, plus ein Kalender zum Reinklicken in einzelne Tage. Bonus wird hier aktuell nicht angezeigt.",
+      },
+      {
         heading: "Wissen & Skript — wo finde ich was?",
         content:
-          "Skript ist der verbindliche Gesprächsleitfaden inkl. Einwandkarten - hier im Wissen-Bereich findest du stattdessen Hintergrundwissen: Firmeninformationen, die Haltung hinter der Gesprächsführung, und diese Übersicht über das Tool selbst.",
+          "Skript ist der verbindliche Gesprächsleitfaden inkl. Einwandkarten - hier im Wissen-Bereich findest du stattdessen Hintergrundwissen: Firmeninformationen, die Haltung hinter der Gesprächsführung, und diese Übersicht über das Tool selbst. Deine eigenen Verkaufsergebnisse (Monatsübersicht + Kalender) findest du unter \"Meine Ergebnisse\" im Menü.",
       },
     ],
   },

@@ -299,7 +299,13 @@ export default async function CompanyProfilePage({
                     <div className="flex items-center gap-2">
                       <Badge variant={signalTypeVariant(s.type)}>{signalTypeLabel(s.type)}</Badge>
                       {(s.products as { name: string } | null)?.name ? (
-                        <span className="font-medium">{(s.products as { name: string }).name}</span>
+                        s.product_id ? (
+                          <Link href={`/katalog/${s.product_id}`} className="font-medium text-primary hover:underline">
+                            {(s.products as { name: string }).name}
+                          </Link>
+                        ) : (
+                          <span className="font-medium">{(s.products as { name: string }).name}</span>
+                        )
                       ) : null}
                     </div>
                     {isAdmin ? <p className="mt-1 text-muted-foreground">{s.reason}</p> : null}

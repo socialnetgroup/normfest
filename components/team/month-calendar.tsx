@@ -33,7 +33,15 @@ export type DayEntry = {
  * Genesys-style depth-of-view: small by default, click a day for detail,
  * or expand to the full day-by-day list).
  */
-export function MonthCalendar({ month, days }: { month: string; days: DayEntry[] }) {
+export function MonthCalendar({
+  month,
+  days,
+  showBonus = true,
+}: {
+  month: string;
+  days: DayEntry[];
+  showBonus?: boolean;
+}) {
   const [selected, setSelected] = useState<string | null>(null);
   const [showList, setShowList] = useState(false);
 
@@ -73,7 +81,7 @@ export function MonthCalendar({ month, days }: { month: string; days: DayEntry[]
                 <th className="px-3 py-2 font-medium">Sales</th>
                 <th className="px-3 py-2 font-medium">Anrufe</th>
                 <th className="px-3 py-2 font-medium">CR</th>
-                <th className="px-3 py-2 font-medium">Bonus</th>
+                {showBonus ? <th className="px-3 py-2 font-medium">Bonus</th> : null}
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -86,9 +94,11 @@ export function MonthCalendar({ month, days }: { month: string; days: DayEntry[]
                   <td className="px-3 py-2 tabular-nums">
                     {d.callsCount ? pct.format(d.salesCount / d.callsCount) : "-"}
                   </td>
-                  <td className="px-3 py-2 tabular-nums font-medium text-success-foreground">
-                    {d.dayOff ? "-" : bonusLabel(d.bonusKm)}
-                  </td>
+                  {showBonus ? (
+                    <td className="px-3 py-2 tabular-nums font-medium text-success-foreground">
+                      {d.dayOff ? "-" : bonusLabel(d.bonusKm)}
+                    </td>
+                  ) : null}
                 </tr>
               ))}
             </tbody>
@@ -162,12 +172,14 @@ export function MonthCalendar({ month, days }: { month: string; days: DayEntry[]
                   {selectedEntry.callsCount ? pct.format(selectedEntry.salesCount / selectedEntry.callsCount) : "-"}
                 </span>
               </span>
-              <span>
-                Bonus:{" "}
-                <span className="font-medium text-success-foreground tabular-nums">
-                  {bonusLabel(selectedEntry.bonusKm)}
+              {showBonus ? (
+                <span>
+                  Bonus:{" "}
+                  <span className="font-medium text-success-foreground tabular-nums">
+                    {bonusLabel(selectedEntry.bonusKm)}
+                  </span>
                 </span>
-              </span>
+              ) : null}
             </>
           )}
         </div>
