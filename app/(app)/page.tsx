@@ -84,8 +84,7 @@ export default async function DashboardPage() {
     { count: feedbackCountThisWeek },
     { data: topSignals },
     { count: signalsTotal },
-    { count: uncontactedCount },
-    { count: totalCompanies },
+    { data: companyCountsRows },
     { data: myToday },
     { data: coverageAgents },
     { data: coverageStats },
@@ -105,13 +104,13 @@ export default async function DashboardPage() {
       .order("score", { ascending: false })
       .limit(8),
     supabase.from("signals").select("id", { count: "exact", head: true }),
-    supabase
-      .from("companies")
-      .select("id", { count: "exact", head: true })
-      .eq("active", true)
-      .eq("do_not_contact", false)
-      .or(`last_contact_date.is.null,last_contact_date.lt.${threeMonthsAgoStr}`),
-    supabase.from("companies").select("id", { count: "exact", head: true }),
+    // RPC instead of two direct .from("companies") counts -- a direct count
+    // goes through RLS's companies_select_visible policy, whose
+    // fn_company_visible() predicate forces a per-row function call on a
+    // full Seq Scan (measured ~2.7s EACH). fn_dashboard_company_counts()
+    // replicates the same visibility rule once instead of per row (measured
+    // ~600ms for both combined). See 20260731030000_fn_dashboard_company_counts.sql.
+    supabase.rpc("fn_dashboard_company_counts", { p_uncontacted_before: threeMonthsAgoStr }),
     myAgent
       ? supabase
           .from("agent_daily_performance")
@@ -123,11 +122,13 @@ export default async function DashboardPage() {
     isAdmin
       ? supabase.from("agents").select("id, full_name, gebiet").eq("active", true)
       : Promise.resolve({ data: null }),
-    isAdmin
-      ? supabase
-          .from("company_gebiet_coverage")
-          .select("gebiet, total, not_contacted_this_month, not_contacted_last_2_months, not_contacted_last_3_months")
-      : Promise.resolve({ data: null }),
+    // RPC instead of the security_invoker `company_gebiet_coverage` view --
+    // same RLS-defeats-the-plan issue as the two RPCs above: reading the view
+    // under RLS evaluated fn_company_visible() on all 14,347 rows for its
+    // GROUP BY (measured ~3.26s). fn_company_gebiet_coverage() is admin-gated
+    // explicitly and does the aggregation without per-row RLS overhead
+    // (measured ~28ms). See 20260731040000_fn_company_gebiet_coverage.sql.
+    isAdmin ? supabase.rpc("fn_company_gebiet_coverage") : Promise.resolve({ data: null }),
     isAdmin ? supabase.rpc("fn_get_agent_login_status") : Promise.resolve({ data: null }),
   ]);
 
@@ -170,7 +171,8 @@ export default async function DashboardPage() {
 
   const monthLabel = new Intl.DateTimeFormat("de-DE", { month: "long", year: "numeric" }).format(new Date());
 
-  const uncontacted = uncontactedCount ?? 0;
+  const totalCompanies = companyCountsRows?.[0]?.total_count ?? 0;
+  const uncontacted = companyCountsRows?.[0]?.uncontacted_count ?? 0;
   const uncontactedSevere = uncontacted >= 500;
 
   // Firmen have no direct agent_id - the link is companies.gebiet <-> agents.gebiet
@@ -398,7 +400,7 @@ export default async function DashboardPage() {
                           {(s.companies as { name: string } | null)?.name}
                         </span>
                       </div>
-                      <p className="mt-1 text-muted-foreground">{s.reason}</p>
+                      {isAdmin ? <p className="mt-1 text-muted-foreground">{s.reason}</p> : null}
                     </div>
                   </Link>
                   <SignalDismissButton companyId={s.company_id} type={s.type} productId={s.product_id} />

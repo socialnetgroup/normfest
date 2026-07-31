@@ -1577,7 +1577,24 @@ export type Database = {
           sku: string
         }[]
       }
+      fn_company_gebiet_coverage: {
+        Args: never
+        Returns: {
+          gebiet: string
+          not_contacted_last_2_months: number
+          not_contacted_last_3_months: number
+          not_contacted_this_month: number
+          total: number
+        }[]
+      }
       fn_company_visible: { Args: { p_gebiet: string }; Returns: boolean }
+      fn_dashboard_company_counts: {
+        Args: { p_uncontacted_before: string }
+        Returns: {
+          total_count: number
+          uncontacted_count: number
+        }[]
+      }
       fn_dismiss_signal: {
         Args: { p_company_id: string; p_product_id?: string; p_type: string }
         Returns: undefined

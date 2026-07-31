@@ -302,7 +302,7 @@ export default async function CompanyProfilePage({
                         <span className="font-medium">{(s.products as { name: string }).name}</span>
                       ) : null}
                     </div>
-                    <p className="mt-1 text-muted-foreground">{s.reason}</p>
+                    {isAdmin ? <p className="mt-1 text-muted-foreground">{s.reason}</p> : null}
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <Badge variant={s.tier === 1 ? "muted" : "secondary"}>Tier {s.tier}</Badge>
