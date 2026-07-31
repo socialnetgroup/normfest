@@ -272,13 +272,19 @@ export default async function SkriptPage() {
       .order("created_at"),
   ]);
 
-  const { data: chunks } = doc
+  const { data: allChunks } = doc
     ? await supabase
         .from("kb_chunks")
         .select("id, heading, content")
         .eq("document_id", doc.id)
         .order("chunk_index")
     : { data: null };
+
+  // "4. Prigovori kupaca i kako odgovoriti" duplicates the Einwandbehandlung
+  // card above (same objections, same DE/BS responses) - dropped from the
+  // full guide per Anis (2026-08-01) to stop showing it twice; its opening
+  // line moved into the Einwandbehandlung card itself, see below.
+  const chunks = allChunks?.filter((c) => c.heading !== "4. Prigovori kupaca i kako odgovoriti") ?? null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -299,6 +305,10 @@ export default async function SkriptPage() {
             </p>
           </CardHeader>
           <CardContent>
+            <blockquote className="mb-4 rounded-md border-l-2 border-l-primary bg-muted/40 px-3 py-2 text-sm italic text-foreground">
+              Zapamti: &quot;Ne&quot; je početak pregovora, ne kraj. 80% kupaca kaže &quot;NE&quot; u prosjeku 4 puta
+              prije &quot;DA&quot;. 92% agenata odustane nakon prvog &quot;ne&quot;.
+            </blockquote>
             <ul className="flex flex-col gap-3">
               {objections.map((o) => (
                 <li key={o.id} className="rounded-lg border-l-4 border-l-warning bg-muted/30 p-3">
