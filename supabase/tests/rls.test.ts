@@ -568,7 +568,13 @@ describe("signals RLS + fn_refresh_signals", () => {
     // 20260731010000 migration's comment for the full investigation). Real
     // driver: cross_sell now produces ~85k rows (was ~17.6k), so the insert
     // itself, not just the join, is genuinely heavier. Measured ~26-30s/run.
-    60000,
+    // Bumped again same day: CI #103 still hit the DB's own 57014 timeout
+    // (the function-level override was 45s, a single real call measured
+    // 32.1s right after -- not enough headroom for the already-documented
+    // run-to-run variance). DB-side timeout raised to 75s
+    // (20260731080000_bump_fn_refresh_signals_timeout.sql); this JS-side
+    // timeout raised to match with margin.
+    90000,
   );
 
   it(
@@ -588,8 +594,9 @@ describe("signals RLS + fn_refresh_signals", () => {
 
       expect(countAfterSecond).toBe(countAfterFirst);
     },
-    // Two full sequential refreshes -- same driver as above, doubled.
-    150000,
+    // Two full sequential refreshes -- same driver as above, doubled and
+    // bumped again same day for the same reason (75s DB timeout x2 + margin).
+    220000,
   );
 });
 
