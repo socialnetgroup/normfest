@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   LayoutDashboard,
   Building2,
@@ -106,10 +106,14 @@ export function AppSidebar({
   const settingsActive = SETTINGS_ITEMS.some((i) => isActive(pathname, i.href));
   const [settingsOpen, setSettingsOpen] = useState(settingsActive);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [lastPathname, setLastPathname] = useState(pathname);
 
-  useEffect(() => {
+  // Adjusting state during render (not in an effect) on navigation, per
+  // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
+  if (pathname !== lastPathname) {
+    setLastPathname(pathname);
     setMobileOpen(false);
-  }, [pathname]);
+  }
 
   const closeMobile = () => setMobileOpen(false);
 
