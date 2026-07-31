@@ -2066,6 +2066,38 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     agent using the app mid-test-run would briefly see the shared-mode company list. Low
     risk (agents aren't expected to be testing during a CI run), not eliminated.
 
+17. **Agent-facing Dashboard redesigned + "Meine Ergebnisse" added (2026-07-31),** Anis:
+    "prilagodimo Dashboard za agenta... Neka to budu prve kocke" + "dodaj u Agent view dio
+    'moji rezultati'... kao 'team' dio sto vidi admin, ali samo za sebe". Two changes:
+
+    a) The top stat-tile row is now genuinely different for admin vs. agent (previously
+    identical for everyone). Agent tiles, in order: Firmen gesamt, then the same
+    not-contacted breakdown admin already saw per-agent in "Kontakt-Abdeckung" (this
+    month / 2+ / 3+ months / 3+ share), then Feedback diese Woche — Team-Umsatz and
+    Signale offen dropped (redundant with Team-Ziel/Mein Ziel right below, and with the
+    Empfehlungen list). Admin's row is unchanged. Required extending
+    `fn_dashboard_company_counts()` (migration `20260731090000_fn_dashboard_company_counts_breakdown.sql`)
+    to return the full 3-bucket breakdown instead of a single 3-month count — same
+    evaluate-visibility-once RPC pattern as the rest of this session's perf work, so an
+    agent's numbers come back pre-scoped to their own Gebiet automatically. Verified live:
+    Alan's tiles (1352 / 613 / 333 / 294 / 22%) match his row in the admin coverage table
+    exactly.
+
+    b) New `/meine-ergebnisse` page — the exact same structure as
+    `/admin/team/[agentId]` (month cards, real per-day bonus, `MonthCalendar` drill-in),
+    reusing the same `computeBonusByDate` logic, just scoped to the logged-in agent's own
+    `agent_daily_performance` rows instead of admin-only access to any agent. Not
+    admin-gated — if the caller has no linked `agents` row (e.g. an admin account), it
+    shows an explanatory empty state instead of a raw 404. New sidebar nav item, agent-only
+    (mirrors how "Team" is admin-only). Verified live: Alan's July numbers (6.845,77 € /
+    48 Sales / 39,24 KM Bonus) match his row in admin's Team Dashboard exactly.
+
+    Also: the Team-Ziel progress bar's marker labels (was a single caption line "Minimum
+    80.000 € · Ziel 100.000 € · Stretch 120.000 €") now render as three small labels
+    positioned directly above their tick marks on the bar itself (`components/progress-bar.tsx`
+    gained visible marker labels, previously title-only tooltips), on both the admin and
+    agent Dashboard — same component, one shared instance.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

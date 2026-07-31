@@ -172,6 +172,16 @@ export function AppSidebar({
             <NavItem key={item.href} {...item} active={isActive(pathname, item.href)} onNavigate={closeMobile} />
           ))}
 
+          {!isAdmin ? (
+            <NavItem
+              href="/meine-ergebnisse"
+              label="Meine Ergebnisse"
+              icon={BarChart3}
+              active={isActive(pathname, "/meine-ergebnisse")}
+              onNavigate={closeMobile}
+            />
+          ) : null}
+
           {isAdmin ? (
             <>
               <div className="mt-4 mb-1 px-3 text-xs font-semibold tracking-wide text-muted-foreground uppercase">

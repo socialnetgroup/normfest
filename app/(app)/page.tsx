@@ -74,9 +74,6 @@ export default async function DashboardPage() {
   weekStart.setDate(now.getDate() - dayOfWeek);
   weekStart.setHours(0, 0, 0, 0);
 
-  const threeMonthsAgo = new Date(now);
-  threeMonthsAgo.setMonth(now.getMonth() - 3);
-  const threeMonthsAgoStr = threeMonthsAgo.toISOString().slice(0, 10);
   const todayStr = now.toISOString().slice(0, 10);
 
   const [
@@ -110,13 +107,15 @@ export default async function DashboardPage() {
     // combined vs ~6ms + ~580ms split). See 20260731060000_signals_gebiet_visibility.sql.
     supabase.rpc("fn_dashboard_top_signals", { p_limit: 8 }),
     supabase.rpc("fn_dashboard_signals_count"),
-    // RPC instead of two direct .from("companies") counts -- a direct count
-    // goes through RLS's companies_select_visible policy, whose
-    // fn_company_visible() predicate forces a per-row function call on a
-    // full Seq Scan (measured ~2.7s EACH). fn_dashboard_company_counts()
-    // replicates the same visibility rule once instead of per row (measured
-    // ~600ms for both combined). See 20260731030000_fn_dashboard_company_counts.sql.
-    supabase.rpc("fn_dashboard_company_counts", { p_uncontacted_before: threeMonthsAgoStr }),
+    // RPC instead of direct .from("companies") counts -- a direct count goes
+    // through RLS's companies_select_visible policy, whose fn_company_visible()
+    // predicate forces a per-row function call on a full Seq Scan (measured
+    // ~2.7s EACH). fn_dashboard_company_counts() replicates the same
+    // visibility rule once instead of per row, and now also returns the
+    // this-month/2-month/3-month not-contacted breakdown (same numbers admin
+    // sees per-agent in "Kontakt-Abdeckung", scoped to the caller) instead of
+    // a single 3-month bucket. See 20260731090000_fn_dashboard_company_counts_breakdown.sql.
+    supabase.rpc("fn_dashboard_company_counts"),
     myAgent
       ? supabase
           .from("agent_daily_performance")
@@ -178,8 +177,11 @@ export default async function DashboardPage() {
   const monthLabel = new Intl.DateTimeFormat("de-DE", { month: "long", year: "numeric" }).format(new Date());
 
   const totalCompanies = companyCountsRows?.[0]?.total_count ?? 0;
-  const uncontacted = companyCountsRows?.[0]?.uncontacted_count ?? 0;
+  const notContactedThisMonth = companyCountsRows?.[0]?.not_contacted_this_month ?? 0;
+  const notContacted2Months = companyCountsRows?.[0]?.not_contacted_2months ?? 0;
+  const uncontacted = companyCountsRows?.[0]?.not_contacted_3months ?? 0;
   const uncontactedSevere = uncontacted >= 500;
+  const uncontactedShare = totalCompanies > 0 ? uncontacted / totalCompanies : 0;
 
   // Firmen have no direct agent_id - the link is companies.gebiet <-> agents.gebiet
   // (each agent owns one Gebiet code, per §4.11). Aggregated in Postgres via the
@@ -243,18 +245,39 @@ export default async function DashboardPage() {
         <p className="mt-1 text-sm text-muted-foreground">{monthLabel}</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        <StatTile label="Firmen gesamt" value={String(totalCompanies ?? 0)} accent="primary" />
-        <StatTile label="Team-Umsatz" value={eur.format(teamRevenue)} accent="primary" />
-        <StatTile label="Feedback diese Woche" value={String(feedbackCountThisWeek ?? 0)} accent="success" />
-        <StatTile
-          label="Nicht kontaktiert (3+ Mon.)"
-          value={String(uncontacted)}
-          accent={uncontactedSevere ? "warning" : "secondary"}
-          href={isAdmin ? "#kontakt-abdeckung" : undefined}
-        />
-        <StatTile label="Signale offen" value={String(signalsTotal ?? 0)} accent="secondary" />
-      </div>
+      {isAdmin ? (
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+          <StatTile label="Firmen gesamt" value={String(totalCompanies ?? 0)} accent="primary" />
+          <StatTile label="Team-Umsatz" value={eur.format(teamRevenue)} accent="primary" />
+          <StatTile label="Feedback diese Woche" value={String(feedbackCountThisWeek ?? 0)} accent="success" />
+          <StatTile
+            label="Nicht kontaktiert (3+ Mon.)"
+            value={String(uncontacted)}
+            accent={uncontactedSevere ? "warning" : "secondary"}
+            href="#kontakt-abdeckung"
+          />
+          <StatTile label="Signale offen" value={String(signalsTotal ?? 0)} accent="secondary" />
+        </div>
+      ) : (
+        // Agent view (Anis, 2026-07-31): Firmen gesamt first, then the same
+        // not-contacted breakdown admin sees per-agent in "Kontakt-Abdeckung"
+        // (now scoped to this agent's own Gebiet via fn_dashboard_company_counts),
+        // then Feedback diese Woche. No Signale offen (redundant with the
+        // Empfehlungen list below) and no Team-Umsatz (redundant with the
+        // Team-Ziel/Mein Ziel cards right below).
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+          <StatTile label="Firmen gesamt" value={String(totalCompanies ?? 0)} accent="primary" />
+          <StatTile label={`Nicht kontaktiert diesen Monat (${dayOfMonth}. Tag)`} value={String(notContactedThisMonth)} accent="secondary" />
+          <StatTile label="Nicht kontaktiert (2+ Mon.)" value={String(notContacted2Months)} accent="secondary" />
+          <StatTile
+            label="Nicht kontaktiert (3+ Mon.)"
+            value={String(uncontacted)}
+            accent={uncontactedSevere ? "warning" : "secondary"}
+          />
+          <StatTile label="Anteil (3+ Mon.)" value={`${Math.round(uncontactedShare * 100)}%`} accent={uncontactedShare >= 0.4 ? "warning" : "secondary"} />
+          <StatTile label="Feedback diese Woche" value={String(feedbackCountThisWeek ?? 0)} accent="success" />
+        </div>
+      )}
 
       {myAgent ? (
         <Card>
@@ -288,21 +311,14 @@ export default async function DashboardPage() {
             <CardTitle>Team-Ziel</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="mb-1 flex justify-between text-sm">
-              <span className="font-medium">{eur.format(teamRevenue)}</span>
-              <span className="text-muted-foreground">
-                Minimum {eur.format(goals.team_monthly_goal_floor)} · Ziel{" "}
-                {eur.format(goals.team_monthly_goal_target)} · Stretch{" "}
-                {eur.format(goals.team_monthly_goal_stretch)}
-              </span>
-            </div>
+            <div className="mb-1 text-sm font-medium">{eur.format(teamRevenue)}</div>
             <ProgressBar
               value={teamRevenue}
               max={goals.team_monthly_goal_stretch}
               markers={[
-                { position: goals.team_monthly_goal_floor, label: "Minimum" },
-                { position: goals.team_monthly_goal_target, label: "Ziel" },
-                { position: goals.team_leader_bonus_threshold, label: "TL-Bonus" },
+                { position: goals.team_monthly_goal_floor, label: eur.format(goals.team_monthly_goal_floor) },
+                { position: goals.team_monthly_goal_target, label: eur.format(goals.team_monthly_goal_target) },
+                { position: goals.team_monthly_goal_stretch, label: eur.format(goals.team_monthly_goal_stretch) },
               ]}
             />
           </CardContent>

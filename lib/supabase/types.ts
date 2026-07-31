@@ -1589,10 +1589,12 @@ export type Database = {
       }
       fn_company_visible: { Args: { p_gebiet: string }; Returns: boolean }
       fn_dashboard_company_counts: {
-        Args: { p_uncontacted_before: string }
+        Args: never
         Returns: {
+          not_contacted_2months: number
+          not_contacted_3months: number
+          not_contacted_this_month: number
           total_count: number
-          uncontacted_count: number
         }[]
       }
       fn_dashboard_signals: {
