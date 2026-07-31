@@ -859,6 +859,38 @@ background):** every item checked against the real codebase/project, not assumed
   affected tests' timeouts to 15s (real cost after the index: ~2.8s / ~4.4s for the
   idempotency test's two back-to-back full refreshes). Verified: full suite green again,
   40/40 passing.
+  **Second real regression, same test (2026-07-31), CI red again:** the whole-book
+  enrichment rollout (§13 M4/M5: `company_enrichment` analyzed rows grew 494 → 1,432)
+  pushed `fn_refresh_signals()` to ~27.8s end to end (measured directly via
+  `clock_timestamp()` against production, not estimated) — the `authenticated` role's
+  `statement_timeout=8s` (used by the RPC call in tests and by the real "Empfehlungen
+  aktualisieren" admin button) killed every call outright with `57014`. Root cause:
+  `seasonal_push`, `new_product_match`, and `cross_sell` each independently re-ran the
+  exact same expensive `cross join lateral jsonb_array_elements(external_opportunities)`
+  unnest to compute company/category affinity — 2-3x redundant work. Fixed in migration
+  `20260731010000_fn_refresh_signals_perf_fix.sql`: the affinity computation (category-
+  level, used by seasonal_push/new_product_match) and the cross_sell trigger set are now
+  each materialized once into a temp table (with `analyze` immediately after — without it
+  the planner picks a much worse plan on the fresh temp table) and all three blocks join
+  against those instead of repeating the unnest.
+  **Real, load-bearing finding along the way:** a plain `set local statement_timeout` at
+  the top of the function body does NOT extend the timeout for that same top-level RPC
+  call — the deadline for the current statement is already latched at invocation time
+  before the function body starts running (confirmed directly: with only `set local`, the
+  test still died at almost exactly 8s despite the higher setting). What actually works is
+  a function-level `set statement_timeout = '45s'` in the `CREATE FUNCTION` signature
+  itself (a GUC override applied when the function's execution context is set up, not
+  mid-body) — added and verified: the same test now runs the RPC to completion instead of
+  hitting `57014`.
+  **cross_sell now legitimately produces ~85,500 rows (up from ~17,600 in the July 25
+  fix)** — a further, expected consequence of the same enrichment rollout, not a bug;
+  confirmed via `select type, count(*) from signals group by type`. The insert itself, not
+  just the join, is now genuinely heavy. Bumped the two affected tests' timeouts again
+  (60s single-refresh, 150s for the idempotency test's two back-to-back refreshes — real
+  measured range was ~26-30s/~63-76s across several runs, so real variance is wide).
+  Verified: full suite green again (only the pre-existing, already-documented `chat_log`
+  describe-block flakiness reproduced once, immediately fixed by an isolated re-run of just
+  that test — confirmed not caused by this change).
   **Two real bugs found + fixed in the test file itself (2026-07-24)**, surfaced while
   re-running the suite after the day's data changes: the `chat_log RLS` describe block's
   `beforeAll` picked a company via `select("id, name").limit(1)` with no `order by` and no

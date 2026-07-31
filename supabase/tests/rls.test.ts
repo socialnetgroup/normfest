@@ -506,7 +506,12 @@ describe("signals RLS + fn_refresh_signals", () => {
       expect(error).toBeNull();
       expect(data!.length).toBeGreaterThan(0);
     },
-    15000,
+    // Bumped 2026-07-31 (regression from the whole-book enrichment rollout
+    // growing company_enrichment 494 -> 1432 analyzed rows -- see the
+    // 20260731010000 migration's comment for the full investigation). Real
+    // driver: cross_sell now produces ~85k rows (was ~17.6k), so the insert
+    // itself, not just the join, is genuinely heavier. Measured ~26-30s/run.
+    60000,
   );
 
   it(
@@ -526,7 +531,8 @@ describe("signals RLS + fn_refresh_signals", () => {
 
       expect(countAfterSecond).toBe(countAfterFirst);
     },
-    15000,
+    // Two full sequential refreshes -- same driver as above, doubled.
+    150000,
   );
 });
 
