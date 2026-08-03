@@ -1624,6 +1624,7 @@ export type Database = {
           type: string
         }[]
       }
+      fn_delete_sales_feedback: { Args: { p_id: string }; Returns: undefined }
       fn_dismiss_signal: {
         Args: { p_company_id: string; p_product_id?: string; p_type: string }
         Returns: undefined
@@ -1737,6 +1738,18 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      fn_update_sales_feedback: {
+        Args: {
+          p_comment?: string
+          p_id: string
+          p_objection?: string
+          p_outcome: string
+          p_product_id?: string
+          p_qty?: number
+          p_value_net?: number
+        }
+        Returns: undefined
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }

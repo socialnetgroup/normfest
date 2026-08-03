@@ -12,6 +12,7 @@ import {
 import { BrandFocusVerifyButton } from "@/components/brand-focus-verify-button";
 import { EnrichNowButton } from "@/components/enrich-now-button";
 import { FeedbackForm } from "@/components/feedback-form";
+import { FeedbackHistoryItem } from "@/components/feedback-history-item";
 import { SignalDismissButton } from "@/components/signal-dismiss-button";
 import { getCurrentUser } from "@/lib/auth";
 import { signalTypeLabel, signalTypeVariant } from "@/lib/signals";
@@ -22,20 +23,6 @@ const ratingFmt = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 1 });
 
 const eur = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
 const dateFmt = new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
-const dateTimeFmt = new Intl.DateTimeFormat("de-DE", {
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-});
-
-const OUTCOME_LABELS: Record<string, string> = {
-  sold: "Verkauft",
-  interested: "Interessiert",
-  rejected: "Abgelehnt",
-  not_relevant: "Nicht relevant",
-};
 
 function money(value: number | null) {
   return value === null ? "-" : eur.format(value);
@@ -89,7 +76,7 @@ export default async function CompanyProfilePage({
       supabase
         .from("sales_feedback")
         .select(
-          "id, outcome, qty, value_net, objection, comment, created_at, products(name), profiles(full_name, agents(id))",
+          "id, agent_id, outcome, qty, value_net, objection, comment, created_at, product_id, products(name), profiles(full_name, agents(id))",
         )
         .eq("company_id", id)
         .order("created_at", { ascending: false })
@@ -457,49 +444,27 @@ export default async function CompanyProfilePage({
           </CardHeader>
           <CardContent>
             <ul className="flex flex-col divide-y">
-              {feedbackHistory.map((f) => (
-                <li key={f.id} className="py-2.5 text-base">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge
-                      variant={
-                        f.outcome === "sold"
-                          ? "success"
-                          : f.outcome === "rejected"
-                            ? "destructive"
-                            : "secondary"
-                      }
-                    >
-                      {OUTCOME_LABELS[f.outcome] ?? f.outcome}
-                    </Badge>
-                    {(f.products as { name: string } | null)?.name ? (
-                      <span className="font-medium">
-                        {(f.products as { name: string }).name}
-                      </span>
-                    ) : null}
-                    {f.qty ? <span className="text-muted-foreground">×{f.qty}</span> : null}
-                    {f.value_net ? <span className="text-muted-foreground">{eur.format(f.value_net)}</span> : null}
-                  </div>
-                  {f.objection ? (
-                    <p className="mt-1 text-muted-foreground">Einwand: {f.objection}</p>
-                  ) : null}
-                  {f.comment ? <p className="mt-1 text-muted-foreground">{f.comment}</p> : null}
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {(() => {
-                      const fp = f.profiles as { full_name: string | null; agents: { id: string }[] } | null;
-                      const agentId = fp?.agents?.[0]?.id;
-                      const name = fp?.full_name ?? "-";
-                      return isAdmin && agentId ? (
-                        <Link href={`/admin/team/${agentId}`} className="hover:underline">
-                          {name}
-                        </Link>
-                      ) : (
-                        name
-                      );
-                    })()}{" "}
-                    · {dateTimeFmt.format(new Date(f.created_at))}
-                  </p>
-                </li>
-              ))}
+              {feedbackHistory.map((f) => {
+                const fp = f.profiles as { full_name: string | null; agents: { id: string }[] } | null;
+                const agentId = fp?.agents?.[0]?.id;
+                return (
+                  <FeedbackHistoryItem
+                    key={f.id}
+                    id={f.id}
+                    outcome={f.outcome}
+                    qty={f.qty}
+                    valueNet={f.value_net}
+                    objection={f.objection}
+                    comment={f.comment}
+                    createdAt={f.created_at}
+                    productId={f.product_id}
+                    productName={(f.products as { name: string } | null)?.name ?? null}
+                    agentName={fp?.full_name ?? "-"}
+                    adminAgentLink={isAdmin && agentId ? `/admin/team/${agentId}` : null}
+                    canEdit={f.agent_id === currentUser?.id || isAdmin}
+                  />
+                );
+              })}
             </ul>
           </CardContent>
         </Card>

@@ -235,6 +235,27 @@ separate report yet, the count is visible in place. `focus_lists.active` is now 
 unique at the DB level (`idx_focus_lists_single_active`, added same day after finding
 nothing previously stopped two lists being active at once).
 
+**Feedback self-correction (added 2026-08-03, Anis):** the original §4.7 design was an
+immutable log ("corrections go through the admin/service-role path if ever needed, not
+a self-serve edit") — reversed on Anis's explicit ask: an agent must be able to fix or
+delete their own mistaken feedback entries (wrong outcome/qty/value/objection, or a
+duplicate). Not exposed as a plain RLS update/delete policy, because
+`fn_log_sales_feedback` has a real side effect on `outcome='sold'` rows (increments
+`agent_daily_performance.revenue`/`sales_count` for that day, which feeds the Team
+Dashboard/leaderboard/bonus) — a raw table-level update/delete would silently desync
+that side effect from the corrected/removed row. `fn_update_sales_feedback`/
+`fn_delete_sales_feedback` (security definer, `agent_id = auth.uid() OR fn_is_admin()`
+check inside) keep the two tables in sync: editing or deleting a 'sold' row always
+reverses its old contribution on the row's own date (not today) and applies the new one.
+UI: `components/feedback-history-item.tsx` (Pencil/Trash icons, shown only on the
+caller's own rows or to admin) on the Feedback-Verlauf list, `/firmen/[id]`. Verified
+live end-to-end with real throwaway accounts (not just the RPCs in isolation): a
+non-owner agent is correctly blocked from editing/deleting another agent's row; the
+owner's edit (100€→50€) correctly nets `agent_daily_performance.revenue` from 100 to 50
+and leaves `sales_count` unchanged (old contribution subtracted, new one added); delete
+correctly zeroes both back out and removes the row - then the same flow re-verified
+through the actual UI (edit form pre-fills, saves, and the row disappears on delete).
+
 ### 4.8 KB & script / 4.9 chat, imports, audit / 4.10 RLS — as v2.2. Focus-list draft
 approval: **admin (Anis)**.
 
