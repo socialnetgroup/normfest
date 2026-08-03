@@ -30,7 +30,7 @@ export default async function BrandProfilesPage() {
         <p className="mt-1 text-sm text-muted-foreground">
           Kuratierte Zuordnung Marke → Produktkategorie mit erhöhtem Verbrauch (steuert das Signal
           brand_profile_match). Vorläufige Einträge stammen aus einer ersten Recherche und sind noch
-          nicht von Anis/Sanin bestätigt.
+          nicht von Anis/Armina bestätigt.
         </p>
       </div>
 

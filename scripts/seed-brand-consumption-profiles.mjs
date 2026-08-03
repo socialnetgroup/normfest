@@ -32,7 +32,7 @@ const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUP
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
-const SOURCE = "Claude-Recherche, vorläufig (2026-07-25) — noch nicht von Anis/Sanin geprüft";
+const SOURCE = "Claude-Recherche, vorläufig (2026-07-25) — noch nicht von Anis/Armina geprüft";
 
 const ROWS = [
   {
