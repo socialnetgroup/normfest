@@ -86,7 +86,7 @@ export default async function DialerPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      {isAdmin ? <AutoRefresh intervalMs={10_000} /> : null}
+      {isAdmin ? <AutoRefresh intervalMs={4_000} /> : null}
       <div>
         <h1 className="font-heading flex items-center gap-2 text-2xl font-semibold tracking-tight">
           Dialer
@@ -102,7 +102,7 @@ export default async function DialerPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <IconTitle icon={Activity}>Live-Status (Dialer)</IconTitle>
-            <Badge variant="success">Live · aktualisiert alle 10s</Badge>
+            <Badge variant="success">Live · aktualisiert alle 4s</Badge>
           </CardHeader>
           <CardContent>
             <p className="mb-3 text-sm text-muted-foreground">
