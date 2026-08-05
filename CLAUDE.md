@@ -1954,6 +1954,25 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     correct sort (in-call first), correct German status labels, correct diacritic-aware
     name matching linking to `/admin/team/[agentId]`.
 
+    **Real production crash found + fixed same day.** Anis reported `/dialer` itself
+    failing to load ("This page couldn't load"). Reproduced locally rather than guessed
+    at a network/timeout cause: server logs showed a real `TypeError: Cannot read
+    properties of null (reading 'toUpperCase')` on `row.status.toUpperCase()` — a live
+    agent (Nejra Adzemovic, logged out of the dialer) had `status: null` and
+    `campaignID: null` in the real API response, a state the single earlier sample
+    response never exhibited. `RawDialerRow` was typed as if every field were always a
+    string; fixed by typing every field nullable and coalescing at the mapping boundary
+    (`status ?? "OFFLINE"`, `campaignID ?? "-"`, etc. in `fetchDialerAgentStatuses()`) so
+    a null can never reach `.toUpperCase()` downstream — added an `OFFLINE` → "Abgemeldet"
+    label alongside the existing three. Also tried wrapping the card in its own
+    `<Suspense>` boundary (isolating a slow/unreachable dialer host from the rest of the
+    page) but reverted it after live testing showed the boundary never resolved in this
+    dev environment (Turbopack dev-server streaming quirk, not explained, not worth
+    shipping unverified) — reverted to the plain inline-await structure that every other
+    page in this app already uses, keeping only the null-safety fix. Verified live twice:
+    the exact reproduction case (null-status agent present) now renders "Abgemeldet"
+    correctly instead of crashing, and server logs show zero errors afterward.
+
 14. **QA-Bewertungen — shipped (2026-07-25).** New standalone admin menu item (real feature,
     not a placeholder — unlike QA-Anrufe/M9, nothing here is blocked on an external vendor
     decision): the TL's mandatory monthly per-agent call-quality evaluation. Anis referenced

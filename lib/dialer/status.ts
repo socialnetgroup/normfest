@@ -27,23 +27,29 @@ export type DialerAgentStatus = {
   inactiveTime: string;
 };
 
+// Fields come back null for agents in some states (confirmed live, 2026-08-05:
+// a logged-out/idle agent had status:null and campaignID:null while every
+// other field was a normal string) - typed nullable throughout rather than
+// trusting the one sample response this was built against, since that's
+// exactly the assumption that crashed the whole page (status.toUpperCase()
+// on a null status, in production, on a real agent's real current state).
 type RawDialerRow = {
-  user: string;
-  full_name: string;
-  status: string;
-  vrijeme: string;
-  campaignID: string;
-  sales: string;
-  totalCalls: string;
-  konverzija: string;
-  pauseTime: string;
-  waitTime: string;
-  dispoTime: string;
-  deadTime: string;
-  talkTime: string;
-  totalTime: string;
-  activeTime: string;
-  inactiveTime: string;
+  user: string | null;
+  full_name: string | null;
+  status: string | null;
+  vrijeme: string | null;
+  campaignID: string | null;
+  sales: string | null;
+  totalCalls: string | null;
+  konverzija: string | null;
+  pauseTime: string | null;
+  waitTime: string | null;
+  dispoTime: string | null;
+  deadTime: string | null;
+  talkTime: string | null;
+  totalTime: string | null;
+  activeTime: string | null;
+  inactiveTime: string | null;
 };
 
 export async function fetchDialerAgentStatuses(): Promise<{
@@ -61,24 +67,26 @@ export async function fetchDialerAgentStatuses(): Promise<{
     // Content-Type is mislabeled as text/html by the dialer even though the
     // body is JSON - parse the raw text ourselves rather than res.json().
     const raw = JSON.parse(await res.text()) as RawDialerRow[];
-    const data: DialerAgentStatus[] = raw.map((r) => ({
-      extension: r.user,
-      fullName: r.full_name,
-      status: r.status,
-      timeInStatus: r.vrijeme,
-      campaignId: r.campaignID,
-      sales: Number(r.sales ?? 0),
-      totalCalls: Number(r.totalCalls ?? 0),
-      conversionRate: r.konverzija,
-      pauseTime: r.pauseTime,
-      waitTime: r.waitTime,
-      dispoTime: r.dispoTime,
-      deadTime: r.deadTime,
-      talkTime: r.talkTime,
-      totalTime: r.totalTime,
-      activeTime: r.activeTime,
-      inactiveTime: r.inactiveTime,
-    }));
+    const data: DialerAgentStatus[] = raw
+      .filter((r) => r.user && r.full_name)
+      .map((r) => ({
+        extension: r.user as string,
+        fullName: r.full_name as string,
+        status: r.status ?? "OFFLINE",
+        timeInStatus: r.vrijeme ?? "-",
+        campaignId: r.campaignID ?? "-",
+        sales: Number(r.sales ?? 0),
+        totalCalls: Number(r.totalCalls ?? 0),
+        conversionRate: r.konverzija ?? "-",
+        pauseTime: r.pauseTime ?? "-",
+        waitTime: r.waitTime ?? "-",
+        dispoTime: r.dispoTime ?? "-",
+        deadTime: r.deadTime ?? "-",
+        talkTime: r.talkTime ?? "-",
+        totalTime: r.totalTime ?? "-",
+        activeTime: r.activeTime ?? "-",
+        inactiveTime: r.inactiveTime ?? "-",
+      }));
     return { data, error: null };
   } catch (e) {
     return { data: null, error: e instanceof Error ? e.message : "Dialer nicht erreichbar" };

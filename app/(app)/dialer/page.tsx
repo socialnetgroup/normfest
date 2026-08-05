@@ -40,6 +40,7 @@ const STATUS_LABELS: Record<string, string> = {
   INCALL: "Im Gespräch",
   DISPO: "Nachbearbeitung",
   PAUSED: "Pause",
+  OFFLINE: "Abgemeldet",
 };
 
 export default async function DialerPage() {
