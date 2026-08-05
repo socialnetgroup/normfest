@@ -1935,6 +1935,25 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     connection exists yet) — purely to show the interaction shape, no telephony
     functionality, consistent with §1's "no dialer/telephony" MVP boundary. Verified live.
 
+    **Live-Status added (2026-08-05).** Anis got a real URL from the dialer dev
+    (`http://socialnet.dialer.ba/agents.php`) and asked whether it's a realtime-monitor
+    API — checked directly: unauthenticated GET, real JSON body (mislabeled
+    `Content-Type: text/html`) with per-agent live status (`INCALL`/`PAUSED`/`DISPO`),
+    time in status, campaign, sales/calls/conversion, and a pause/wait/dispo/dead/talk/
+    active-inactive time breakdown — confirmed against real agent names in the response.
+    Flagged back to Anis that the endpoint has no visible auth, exposing real per-agent
+    productivity data to anyone with the URL — worth asking the dialer dev whether
+    there's IP-level protection this session can't see. Read-only mirror shipped same
+    day: `lib/dialer/status.ts` (`fetchDialerAgentStatuses()`, `matchDialerAgent()` -
+    dialer names carry no diacritics, e.g. "Alan Sacic" vs our "Alan Sačić", matched via
+    NFD-normalized comparison rather than exact string) + a new "Live-Status" card on
+    `/dialer`, admin-only (same HR-adjacent-data reasoning as `agent_daily_performance`,
+    §4.11), auto-refreshing every 15s via the existing `AutoRefresh` component. Does not
+    start, control, or route calls — purely a read-only status mirror, does not touch the
+    "no dialer/telephony" MVP boundary (§1). Verified live end-to-end with real data:
+    correct sort (in-call first), correct German status labels, correct diacritic-aware
+    name matching linking to `/admin/team/[agentId]`.
+
 14. **QA-Bewertungen — shipped (2026-07-25).** New standalone admin menu item (real feature,
     not a placeholder — unlike QA-Anrufe/M9, nothing here is blocked on an external vendor
     decision): the TL's mandatory monthly per-agent call-quality evaluation. Anis referenced
@@ -2118,6 +2137,28 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     positioned directly above their tick marks on the bar itself (`components/progress-bar.tsx`
     gained visible marker labels, previously title-only tooltips), on both the admin and
     agent Dashboard — same component, one shared instance.
+
+18. **Katalog cross-sell tile images fixed - real, measured blur, not a hunch
+    (2026-08-05).** Anis reported "slike u Katalogu su blur". Diagnosed live rather than
+    guessed: on the product detail page's "Könnte auch interessant sein" grid
+    (`app/(app)/katalog/[id]/page.tsx`), each tile's `<Image>` had a hardcoded
+    `width={96} height={96}` — but the tile's real on-screen size comes from the
+    responsive grid (`grid-cols-2/3/4`), measured live at ~199px, roughly 2x what the
+    code told Next.js to optimize for. Next.js only ever fetched a `w=256` source for a
+    box actually rendered at 199 CSS px, which is under-provisioned the moment the
+    screen's device-pixel-ratio is above 1 (any modern laptop/phone) - a real,
+    reproducible cause, confirmed by reading `clientWidth`/`widthAttr` directly off the
+    live DOM, not assumed. The main product photo above it (`width={128} height={128}`
+    inside a `size-32`/128px-fixed container) was already correct - same
+    `clientWidth`≈`widthAttr` check confirmed no mismatch there, so only the cross-sell
+    tiles needed a fix. Switched those tiles to `fill` + a `sizes` prop matching the real
+    grid breakpoints (`"(max-width: 640px) 45vw, (max-width: 768px) 30vw, 200px"`)
+    instead of a fixed width/height guess, so Next.js generates the correct multi-
+    resolution `srcset` (confirmed live: 256w through 3840w, versus always exactly 256w
+    before) and the browser picks the right one for its own pixel density. Grepped the
+    whole app for other `next/image` usage first (only 3 files: this one, the login-page
+    logo, the sidebar logo) - confirmed this was the only place the bug existed, not a
+    pattern to hunt down elsewhere.
 
 ---
 

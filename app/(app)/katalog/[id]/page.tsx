@@ -154,9 +154,18 @@ export default async function ProductPage({
                         <Image
                           src={relatedImageUrl}
                           alt={related.name}
-                          width={96}
-                          height={96}
-                          className="size-full object-contain p-1.5"
+                          fill
+                          // The tile's actual rendered size comes from the
+                          // responsive grid (grid-cols-2/3/4), not a fixed
+                          // pixel value - a hardcoded width/height={96} told
+                          // Next.js to optimize for 96px while the real
+                          // on-screen size is often ~2x that, so the fetched
+                          // image was under-resolved and looked blurry
+                          // (confirmed live: clientWidth 199px vs a w=256
+                          // source optimized for a 96px target). `sizes`
+                          // matches the grid's real breakpoints instead.
+                          sizes="(max-width: 640px) 45vw, (max-width: 768px) 30vw, 200px"
+                          className="object-contain p-1.5"
                         />
                       ) : (
                         <span className="text-xs text-muted-foreground">Kein Bild</span>
