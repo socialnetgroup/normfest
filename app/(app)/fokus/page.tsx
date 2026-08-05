@@ -1,4 +1,4 @@
-import { Building2, ListChecks, Package, Target } from "lucide-react";
+import { Building2, FileText, ListChecks, Package, Target } from "lucide-react";
 import Link from "next/link";
 
 import { FocusItemRemoveButton } from "@/components/focus-item-remove-button";
@@ -51,10 +51,14 @@ export default async function FokusPage() {
   const supabase = await createClient();
   const [{ user, profile }, { data: activeList }] = await Promise.all([
     getCurrentUser(),
-    supabase.from("focus_lists").select("id, name, note, created_at").eq("active", true).maybeSingle(),
+    supabase.from("focus_lists").select("id, name, note, created_at, pdf_path").eq("active", true).maybeSingle(),
   ]);
 
   const isAdmin = profile?.role === "admin";
+
+  const pdfUrl = activeList?.pdf_path
+    ? supabase.storage.from("focus-list-files").getPublicUrl(activeList.pdf_path).data.publicUrl
+    : null;
 
   const { data: allLists } = isAdmin
     ? await supabase.from("focus_lists").select("id, name, active, created_at").order("created_at", { ascending: false })
@@ -132,6 +136,17 @@ export default async function FokusPage() {
               {isAdmin ? <FocusListManage listId={activeList.id} name={activeList.name} /> : null}
             </div>
             {activeList.note ? <p className="text-sm text-muted-foreground">{activeList.note}</p> : null}
+            {pdfUrl ? (
+              <a
+                href={pdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={cn(buttonVariants({ variant: "outline", size: "sm" }), "w-fit gap-2")}
+              >
+                <FileText className="size-4" />
+                Flyer (PDF) öffnen / an Kunden senden
+              </a>
+            ) : null}
           </div>
 
           <Card>

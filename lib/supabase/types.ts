@@ -798,6 +798,7 @@ export type Database = {
           id: string
           name: string
           note: string | null
+          pdf_path: string | null
         }
         Insert: {
           active?: boolean
@@ -806,6 +807,7 @@ export type Database = {
           id?: string
           name: string
           note?: string | null
+          pdf_path?: string | null
         }
         Update: {
           active?: boolean
@@ -814,6 +816,7 @@ export type Database = {
           id?: string
           name?: string
           note?: string | null
+          pdf_path?: string | null
         }
         Relationships: [
           {

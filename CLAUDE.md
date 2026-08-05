@@ -2271,6 +2271,78 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     real 61-row feedback list (grown from the 50+ noted above, same day's ongoing agent
     activity) renders correctly via the new sidebar link.
 
+    **Outcome filter added (2026-08-06)** - Anis: "u Feedback dio dodaj pored agent i tag
+    filtera takodjer filter po tipu ocjene: nicht relevant, abgelecht, verkauf itd." A
+    third `outcome` query param (sold/interested/rejected/not_relevant, same four values
+    `FeedbackHistoryItem` already renders) added alongside `agent`/`date`, same
+    `<form method="get">` pattern - a plain `<select>` "Ergebnis" between Agent and Tag.
+    Verified live: `?outcome=sold` correctly narrowed the real list to exactly the one
+    real 'sold' row logged so far, matching the count found directly against the DB.
+
+    **Real finding, not a bug (2026-08-06), Anis asked directly: "da li Alanove prodaje
+    sada se prikazuju iz team dashboard uploada ili iz ovog sto je on u firme ubacivao kao
+    feedback i verkauf? da li se to poklapa, provjeri."** Checked both sources directly for
+    Alan's August data: `agent_daily_performance` (from the monthly Team Dashboard Excel,
+    §4.11 - what Rangliste/Team Dashboard/dialer Sales column all read from) shows 5 sales
+    / 670,44 € for the month so far (3/552,64 € on 08-04, 2/117,80 € on 08-05). His own
+    `sales_feedback` rows with `outcome='sold'` (what he personally logs on a company
+    profile) show only 1 row / 13,90 € (qty 2, 08-05) for the same period. **They do not
+    reconcile - by design, not a defect:** these have always been two separate data
+    sources per §4A (Team Dashboard = Tier-1 "official" daily revenue/sales_count, entered
+    by/for the whole team's KPI tracking; `sales_feedback` = each agent's own granular,
+    per-company outcome log, the flywheel's fuel). Nothing wires one into the other - an
+    agent can have real sales that never get logged as `sales_feedback` (busy day, forgot,
+    logged the call as "interested" instead), and that's expected today. This is exactly
+    the class of gap §4A's "feedback-vs-reality discrepancy report" was already scoped for
+    (deferred until Tier-2 invoice data exists, §4A point 2) - the same shape of problem,
+    just against Team Dashboard rather than invoices. No code changed; reported the real
+    numbers back to Anis rather than assuming they'd match.
+
+12. **August Kracher 2026 focus list — shipped (2026-08-06).** Anis attached the real
+    monthly Normfest promo flyer (`August Kracher 2026.pdf`, 9 pages - a `pdftotext`
+    layout check plus a direct pdfjs page count confirmed this, correcting an earlier
+    57-page estimate from a different tool) and asked to turn it into the Fokus list:
+    *"Lass uns diesen August Kracher bzw. Fokuskatalog der Fokus liste in der App anhängen
+    und diese Produkte in der Liste auflisten (die akutelle placeholder liste dann gerne
+    löschen). Falls einer dieser Produkte nicht exisiteren sollte, dann gerne direk in
+    Katalog aufnehmen... Idee = Agenten haben pdf zum versenden und preise, Liste fuer
+    nachtragen wer die gewinner waren."* No `pdftoppm`/poppler in this environment (same
+    gap noted in §13 M4's PDF-crop work) - reused `scripts/render-catalog-page.mjs`'s
+    pdfjs-dist + `@napi-rs/canvas` approach (one-off script, not committed) to render all
+    9 pages to PNG and read them directly, since `pdftotext` only has a real text layer on
+    the first ~2 pages (price tags and most of the layout are vector/image graphics, not
+    text).
+
+    Extracted all 64 real SKUs across the flyer (Aquano hygiene set, seasonal Leder-/
+    Aerofit-/Schraubensicherung items, Chemieartikel sprays, Klett-Scheiben set deal,
+    3 glove lines with size variants, NFZ hose/coupling-head parts) with their real prices
+    and pack conditions (Setpreis, per-Stk, per-Paar-ab-12, Duft-group pricing). Checked
+    all 64 against `products.sku` before touching anything - **all 64 already exist in the
+    catalog**, so nothing needed adding (Anis's "falls nicht existieren" branch didn't
+    apply this time).
+
+    New `focus_lists.pdf_path` column (migration `20260806010000_focus_lists_pdf_path.sql`)
+    + a new public Storage bucket `focus-list-files` (created via the admin API, same
+    pattern as `product-images`) holding the flyer itself
+    (`august-kracher-2026.pdf`) - `/fokus` resolves it to a public URL and renders a
+    "Flyer (PDF) öffnen / an Kunden senden" button on the active list's header card when
+    `pdf_path` is set, satisfying the "Agenten haben pdf zum versenden" half of the ask.
+    The "Liste fuer nachtragen wer die gewinner waren" half needed no new building at all -
+    it's exactly the existing `focus_list_products` + "N× verkauft" quick-entry mechanism
+    from §4.7/§7, just pointed at these 64 real products with their real prices as each
+    row's `note`.
+
+    Old placeholder list ("Fokus August 2026 - Hauptkategorien 1-4", 20 arbitrary
+    alphabetical products from the 2026-07-31 reset, §14 item 6 note) deleted per Anis's
+    explicit ask, not just deactivated - `focus_list_products`/`focus_list_items` cascade
+    on `focus_list_id`, so this cleanly removed its rows too. New list ("August Kracher
+    2026", note carries the flyer's real validity window "01.08. bis 31.08.2026") created
+    active in its place. Verified live end-to-end (throwaway admin test account, deleted
+    after): all 64 products render correctly grouped into their 8 real catalog categories
+    with the correct price/pack note on each row, the PDF button opens the real uploaded
+    flyer at its real public Storage URL, and "Alle Fokuslisten" shows only the new list
+    (old one confirmed gone, not just hidden).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

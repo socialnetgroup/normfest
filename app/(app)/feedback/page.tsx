@@ -13,12 +13,19 @@ const PAGE_SIZE = 30;
 const selectClassName =
   "h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
 
+const OUTCOME_OPTIONS = [
+  { value: "sold", label: "Verkauft" },
+  { value: "interested", label: "Interessiert" },
+  { value: "rejected", label: "Abgelehnt" },
+  { value: "not_relevant", label: "Nicht relevant" },
+] as const;
+
 export default async function FeedbackListPage({
   searchParams,
 }: {
-  searchParams: Promise<{ agent?: string; date?: string; page?: string }>;
+  searchParams: Promise<{ agent?: string; date?: string; outcome?: string; page?: string }>;
 }) {
-  const { agent: agentFilter, date: dateFilter, page: pageParam } = await searchParams;
+  const { agent: agentFilter, date: dateFilter, outcome: outcomeFilter, page: pageParam } = await searchParams;
   const page = Math.max(1, Number(pageParam) || 1);
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
@@ -36,6 +43,7 @@ export default async function FeedbackListPage({
     .order("created_at", { ascending: false })
     .range(from, to);
   if (agentFilter) feedbackBuilder = feedbackBuilder.eq("agent_id", agentFilter);
+  if (outcomeFilter) feedbackBuilder = feedbackBuilder.eq("outcome", outcomeFilter);
   if (dateFilter) {
     feedbackBuilder = feedbackBuilder
       .gte("created_at", `${dateFilter}T00:00:00.000Z`)
@@ -49,12 +57,13 @@ export default async function FeedbackListPage({
 
   const total = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const hasFilter = Boolean(agentFilter || dateFilter);
+  const hasFilter = Boolean(agentFilter || dateFilter || outcomeFilter);
 
   function pageHref(p: number) {
     const params = new URLSearchParams();
     if (agentFilter) params.set("agent", agentFilter);
     if (dateFilter) params.set("date", dateFilter);
+    if (outcomeFilter) params.set("outcome", outcomeFilter);
     if (p > 1) params.set("page", String(p));
     const qs = params.toString();
     return qs ? `/feedback?${qs}` : "/feedback";
@@ -79,6 +88,17 @@ export default async function FeedbackListPage({
                 {(agentOptions ?? []).map((a) => (
                   <option key={a.id} value={a.profile_id!}>
                     {a.full_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="outcome">Ergebnis</Label>
+              <select id="outcome" name="outcome" defaultValue={outcomeFilter ?? ""} className={selectClassName}>
+                <option value="">Alle</option>
+                {OUTCOME_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
                   </option>
                 ))}
               </select>
