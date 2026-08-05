@@ -944,11 +944,21 @@ background):** every item checked against the real codebase/project, not assumed
   margin across every measurement today, concluded this was a one-off CI-runner-side
   transient (most likely a brief connection/count-query hiccup under GitHub Actions'
   resource constraints, not a systemic timeout risk) rather than a regression needing a
-  timeout bump or query fix - no code change made for this specific failure. Flagging
-  here in case it recurs: if it does, the next fix should be to make the test itself
-  assert on the count query's own `error` (not just the RPC's) so a repeat failure comes
-  back as a clear "count query failed: ..." instead of a confusing null-vs-number
-  mismatch - not built now since it hasn't recurred.
+  timeout bump or query fix - no code change made for this specific failure at the time.
+  **It recurred the same day, this time reproduced locally** (`expected null to be
+  86478` - one of the two `count` queries came back `null` with no surfaced error,
+  exactly the failure mode predicted above) - with two real occurrences now (one CI, one
+  local), fixed properly instead of noting it a third time. Added a `countSignals()`
+  helper in the idempotency test that checks the count query's own `error` explicitly
+  (previously only the RPC's `error` was checked) and retries once after a 1s delay
+  before throwing a clear, labeled error - a single transient hiccup self-heals, a
+  second consecutive failure fails loudly instead of producing a confusing
+  null-vs-number mismatch. Also bumped the two other describe blocks that sit
+  immediately downstream of the heavy signals insert and had shown the same
+  DB-contention symptom before (`product_relations / brand_consumption_profiles RLS`,
+  `company_enrichment / enrichment_jobs RLS`) from the vitest default 5s timeout to 20s
+  each. Verified: full suite green (41/41) on the next run, `visibility_mode` integrity
+  re-checked after.
 - ✅ **Key hygiene** — `.env*` gitignored except `.env.example` (confirmed: no `.env` variant
   ever tracked in git). `SUPABASE_SERVICE_ROLE_KEY` usage is confined to
   `lib/supabase/admin.ts`, CLI scripts, and the test file — confirmed zero client-component

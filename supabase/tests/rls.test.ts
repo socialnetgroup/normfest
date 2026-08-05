@@ -577,20 +577,38 @@ describe("signals RLS + fn_refresh_signals", () => {
     90000,
   );
 
+  // The count query below has twice come back with count:null and no
+  // surfaced error (once in real CI run #114, once reproduced locally,
+  // 2026-08-06) -- almost certainly a transient PostgREST/connection hiccup
+  // right after fn_refresh_signals' own huge insert, not a real assertion
+  // failure. Previously the test only checked the RPC's own error, not the
+  // count query's, so a real failure there showed up as a confusing
+  // null-vs-number mismatch. This helper surfaces that error explicitly and
+  // retries once (a single transient hiccup should clear on its own; a
+  // second consecutive failure is worth failing loudly on).
+  async function countSignals(label: string): Promise<number> {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      const { count, error } = await admin.from("signals").select("id", { count: "exact", head: true });
+      if (!error && count !== null) return count;
+      if (attempt === 1) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        continue;
+      }
+      throw new Error(`counting signals (${label}) failed after retry: ${error?.message ?? "count was null"}`);
+    }
+    throw new Error(`counting signals (${label}) failed unexpectedly`);
+  }
+
   it(
     "fn_refresh_signals is idempotent (dedup index holds across re-runs)",
     async () => {
       const { error: first } = await admin.rpc("fn_refresh_signals");
       expect(first).toBeNull();
-      const { count: countAfterFirst } = await admin
-        .from("signals")
-        .select("id", { count: "exact", head: true });
+      const countAfterFirst = await countSignals("after first refresh");
 
       const { error: second } = await admin.rpc("fn_refresh_signals");
       expect(second).toBeNull();
-      const { count: countAfterSecond } = await admin
-        .from("signals")
-        .select("id", { count: "exact", head: true });
+      const countAfterSecond = await countSignals("after second refresh");
 
       expect(countAfterSecond).toBe(countAfterFirst);
     },
@@ -605,6 +623,10 @@ describe("product_relations / brand_consumption_profiles RLS", () => {
     await admin.from("product_relations").delete().ilike("note", `RLS test%`);
   });
 
+  // The next three tests run immediately after the heavy fn_refresh_signals
+  // block's ~90k-row bulk insert (above) -- real CI runs have shown the DB
+  // still contended enough right after that a simple insert can miss the
+  // vitest default 5s timeout (see §12 CLAUDE.md). Bumped to 20s for margin.
   it("a non-admin cannot write product_relations", async () => {
     const client = anonClient();
     await client.auth.signInWithPassword({ email: agentEmail, password });
@@ -617,7 +639,7 @@ describe("product_relations / brand_consumption_profiles RLS", () => {
       note: `RLS test ${stamp}`,
     });
     expect(error).not.toBeNull();
-  });
+  }, 20000);
 
   it("an admin can write product_relations and any authenticated user can read it", async () => {
     const adminClient = anonClient();
@@ -645,7 +667,7 @@ describe("product_relations / brand_consumption_profiles RLS", () => {
       .single();
     expect(readErr).toBeNull();
     expect(data?.id).toBe(rel!.id);
-  });
+  }, 20000);
 
   it("a non-admin cannot write brand_consumption_profiles", async () => {
     const client = anonClient();
@@ -655,7 +677,7 @@ describe("product_relations / brand_consumption_profiles RLS", () => {
       .from("brand_consumption_profiles")
       .insert({ brand: `RLS-Test-${stamp}`, category: "Test", note: "test" });
     expect(error).not.toBeNull();
-  });
+  }, 20000);
 });
 
 describe("company_enrichment / enrichment_jobs RLS (M5)", () => {
@@ -679,6 +701,8 @@ describe("company_enrichment / enrichment_jobs RLS (M5)", () => {
     if (jobId) await admin.from("enrichment_jobs").delete().eq("id", jobId);
   });
 
+  // Same real-CI DB-contention margin as the product_relations block above
+  // (this describe block also runs shortly after the heavy signals insert).
   it("a non-admin cannot create an enrichment job or enrichment row", async () => {
     const client = anonClient();
     await client.auth.signInWithPassword({ email: agentEmail, password });
@@ -690,7 +714,7 @@ describe("company_enrichment / enrichment_jobs RLS (M5)", () => {
       .from("company_enrichment")
       .insert({ company_id: companyId });
     expect(enrichErr).not.toBeNull();
-  });
+  }, 20000);
 
   it("an admin can create a job + enrichment row, and any authenticated user can read them", async () => {
     const adminClient = anonClient();
@@ -730,7 +754,7 @@ describe("company_enrichment / enrichment_jobs RLS (M5)", () => {
       .single();
     expect(readEnrichErr).toBeNull();
     expect(readEnrichment?.places_name).toBe("RLS Test Place");
-  });
+  }, 20000);
 });
 
 describe("chat_log RLS + chat tool RPCs (M7)", () => {
