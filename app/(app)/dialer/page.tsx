@@ -51,16 +51,26 @@ export default async function DialerPage() {
   let dialerRows: DialerAgentStatus[] | null = null;
   let dialerError: string | null = null;
   let agents: { id: string; full_name: string }[] = [];
+  let salesByAgentId = new Map<string, number>();
 
   if (isAdmin) {
     const supabase = await createClient();
-    const [{ data: dialerData, error: fetchError }, { data: agentRows }] = await Promise.all([
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const [{ data: dialerData, error: fetchError }, { data: agentRows }, { data: perfRows }] = await Promise.all([
       fetchDialerAgentStatuses(),
       supabase.from("agents").select("id, full_name").eq("active", true),
+      supabase.from("agent_daily_performance").select("agent_id, sales_count").eq("date", todayStr),
     ]);
     dialerRows = dialerData;
     dialerError = fetchError;
     agents = agentRows ?? [];
+    // "Sales" in the dialer's own API is the dialer's own internal counter,
+    // disconnected from what this app actually tracks (Anis, 2026-08-06:
+    // wants it pulled from the same real source as the Rangliste/Team
+    // Dashboard - today's agent_daily_performance.sales_count - not the
+    // dialer's own number). Falls back to the dialer's raw count only if a
+    // row's name doesn't match a real agent.
+    salesByAgentId = new Map((perfRows ?? []).map((r) => [r.agent_id, r.sales_count]));
   }
 
   const sortedRows = dialerRows
@@ -74,7 +84,7 @@ export default async function DialerPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      {isAdmin ? <AutoRefresh intervalMs={15_000} /> : null}
+      {isAdmin ? <AutoRefresh intervalMs={10_000} /> : null}
       <div>
         <h1 className="font-heading flex items-center gap-2 text-2xl font-semibold tracking-tight">
           Dialer
@@ -90,12 +100,14 @@ export default async function DialerPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <IconTitle icon={Activity}>Live-Status (Dialer)</IconTitle>
-            <Badge variant="success">Live · aktualisiert alle 15s</Badge>
+            <Badge variant="success">Live · aktualisiert alle 10s</Badge>
           </CardHeader>
           <CardContent>
             <p className="mb-3 text-sm text-muted-foreground">
               Direkt aus dem bestehenden Dialer gelesen (schreibgeschützt - startet, steuert oder beendet
-              keine Anrufe). Nur für Admin sichtbar, gleiche Einstufung wie das Team Dashboard.
+              keine Anrufe). Nur für Admin sichtbar, gleiche Einstufung wie das Team Dashboard.{" "}
+              <span className="font-medium">Sales</span> kommt nicht vom Dialer selbst, sondern aus den
+              echten, heute erfassten Verkäufen dieses Tools (gleiche Quelle wie Rangliste/Team Dashboard).
             </p>
             {dialerError ? (
               <p className="text-sm text-destructive">Dialer nicht erreichbar: {dialerError}</p>
@@ -123,6 +135,7 @@ export default async function DialerPage() {
                   <tbody className="divide-y">
                     {sortedRows.map((row) => {
                       const matched = matchDialerAgent(row.fullName, agents);
+                      const realSales = matched ? (salesByAgentId.get(matched.id) ?? 0) : row.sales;
                       return (
                         <tr key={row.extension}>
                           <td className="px-2 py-2 font-medium">
@@ -141,7 +154,7 @@ export default async function DialerPage() {
                           </td>
                           <td className="px-2 py-2 tabular-nums">{row.timeInStatus}</td>
                           <td className="px-2 py-2 tabular-nums">{row.totalCalls}</td>
-                          <td className="px-2 py-2 tabular-nums">{row.sales}</td>
+                          <td className="px-2 py-2 tabular-nums">{realSales}</td>
                           <td className="px-2 py-2 tabular-nums">{row.conversionRate}</td>
                           <td className="px-2 py-2 tabular-nums">{row.talkTime}</td>
                           <td className="px-2 py-2 tabular-nums">{row.pauseTime}</td>

@@ -1973,6 +1973,17 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     the exact reproduction case (null-status agent present) now renders "Abgemeldet"
     correctly instead of crashing, and server logs show zero errors afterward.
 
+    **"Sales" column re-sourced (2026-08-06).** Anis: the dialer's own `sales` field is
+    the dialer's internal counter, disconnected from what this app actually tracks -
+    should pull from the same real source as Rangliste/Team Dashboard instead. Added a
+    third query (`agent_daily_performance.sales_count` for today, keyed by `agent_id`)
+    alongside the existing dialer fetch + agents query; each row now shows that number
+    for its matched agent (falling back to the dialer's own count only if a name doesn't
+    match a real agent - shouldn't happen in practice). Also dropped the auto-refresh
+    interval to 10s per Anis's ask. Verified live against the real
+    `agent_daily_performance` values for today (Arnela 4, Lejla 1, Maja 2, Muhamed 2,
+    everyone else 0) - matched exactly.
+
 14. **QA-Bewertungen — shipped (2026-07-25).** New standalone admin menu item (real feature,
     not a placeholder — unlike QA-Anrufe/M9, nothing here is blocked on an external vendor
     decision): the TL's mandatory monthly per-agent call-quality evaluation. Anis referenced
