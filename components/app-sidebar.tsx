@@ -19,6 +19,7 @@ import {
   Wand2,
   Headphones,
   Phone,
+  MessageSquare,
   ClipboardCheck,
   Tags,
   Copy,
@@ -199,6 +200,13 @@ export function AppSidebar({
                 label="Team"
                 icon={Users}
                 active={isActive(pathname, "/admin/team")}
+                onNavigate={closeMobile}
+              />
+              <NavItem
+                href="/feedback"
+                label="Feedback"
+                icon={MessageSquare}
+                active={isActive(pathname, "/feedback")}
                 onNavigate={closeMobile}
               />
               <NavItem

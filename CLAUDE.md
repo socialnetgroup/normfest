@@ -929,6 +929,26 @@ background):** every item checked against the real codebase/project, not assumed
   same file without issue). Root cause not found; smells like a session-propagation timing
   quirk specific to this describe block. Re-run the suite once or twice if it goes red on
   exactly these assertions before assuming a real regression.
+  **Real GitHub Actions CI failure investigated (2026-08-06), not just local flakiness
+  this time.** Anis shared a screenshot of a real failed CI run (#114, commit `9090e6c`)
+  on `fn_refresh_signals is idempotent`, a count-comparison assertion coming back with
+  one side `null` instead of the real row count - meaning one of the test's two
+  `select("id", {count:"exact", head:true})` calls itself failed (PostgREST returns
+  `count: null` on an error) without the test surfacing that error, not a hard RPC
+  failure. Investigated properly rather than dismissing it as the already-documented
+  local variance: timed `fn_refresh_signals()` directly against production multiple times
+  today (single call: 39.2s, 26.1s; back-to-back double-call sequences: 56.4s and 61.2s
+  total) - all comfortably inside the 220s JS test timeout and the function's own 75s
+  DB-level timeout, with 3-4x margin every time, including in the full suite run right
+  after (41/41 green, idempotency test at 61.171s). Given the consistent, healthy local
+  margin across every measurement today, concluded this was a one-off CI-runner-side
+  transient (most likely a brief connection/count-query hiccup under GitHub Actions'
+  resource constraints, not a systemic timeout risk) rather than a regression needing a
+  timeout bump or query fix - no code change made for this specific failure. Flagging
+  here in case it recurs: if it does, the next fix should be to make the test itself
+  assert on the count query's own `error` (not just the RPC's) so a repeat failure comes
+  back as a clear "count query failed: ..." instead of a confusing null-vs-number
+  mismatch - not built now since it hasn't recurred.
 - ✅ **Key hygiene** — `.env*` gitignored except `.env.example` (confirmed: no `.env` variant
   ever tracked in git). `SUPABASE_SERVICE_ROLE_KEY` usage is confined to
   `lib/supabase/admin.ts`, CLI scripts, and the test file — confirmed zero client-component
@@ -2231,6 +2251,15 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     live against real data (Alan's active field-testing produced 50+ real rows same
     day): agent filter, day filter, and reset link all confirmed correct against the
     real row counts.
+
+    **Admin-sidebar nav link added (2026-08-06)** - Anis: "Dodaj i Feedback dugme u admin
+    panel da se moze tako pristupiti" (the tile-click on Dashboard was the only entry
+    point). Added a `/feedback` item to `components/app-sidebar.tsx`'s Admin section
+    (between Team and QA-Bewertungen) - placement only, no new access restriction: the
+    page itself stays open to every authenticated user per `sales_feedback`'s existing
+    team-shared RLS, same as the Dashboard tile it already linked from. Verified live: the
+    real 61-row feedback list (grown from the 50+ noted above, same day's ongoing agent
+    activity) renders correctly via the new sidebar link.
 
 ---
 
