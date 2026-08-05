@@ -46,6 +46,7 @@ const dateTimeFmt = new Intl.DateTimeFormat("de-DE", {
   hour: "2-digit",
   minute: "2-digit",
 });
+const dateFmt = new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
 
 type ProductOption = { id: string; name: string; sku: string };
 
@@ -64,6 +65,8 @@ export function FeedbackHistoryItem({
   canEdit,
   companyId,
   companyName,
+  wiedervorlageDate,
+  wiedervorlageDone,
 }: {
   id: string;
   outcome: string;
@@ -82,6 +85,8 @@ export function FeedbackHistoryItem({
    * omits these. */
   companyId?: string;
   companyName?: string;
+  wiedervorlageDate?: string | null;
+  wiedervorlageDone?: boolean;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -98,6 +103,8 @@ export function FeedbackHistoryItem({
   const [formValue, setFormValue] = useState(valueNet ? String(valueNet) : "");
   const [formObjection, setFormObjection] = useState(objection ?? "");
   const [formComment, setFormComment] = useState(comment ?? "");
+  const [formWiedervorlage, setFormWiedervorlage] = useState(wiedervorlageDate ?? "");
+  const [wiedervorlagePending, setWiedervorlagePending] = useState(false);
 
   async function searchProducts(q: string) {
     setProductQuery(q);
@@ -127,6 +134,8 @@ export function FeedbackHistoryItem({
       p_value_net: formValue ? Number(formValue) : undefined,
       p_objection: formObjection || undefined,
       p_comment: formComment || undefined,
+      p_wiedervorlage_date: formWiedervorlage || undefined,
+      p_wiedervorlage_done: wiedervorlageDone ?? false,
     });
     setPending(false);
     if (error) {
@@ -144,6 +153,19 @@ export function FeedbackHistoryItem({
     const supabase = createClient();
     const { error } = await supabase.rpc("fn_delete_sales_feedback", { p_id: id });
     setPending(false);
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
+    router.refresh();
+  }
+
+  async function markWiedervorlageDone() {
+    setWiedervorlagePending(true);
+    setErrorMessage(null);
+    const supabase = createClient();
+    const { error } = await supabase.rpc("fn_set_wiedervorlage_done", { p_id: id, p_done: true });
+    setWiedervorlagePending(false);
     if (error) {
       setErrorMessage(error.message);
       return;
@@ -253,6 +275,17 @@ export function FeedbackHistoryItem({
           />
         </div>
 
+        <div className="flex flex-col gap-1">
+          <Label htmlFor={`wiedervorlage-${id}`}>Wiedervorlage (optional)</Label>
+          <Input
+            id={`wiedervorlage-${id}`}
+            type="date"
+            value={formWiedervorlage}
+            onChange={(e) => setFormWiedervorlage(e.target.value)}
+            className="w-40"
+          />
+        </div>
+
         <div className="flex items-center gap-3">
           <Button type="button" size="sm" onClick={save} disabled={pending}>
             {pending ? "Speichern..." : "Speichern"}
@@ -294,6 +327,23 @@ export function FeedbackHistoryItem({
         </div>
         {objection ? <p className="mt-1 text-muted-foreground">Einwand: {objection}</p> : null}
         {comment ? <p className="mt-1 text-muted-foreground">{comment}</p> : null}
+        {wiedervorlageDate && !wiedervorlageDone ? (
+          <div className="mt-1.5 flex items-center gap-2">
+            <Badge variant={wiedervorlageDate <= new Date().toISOString().slice(0, 10) ? "warning" : "secondary"}>
+              Wiedervorlage: {dateFmt.format(new Date(wiedervorlageDate))}
+            </Badge>
+            {canEdit ? (
+              <button
+                type="button"
+                onClick={markWiedervorlageDone}
+                disabled={wiedervorlagePending}
+                className="text-xs text-muted-foreground hover:underline"
+              >
+                {wiedervorlagePending ? "..." : "Erledigt"}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         <p className="mt-1 text-xs text-muted-foreground">
           {adminAgentLink ? (
             <Link href={adminAgentLink} className="hover:underline">

@@ -37,7 +37,7 @@ export default async function FeedbackListPage({
   let feedbackBuilder = supabase
     .from("sales_feedback")
     .select(
-      "id, agent_id, company_id, outcome, qty, value_net, objection, comment, created_at, product_id, companies(name), products(name), profiles(full_name, agents(id))",
+      "id, agent_id, company_id, outcome, qty, value_net, objection, comment, created_at, product_id, wiedervorlage_date, wiedervorlage_done, companies(name), products(name), profiles(full_name, agents(id))",
       { count: "exact" },
     )
     .order("created_at", { ascending: false })
@@ -151,6 +151,8 @@ export default async function FeedbackListPage({
                     canEdit={f.agent_id === user?.id || isAdmin}
                     companyId={f.company_id}
                     companyName={(f.companies as { name: string } | null)?.name ?? "-"}
+                    wiedervorlageDate={f.wiedervorlage_date}
+                    wiedervorlageDone={f.wiedervorlage_done}
                   />
                 );
               })}

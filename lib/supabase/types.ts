@@ -1169,6 +1169,8 @@ export type Database = {
           product_id: string | null
           qty: number | null
           value_net: number | null
+          wiedervorlage_date: string | null
+          wiedervorlage_done: boolean
         }
         Insert: {
           agent_id: string
@@ -1181,6 +1183,8 @@ export type Database = {
           product_id?: string | null
           qty?: number | null
           value_net?: number | null
+          wiedervorlage_date?: string | null
+          wiedervorlage_done?: boolean
         }
         Update: {
           agent_id?: string
@@ -1193,6 +1197,8 @@ export type Database = {
           product_id?: string | null
           qty?: number | null
           value_net?: number | null
+          wiedervorlage_date?: string | null
+          wiedervorlage_done?: boolean
         }
         Relationships: [
           {
@@ -1698,6 +1704,7 @@ export type Database = {
           p_product_id?: string
           p_qty?: number
           p_value_net?: number
+          p_wiedervorlage_date?: string
         }
         Returns: string
       }
@@ -1742,6 +1749,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      fn_set_wiedervorlage_done: {
+        Args: { p_done?: boolean; p_id: string }
+        Returns: undefined
+      }
       fn_update_sales_feedback: {
         Args: {
           p_comment?: string
@@ -1751,6 +1762,8 @@ export type Database = {
           p_product_id?: string
           p_qty?: number
           p_value_net?: number
+          p_wiedervorlage_date?: string
+          p_wiedervorlage_done?: boolean
         }
         Returns: undefined
       }

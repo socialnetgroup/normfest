@@ -41,7 +41,9 @@ own results, and coached ("koristi tool → tool ti vraća bolje prijedloge").
 
 **What we are NOT building (MVP):**
 - ❌ No dialer/telephony (existing dialer stays; `telephony/` adapter stub stays empty).
-- ❌ No Wiedervorlagen/tasks (old dialer owns follow-ups).
+- ❌ ~~No Wiedervorlagen/tasks (old dialer owns follow-ups)~~ **Reversed 2026-08-06** —
+  Anis deliberately chose to build a lightweight Wiedervorlage (callback date) into the
+  app itself rather than wait on/duplicate the dialer. See §14 for what shipped.
 - ❌ No automated outbound messaging.
 - ❌ No ML training — SQL rules + curated mappings + LLM shell under §9.5 guardrails.
 - ❌ No multi-tenant platform yet.
@@ -2298,7 +2300,7 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     just against Team Dashboard rather than invoices. No code changed; reported the real
     numbers back to Anis rather than assuming they'd match.
 
-12. **August Kracher 2026 focus list — shipped (2026-08-06).** Anis attached the real
+20. **August Kracher 2026 focus list — shipped (2026-08-06).** Anis attached the real
     monthly Normfest promo flyer (`August Kracher 2026.pdf`, 9 pages - a `pdftotext`
     layout check plus a direct pdfjs page count confirmed this, correcting an earlier
     57-page estimate from a different tool) and asked to turn it into the Fokus list:
@@ -2342,6 +2344,72 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     with the correct price/pack note on each row, the PDF button opens the real uploaded
     flyer at its real public Storage URL, and "Alle Fokuslisten" shows only the new list
     (old one confirmed gone, not just hidden).
+
+21. **Wiedervorlage (callback date) — shipped (2026-08-06), a deliberate reversal of §1's
+    original "no Wiedervorlagen/tasks" MVP boundary.** Motivated by real evidence, not a
+    hunch: reviewing Alan's own `sales_feedback` comments for an unrelated question (below)
+    turned up many genuine callback-date mentions ("Sommerpause bis 17.08.2026", "habe den
+    auf Wiedervorlage am 27.08.") that nothing in the app surfaced anywhere. Anis: *"Mogli
+    bi dodati opciju 'Wiedervorlage'... U tom trenutku bi taj dogadjaj kada dodje trebao
+    iskociti prvi u 'Signalima' na Dashboardu."* Flagged the direct contradiction with §1
+    before touching anything; Anis confirmed it's an intentional reversal and chose the
+    smaller of two scopes offered (a date field + a due-today banner, not a full separate
+    Wiedervorlagen screen with per-agent filters - that's a natural v2 if this proves
+    useful, not built now).
+
+    Two new columns on `sales_feedback` (migration `20260806020000_wiedervorlage.sql`):
+    `wiedervorlage_date date`, `wiedervorlage_done boolean default false`. Set optionally
+    on `FeedbackForm` (company profile / `/feedback`, via `fn_log_sales_feedback`) and
+    editable via `FeedbackHistoryItem`'s existing edit mode (via `fn_update_sales_feedback`,
+    same "edit form pre-fills, always overwrites" pattern already used for every other
+    field there). A narrow new `fn_set_wiedervorlage_done(p_id, p_done)` RPC (same
+    single-purpose shape as `fn_dismiss_signal`/`fn_set_day_off`) powers a quick "Erledigt"
+    action both inline on `FeedbackHistoryItem` and on the new Dashboard banner, without
+    needing the full edit form just to dismiss one.
+
+    New Dashboard card "Wiedervorlagen fällig" (`app/(app)/page.tsx`, right above the
+    existing Signale card, matching Anis's "top of Signale" placement) - a plain live query
+    (`wiedervorlage_date <= today AND wiedervorlage_done = false`, not routed through the
+    `signals` table or `fn_refresh_signals()`, which is a heavy admin-triggered batch job
+    with real perf history, §12 - this needed to be simple and always-current instead).
+    Team-shared visibility per Anis's explicit "sve da vidi od svih", consistent with
+    `sales_feedback`'s existing shared-read RLS (unlike `companies`/`signals`, this table
+    was never made Gebiet-scoped, so no new visibility work was needed). Overdue rows badge
+    `destructive` (red), due-today `warning` (amber).
+
+    **Real bug caught by the test suite, not guessed (2026-08-06):** the first version of
+    the migration used `create or replace function` to add the new parameters to
+    `fn_log_sales_feedback`/`fn_update_sales_feedback` - but Postgres treats a changed
+    parameter list as a *different* function signature, so this silently left the old
+    7-parameter versions in place *alongside* the new 8/9-parameter ones instead of
+    replacing them. `fn_chat_log_sales_feedback` calls `fn_log_sales_feedback` positionally
+    with the original 7 args, which became ambiguous between the two overloads
+    ("function ... is not unique", caught immediately by the existing M7 chat-tool RLS
+    test, not discovered live). Fixed in a follow-up migration
+    (`20260806030000_fix_wiedervorlage_function_overload.sql`) that explicitly
+    `drop function if exists ...` on the old 7-arg signatures before recreating - full
+    suite green (41/41) afterward.
+
+    Verified live end-to-end (throwaway admin test account, deleted after): logged real
+    feedback with a Wiedervorlage set to today via the company-profile form, confirmed it
+    appeared correctly in the new Dashboard banner (company link, agent, comment, date
+    badge), clicked "Erledigt" and confirmed both the banner row disappeared on refresh and
+    `wiedervorlage_done` flipped to `true` in the database directly - not just the UI
+    hiding it.
+
+    **Alan's comment quality, the question that surfaced this idea (2026-08-06), Anis:
+    "Schaue dir ausserdem die koemntare von Alan an, ich bin mir nicht sicher, ob es richtig
+    genutzt wird."** Reviewed all 69 of his real `sales_feedback` rows (68 have a comment -
+    almost never skipped): genuinely well-used, specific call notes (reachability windows,
+    named contacts with direct-dial extensions, contact preferences, real product
+    complaints), not junk. One real nuance flagged back to Anis: 55 of 69 (80%) are tagged
+    `outcome='not_relevant'` even when the comment is clearly a real follow-up
+    ("Sommerpause bis 17.08.2026") rather than a genuine non-fit - worth knowing before
+    anything filters/aggregates by `outcome` alone. Also confirmed `fn_chat_get_company_brief`
+    already surfaces the last 8 feedback rows' comments to the AI assistant (so "history
+    before the call" via the assistant already worked, pre-dating this feature) - what was
+    missing, and what this feature adds, is a structured date + proactive surfacing rather
+    than requiring the agent to remember to ask or re-read old comments.
 
 ---
 

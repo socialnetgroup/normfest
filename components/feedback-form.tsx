@@ -42,6 +42,7 @@ export function FeedbackForm({ companyId }: { companyId: string }) {
   const [value, setValue] = useState("");
   const [objection, setObjection] = useState("");
   const [comment, setComment] = useState("");
+  const [wiedervorlageDate, setWiedervorlageDate] = useState("");
   const [status, setStatus] = useState<"idle" | "saving" | "done" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -70,6 +71,7 @@ export function FeedbackForm({ companyId }: { companyId: string }) {
     setValue("");
     setObjection("");
     setComment("");
+    setWiedervorlageDate("");
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -87,6 +89,7 @@ export function FeedbackForm({ companyId }: { companyId: string }) {
       p_value_net: value ? Number(value) : undefined,
       p_objection: objection || undefined,
       p_comment: comment || undefined,
+      p_wiedervorlage_date: wiedervorlageDate || undefined,
     });
 
     if (error) {
@@ -207,6 +210,17 @@ export function FeedbackForm({ companyId }: { companyId: string }) {
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               placeholder="z.B. Rückruf nächste Woche..."
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="wiedervorlage">Wiedervorlage (optional)</Label>
+            <Input
+              id="wiedervorlage"
+              type="date"
+              value={wiedervorlageDate}
+              onChange={(e) => setWiedervorlageDate(e.target.value)}
+              className="w-40"
             />
           </div>
 

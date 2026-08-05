@@ -1,3 +1,4 @@
+import { BellRing } from "lucide-react";
 import Link from "next/link";
 
 import { AutoRefresh } from "@/components/auto-refresh";
@@ -6,6 +7,7 @@ import { LogSaleForm } from "@/components/log-sale-form";
 import { ProgressBar } from "@/components/progress-bar";
 import { RefreshSignalsButton } from "@/components/refresh-signals-button";
 import { SignalDismissButton } from "@/components/signal-dismiss-button";
+import { WiedervorlageDoneButton } from "@/components/wiedervorlage-done-button";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -37,6 +39,7 @@ function pathLabel(path: string | null): string {
 }
 
 const eur = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+const shortDateFmt = new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
 
 type SettingsMap = Record<string, number>;
 
@@ -136,6 +139,19 @@ export default async function DashboardPage() {
     isAdmin ? supabase.rpc("fn_company_gebiet_coverage") : Promise.resolve({ data: null }),
     isAdmin ? supabase.rpc("fn_get_agent_login_status") : Promise.resolve({ data: null }),
   ]);
+
+  // Wiedervorlagen fällig heute oder überfällig - team-weit sichtbar (Anis,
+  // 2026-08-06: "sve da vidi od svih"), gleiche shared-Sichtbarkeit wie
+  // sales_feedback selbst. Separate Abfrage statt im Promise.all oben, da
+  // sie von keiner der anderen Variablen abhängt.
+  const { data: dueWiedervorlagen } = await supabase
+    .from("sales_feedback")
+    .select("id, company_id, comment, wiedervorlage_date, companies(name), profiles(full_name)")
+    .not("wiedervorlage_date", "is", null)
+    .eq("wiedervorlage_done", false)
+    .lte("wiedervorlage_date", todayStr)
+    .order("wiedervorlage_date", { ascending: true })
+    .limit(20);
 
   const byAgent = new Map<string, { name: string; revenue: number }>();
   for (const row of monthRows ?? []) {
@@ -402,6 +418,43 @@ export default async function DashboardPage() {
           )}
         </CardContent>
       </Card>
+
+      {dueWiedervorlagen && dueWiedervorlagen.length > 0 ? (
+        <Card className="border-l-4 border-l-warning">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BellRing className="size-4 text-warning-foreground" />
+              Wiedervorlagen fällig ({dueWiedervorlagen.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="flex flex-col divide-y">
+              {dueWiedervorlagen.map((w) => {
+                const company = w.companies as { name: string } | null;
+                const agent = w.profiles as { full_name: string | null } | null;
+                const overdue = w.wiedervorlage_date! < todayStr;
+                return (
+                  <li key={w.id} className="flex items-start justify-between gap-2 py-2.5 text-sm">
+                    <div className="flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant={overdue ? "destructive" : "warning"}>
+                          {shortDateFmt.format(new Date(w.wiedervorlage_date!))}
+                        </Badge>
+                        <Link href={`/firmen/${w.company_id}`} className="font-medium hover:underline">
+                          {company?.name ?? "-"}
+                        </Link>
+                        <span className="text-muted-foreground">· {agent?.full_name ?? "-"}</span>
+                      </div>
+                      {w.comment ? <p className="mt-1 text-muted-foreground">{w.comment}</p> : null}
+                    </div>
+                    <WiedervorlageDoneButton id={w.id} />
+                  </li>
+                );
+              })}
+            </ul>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {(topSignals && topSignals.length > 0) || isAdmin ? (
         <Card>
