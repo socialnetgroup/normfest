@@ -43,6 +43,8 @@ const STATUS_LABELS: Record<string, string> = {
   OFFLINE: "Abgemeldet",
 };
 
+const pct = new Intl.NumberFormat("de-DE", { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
 export default async function DialerPage() {
   const { user, profile } = await getCurrentUser();
   if (!user) notFound();
@@ -136,6 +138,11 @@ export default async function DialerPage() {
                     {sortedRows.map((row) => {
                       const matched = matchDialerAgent(row.fullName, agents);
                       const realSales = matched ? (salesByAgentId.get(matched.id) ?? 0) : row.sales;
+                      // Computed from realSales, not row.conversionRate - the dialer's
+                      // own conversion figure is based on ITS internal sales counter,
+                      // which no longer matches what's now shown in the Sales column
+                      // (Anis, 2026-08-06: same reasoning as the Sales fix above).
+                      const realConversion = row.totalCalls > 0 ? realSales / row.totalCalls : 0;
                       return (
                         <tr key={row.extension}>
                           <td className="px-2 py-2 font-medium">
@@ -155,7 +162,7 @@ export default async function DialerPage() {
                           <td className="px-2 py-2 tabular-nums">{row.timeInStatus}</td>
                           <td className="px-2 py-2 tabular-nums">{row.totalCalls}</td>
                           <td className="px-2 py-2 tabular-nums">{realSales}</td>
-                          <td className="px-2 py-2 tabular-nums">{row.conversionRate}</td>
+                          <td className="px-2 py-2 tabular-nums">{pct.format(realConversion)}</td>
                           <td className="px-2 py-2 tabular-nums">{row.talkTime}</td>
                           <td className="px-2 py-2 tabular-nums">{row.pauseTime}</td>
                           <td className="px-2 py-2 tabular-nums">{row.waitTime}</td>
