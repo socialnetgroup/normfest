@@ -62,6 +62,8 @@ export function FeedbackHistoryItem({
   agentName,
   adminAgentLink,
   canEdit,
+  companyId,
+  companyName,
 }: {
   id: string;
   outcome: string;
@@ -75,6 +77,11 @@ export function FeedbackHistoryItem({
   agentName: string;
   adminAgentLink: string | null;
   canEdit: boolean;
+  /** Only passed on cross-company lists (e.g. /feedback) - the company
+   * profile's own Feedback-Verlauf already has the company as context and
+   * omits these. */
+  companyId?: string;
+  companyName?: string;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -266,6 +273,17 @@ export function FeedbackHistoryItem({
   return (
     <li className="flex items-start justify-between gap-2 py-2.5 text-base">
       <div className="flex-1">
+        {companyName ? (
+          <p className="mb-0.5">
+            {companyId ? (
+              <Link href={`/firmen/${companyId}`} className="font-medium text-primary hover:underline">
+                {companyName}
+              </Link>
+            ) : (
+              <span className="font-medium">{companyName}</span>
+            )}
+          </p>
+        ) : null}
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={outcome === "sold" ? "success" : outcome === "rejected" ? "destructive" : "secondary"}>
             {OUTCOME_LABELS[outcome] ?? outcome}

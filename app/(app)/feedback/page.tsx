@@ -1,0 +1,165 @@
+import Link from "next/link";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { FeedbackHistoryItem } from "@/components/feedback-history-item";
+import { getCurrentUser } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
+
+const PAGE_SIZE = 30;
+
+const selectClassName =
+  "h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
+
+export default async function FeedbackListPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ agent?: string; date?: string; page?: string }>;
+}) {
+  const { agent: agentFilter, date: dateFilter, page: pageParam } = await searchParams;
+  const page = Math.max(1, Number(pageParam) || 1);
+  const from = (page - 1) * PAGE_SIZE;
+  const to = from + PAGE_SIZE - 1;
+
+  const { user, profile } = await getCurrentUser();
+  const isAdmin = profile?.role === "admin";
+  const supabase = await createClient();
+
+  let feedbackBuilder = supabase
+    .from("sales_feedback")
+    .select(
+      "id, agent_id, company_id, outcome, qty, value_net, objection, comment, created_at, product_id, companies(name), products(name), profiles(full_name, agents(id))",
+      { count: "exact" },
+    )
+    .order("created_at", { ascending: false })
+    .range(from, to);
+  if (agentFilter) feedbackBuilder = feedbackBuilder.eq("agent_id", agentFilter);
+  if (dateFilter) {
+    feedbackBuilder = feedbackBuilder
+      .gte("created_at", `${dateFilter}T00:00:00.000Z`)
+      .lte("created_at", `${dateFilter}T23:59:59.999Z`);
+  }
+
+  const [{ data: agentOptions }, { data: feedbackRows, count }] = await Promise.all([
+    supabase.from("agents").select("id, full_name, profile_id").not("profile_id", "is", null).order("full_name"),
+    feedbackBuilder,
+  ]);
+
+  const total = count ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const hasFilter = Boolean(agentFilter || dateFilter);
+
+  function pageHref(p: number) {
+    const params = new URLSearchParams();
+    if (agentFilter) params.set("agent", agentFilter);
+    if (dateFilter) params.set("date", dateFilter);
+    if (p > 1) params.set("page", String(p));
+    const qs = params.toString();
+    return qs ? `/feedback?${qs}` : "/feedback";
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="font-heading text-2xl font-semibold tracking-tight">Feedback</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Alle erfassten Verkaufsergebnisse - team-weit sichtbar (Flywheel).
+        </p>
+      </div>
+
+      <Card>
+        <CardContent className="pt-4">
+          <form action="/feedback" className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="agent">Agent</Label>
+              <select id="agent" name="agent" defaultValue={agentFilter ?? ""} className={selectClassName}>
+                <option value="">Alle</option>
+                {(agentOptions ?? []).map((a) => (
+                  <option key={a.id} value={a.profile_id!}>
+                    {a.full_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="date">Tag</Label>
+              <Input id="date" name="date" type="date" defaultValue={dateFilter ?? ""} className="w-40" />
+            </div>
+            <Button type="submit" size="sm">
+              Filtern
+            </Button>
+            {hasFilter ? (
+              <Link href="/feedback" className="pb-1.5 text-sm text-muted-foreground hover:underline">
+                Zurücksetzen
+              </Link>
+            ) : null}
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            {total} Feedback{total === 1 ? "" : "s"}
+            {hasFilter ? " (gefiltert)" : ""}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!feedbackRows || feedbackRows.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Keine Feedback-Einträge gefunden.</p>
+          ) : (
+            <ul className="flex flex-col divide-y">
+              {feedbackRows.map((f) => {
+                const fp = f.profiles as { full_name: string | null; agents: { id: string }[] } | null;
+                const linkedAgentId = fp?.agents?.[0]?.id;
+                return (
+                  <FeedbackHistoryItem
+                    key={f.id}
+                    id={f.id}
+                    outcome={f.outcome}
+                    qty={f.qty}
+                    valueNet={f.value_net}
+                    objection={f.objection}
+                    comment={f.comment}
+                    createdAt={f.created_at}
+                    productId={f.product_id}
+                    productName={(f.products as { name: string } | null)?.name ?? null}
+                    agentName={fp?.full_name ?? "-"}
+                    adminAgentLink={isAdmin && linkedAgentId ? `/admin/team/${linkedAgentId}` : null}
+                    canEdit={f.agent_id === user?.id || isAdmin}
+                    companyId={f.company_id}
+                    companyName={(f.companies as { name: string } | null)?.name ?? "-"}
+                  />
+                );
+              })}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      {totalPages > 1 ? (
+        <div className="flex items-center justify-center gap-4 text-sm">
+          {page > 1 ? (
+            <Link href={pageHref(page - 1)} className="hover:underline">
+              ← Zurück
+            </Link>
+          ) : (
+            <span className="text-muted-foreground/40">← Zurück</span>
+          )}
+          <span className="text-muted-foreground">
+            Seite {page} / {totalPages}
+          </span>
+          {page < totalPages ? (
+            <Link href={pageHref(page + 1)} className="hover:underline">
+              Weiter →
+            </Link>
+          ) : (
+            <span className="text-muted-foreground/40">Weiter →</span>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}

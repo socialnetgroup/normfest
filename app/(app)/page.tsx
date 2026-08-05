@@ -249,7 +249,7 @@ export default async function DashboardPage() {
         <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
           <StatTile label="Firmen gesamt" value={String(totalCompanies ?? 0)} accent="primary" />
           <StatTile label="Team-Umsatz" value={eur.format(teamRevenue)} accent="primary" />
-          <StatTile label="Feedback diese Woche" value={String(feedbackCountThisWeek ?? 0)} accent="success" />
+          <StatTile label="Feedback diese Woche" value={String(feedbackCountThisWeek ?? 0)} accent="success" href="/feedback" />
           <StatTile
             label="Nicht kontaktiert (3+ Mon.)"
             value={String(uncontacted)}
@@ -275,7 +275,7 @@ export default async function DashboardPage() {
             accent={uncontactedSevere ? "warning" : "secondary"}
           />
           <StatTile label="Anteil (3+ Mon.)" value={`${Math.round(uncontactedShare * 100)}%`} accent={uncontactedShare >= 0.4 ? "warning" : "secondary"} />
-          <StatTile label="Feedback diese Woche" value={String(feedbackCountThisWeek ?? 0)} accent="success" />
+          <StatTile label="Feedback diese Woche" value={String(feedbackCountThisWeek ?? 0)} accent="success" href="/feedback" />
         </div>
       )}
 

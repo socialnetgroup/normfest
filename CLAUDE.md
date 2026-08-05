@@ -1980,9 +1980,33 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     alongside the existing dialer fetch + agents query; each row now shows that number
     for its matched agent (falling back to the dialer's own count only if a name doesn't
     match a real agent - shouldn't happen in practice). Also dropped the auto-refresh
-    interval to 10s per Anis's ask. Verified live against the real
-    `agent_daily_performance` values for today (Arnela 4, Lejla 1, Maja 2, Muhamed 2,
-    everyone else 0) - matched exactly.
+    interval to 10s per Anis's ask (then to 4s the same day, matching the dialer's own
+    refresh rate - "toliko je i na dialeru samom, pa zasto da ne, ako nemamo neke
+    troskove" - it's a plain unauthenticated GET with no per-call cost, so no reason not
+    to). Verified live against the real `agent_daily_performance` values for today
+    (Arnela 4, Lejla 1, Maja 2, Muhamed 2, everyone else 0) - matched exactly.
+
+    **Konversion re-derived too, same day.** The dialer's own `conversionRate` field is
+    computed from ITS internal sales counter - once Sales switched to the real number,
+    Konversion silently went stale relative to it (Anis caught this: "'Konversion'
+    vjerovatno isto mora sam racunati na osnovu poziva i salesa, jer ne moze to direktno
+    iz dialera jer tamo nisu pravi salesi"). Now computed as `realSales / totalCalls`
+    with the same `de-DE` percent formatter used elsewhere in the app. Verified live:
+    Arnela 4/33=12,1%, Maja 2/53=3,8%, Muhamed 2/45=4,4%, Lejla 1/23=4,3% - all correct.
+    Incidentally also confirmed the null-safety fix from the crash fix above is holding
+    against real-world status values not seen before ("CLOSER" appeared live and fell
+    back to the muted badge correctly, no crash).
+
+    **Historical stats — not built, real answer is to ask the dev, not to snapshot
+    ourselves (2026-08-06).** Anis asked whether we could hypothetically browse past
+    live-status-style stats (a specific day, a whole month like June/July). agents.php
+    only ever returns the CURRENT live snapshot - there is no historical data behind it
+    on our side, and building our own periodic-snapshot table would only start
+    collecting from whenever it's switched on, never backfilling June/July. The right
+    move is to fold this into the same outreach already in flight for call-log/recording
+    access (see the ViciDial memory) - ViciDial itself commonly retains this kind of
+    agent-time/session history in its own reporting tables, so ask the dev whether an
+    export/API for it already exists before building a self-snapshotting system here.
 
 14. **QA-Bewertungen — shipped (2026-07-25).** New standalone admin menu item (real feature,
     not a placeholder — unlike QA-Anrufe/M9, nothing here is blocked on an external vendor
@@ -2189,6 +2213,24 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     whole app for other `next/image` usage first (only 3 files: this one, the login-page
     logo, the sidebar logo) - confirmed this was the only place the bug existed, not a
     pattern to hunt down elsewhere.
+
+19. **`/feedback` list page — shipped (2026-08-06).** Anis: clicking the Dashboard's
+    "Feedback diese Woche" tile should open a browsable, filterable list of every
+    `sales_feedback` entry (filter by agent, filter by day) - previously the only way to
+    see feedback was per-company on the Firmenprofil, with no cross-company view.
+    `app/(app)/feedback/page.tsx`: `searchParams`-driven filters (`agent` = the owning
+    profile's id, `date` = a single day) via a plain `<form method="get">`, same pattern
+    as `/firmen`'s search; paginated at 30/page. Reuses `FeedbackHistoryItem`
+    (`components/feedback-history-item.tsx`, §4.7's self-correction feature) rather than
+    duplicating the row markup - extended it with optional `companyId`/`companyName`
+    props (only passed here; the company-profile call site omits them since company is
+    already implicit there) so each row also links back to its Firmenprofil. Same
+    shared-visibility/self-or-admin-edit rules as everywhere else in this app - no new
+    RLS needed, `sales_feedback` was already team-readable. Dashboard's "Feedback diese
+    Woche" `StatTile` (both admin and agent variants) now links to `/feedback`. Verified
+    live against real data (Alan's active field-testing produced 50+ real rows same
+    day): agent filter, day filter, and reset link all confirmed correct against the
+    real row counts.
 
 ---
 
