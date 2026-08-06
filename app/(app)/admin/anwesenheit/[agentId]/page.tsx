@@ -1,3 +1,4 @@
+import { Download } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -56,15 +57,24 @@ export default async function AgentAnwesenheitPage({ params }: { params: Promise
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <Link href="/admin/anwesenheit" className="text-sm text-muted-foreground hover:underline">
-          ← Anwesenheit
-        </Link>
-        <h1 className="font-heading mt-1 text-2xl font-semibold tracking-tight">{agent.full_name}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Gebiet {agent.gebiet}
-          {!agent.active ? " - inaktiv" : ""} · Tag anklicken zum Eintragen/Bearbeiten.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <Link href="/admin/anwesenheit" className="text-sm text-muted-foreground hover:underline">
+            ← Anwesenheit
+          </Link>
+          <h1 className="font-heading mt-1 text-2xl font-semibold tracking-tight">{agent.full_name}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Gebiet {agent.gebiet}
+            {!agent.active ? " - inaktiv" : ""} · Tag anklicken zum Eintragen/Bearbeiten.
+          </p>
+        </div>
+        <a
+          href={`/api/admin/anwesenheit/export?agentId=${agentId}`}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
+        >
+          <Download className="size-3.5" />
+          Excel exportieren
+        </a>
       </div>
 
       {months.map((month) => {

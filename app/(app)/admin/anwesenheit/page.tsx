@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { Download } from "lucide-react";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { datesInMonth, totalExpectedHours } from "@/lib/attendance";
@@ -88,6 +90,13 @@ export default async function AnwesenheitPage({
             ) : (
               <span className="text-muted-foreground/40">Nächster →</span>
             )}
+            <a
+              href={`/api/admin/anwesenheit/export?month=${month}`}
+              className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium hover:bg-muted"
+            >
+              <Download className="size-3.5" />
+              Excel exportieren
+            </a>
           </div>
         </CardHeader>
         <CardContent>

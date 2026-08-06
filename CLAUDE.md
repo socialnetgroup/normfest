@@ -2669,6 +2669,28 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     from §14 item 19 - confirms the import is correct and consistent with what was
     already cross-checked there.
 
+26. **Anwesenheit Excel export — shipped (2026-08-06).** Anis: *"Dodaj mogucnosti eksel
+    exporta u anwesenheit da se moze poslati nekom dalje ko trazi."* New
+    `GET /api/admin/anwesenheit/export` (admin-gated via `getCurrentUser()`, same shape as
+    other admin API routes) generates a real `.xlsx` server-side with the already-
+    dependency-only-in-Node `xlsx` package (no prior client-side xlsx usage in this app to
+    build on, so kept it server-side and streamed back as a download rather than adding a
+    new client bundle path). Two modes off one route: `?agentId=<id>` exports that agent's
+    full day-by-day log (Datum/Odrađeno/Soll/Nachzuholen/Notiz) across every month with
+    entries; `?month=YYYY-MM` (defaults to current month) exports the cross-agent summary
+    table shown on the overview page. "Excel exportieren" download links added to both
+    `/admin/anwesenheit` (next to the month nav) and `/admin/anwesenheit/[agentId]` (top
+    right, next to the agent name).
+
+    Verified live end-to-end (throwaway admin test account, deleted after): both exports
+    downloaded a real, readable `.xlsx` (confirmed by parsing the response bytes back with
+    `xlsx` itself) with correct real data - the August overview export correctly showed
+    Emina Berilo at 39h worked / +7 Saldo / 5 Urlaub-Tage (real data already logged
+    through this feature), and her per-agent export correctly listed the underlying 5 real
+    Urlaub rows (08-03 through 08-07) that sum to that total. Confirmed unauthenticated
+    requests never reach the route at all - `proxy.ts`'s session-redirect middleware sends
+    them to `/login` first, same protection as every other admin page.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
