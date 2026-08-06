@@ -2688,7 +2688,23 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     Emina Berilo at 39h worked / +7 Saldo / 5 Urlaub-Tage (real data already logged
     through this feature), and her per-agent export correctly listed the underlying 5 real
     Urlaub rows (08-03 through 08-07) that sum to that total. Confirmed unauthenticated
-    requests never reach the route at all - `proxy.ts`'s session-redirect middleware sends
+
+    **Multi-sheet monthly export, same day - Anis: "just the overview, can we add
+    different additional sheets for each employee to have dailed view too."** The
+    `?month=` export now writes a real multi-sheet workbook: an "Übersicht" sheet (the
+    existing summary table) plus one sheet per active agent named after them
+    (`full_name`, stripped of Excel-illegal `\/?*[]:` characters and deduped against a
+    real name collision, though none exists among the current 10 agents), each with a
+    full calendar-day row (Datum/Odrađeno/Soll/Nachzuholen/Notiz) for every day of the
+    month up to today - not just days with an entry, so weekends/un-logged days show
+    correctly as 0h/Soll rather than being silently skipped, and future days in the
+    current month are omitted rather than shown as false 0h deficits. The `?agentId=`
+    single-agent export is unchanged. Verified live (throwaway admin account, deleted
+    after): the regenerated August export has 11 sheets (Übersicht + all 10 agents);
+    Emina Berilo's sheet correctly shows 08-01/08-02 as 0h/0 Soll (weekend), 08-03
+    through 08-06 as 8h/8 Soll/"Urlaub" (real logged data, matching the overview sheet's
+    39h/5 Urlaub-Tage), and stops at today rather than continuing through 08-31.
+    Confirmed unauthenticated
     them to `/login` first, same protection as every other admin page.
 
 ---
