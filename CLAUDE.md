@@ -2043,6 +2043,17 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     agent-time/session history in its own reporting tables, so ask the dev whether an
     export/API for it already exists before building a self-snapshotting system here.
 
+    **Filtered to known Normfest agents only (2026-08-06).** Anis: "Normfest dialer
+    pokazuje Jelenu Stancevic. Posto i drugi koriste ovaj dialer za neke mini projekte,
+    prikazuj samo ljude iz Normfesta" - the same ViciDial instance is shared with other,
+    unrelated teams/projects, so `agents.php` can return rows for people who have nothing
+    to do with Normfest. Previously an unmatched row still rendered (with the dialer's
+    raw name, no link) as a fallback; now `/dialer` filters `dialerRows` down to only
+    those that `matchDialerAgent()` resolves to a real row in our own `agents` table
+    before sorting/rendering - an unrecognized name is simply dropped, not shown with a
+    caveat. Verified live: the real 7-agent Normfest roster renders correctly with no
+    unmatched rows, using a throwaway admin test account.
+
 14. **QA-Bewertungen — shipped (2026-07-25).** New standalone admin menu item (real feature,
     not a placeholder — unlike QA-Anrufe/M9, nothing here is blocked on an external vendor
     decision): the TL's mandatory monthly per-agent call-quality evaluation. Anis referenced

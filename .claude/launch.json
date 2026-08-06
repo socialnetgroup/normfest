@@ -5,7 +5,8 @@
       "name": "normfest-dev",
       "runtimeExecutable": "corepack",
       "runtimeArgs": ["pnpm", "dev"],
-      "port": 3000
+      "port": 3000,
+      "autoPort": true
     }
   ]
 }

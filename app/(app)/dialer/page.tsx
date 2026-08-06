@@ -75,12 +75,22 @@ export default async function DialerPage() {
     salesByAgentId = new Map((perfRows ?? []).map((r) => [r.agent_id, r.sales_count]));
   }
 
-  const sortedRows = dialerRows
-    ? [...dialerRows].sort((a, b) => {
-        const pa = STATUS_ORDER[a.status.toUpperCase()] ?? 99;
-        const pb = STATUS_ORDER[b.status.toUpperCase()] ?? 99;
+  // Other teams share this same ViciDial instance for unrelated mini-projects
+  // (Anis, 2026-08-06: "Normfest dialer pokazuje Jelenu Stancevic... prikazuj
+  // samo ljude iz Normfesta") - only show rows that match a real Normfest
+  // agent; an unrecognized name is someone else's project, not ours to show.
+  const knownRows = dialerRows
+    ? dialerRows
+        .map((row) => ({ row, matched: matchDialerAgent(row.fullName, agents) }))
+        .filter((r): r is { row: DialerAgentStatus; matched: (typeof agents)[number] } => r.matched !== null)
+    : null;
+
+  const sortedRows = knownRows
+    ? [...knownRows].sort((a, b) => {
+        const pa = STATUS_ORDER[a.row.status.toUpperCase()] ?? 99;
+        const pb = STATUS_ORDER[b.row.status.toUpperCase()] ?? 99;
         if (pa !== pb) return pa - pb;
-        return a.fullName.localeCompare(b.fullName);
+        return a.matched.full_name.localeCompare(b.matched.full_name);
       })
     : null;
 
@@ -135,9 +145,8 @@ export default async function DialerPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y">
-                    {sortedRows.map((row) => {
-                      const matched = matchDialerAgent(row.fullName, agents);
-                      const realSales = matched ? (salesByAgentId.get(matched.id) ?? 0) : row.sales;
+                    {sortedRows.map(({ row, matched }) => {
+                      const realSales = salesByAgentId.get(matched.id) ?? 0;
                       // Computed from realSales, not row.conversionRate - the dialer's
                       // own conversion figure is based on ITS internal sales counter,
                       // which no longer matches what's now shown in the Sales column
@@ -146,13 +155,9 @@ export default async function DialerPage() {
                       return (
                         <tr key={row.extension}>
                           <td className="px-2 py-2 font-medium">
-                            {matched ? (
-                              <Link href={`/admin/team/${matched.id}`} className="hover:underline">
-                                {matched.full_name}
-                              </Link>
-                            ) : (
-                              row.fullName
-                            )}
+                            <Link href={`/admin/team/${matched.id}`} className="hover:underline">
+                              {matched.full_name}
+                            </Link>
                           </td>
                           <td className="px-2 py-2">
                             <Badge variant={statusVariant(row.status)}>
