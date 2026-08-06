@@ -93,6 +93,28 @@ export async function fetchDialerAgentStatuses(): Promise<{
   }
 }
 
+/** Dialer time fields come as "HH:MM:SS" (talk/pause/wait/dispo/dead) or
+ * "HH:MM" (totalTime) or "HH:MM (xx,xx%)" (active/inactive) - strip any
+ * trailing "(...)" and parse whichever colon-count shows up into seconds. */
+export function parseDialerTimeToSeconds(s: string | null | undefined): number {
+  if (!s || s === "-") return 0;
+  const clean = s.split("(")[0].trim();
+  const parts = clean.split(":").map((p) => Number(p));
+  if (parts.some((p) => !Number.isFinite(p))) return 0;
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (parts.length === 2) return parts[0] * 3600 + parts[1] * 60;
+  return 0;
+}
+
+/** Formats a second count back to "HH:MM:SS" for derived metrics like AHT. */
+export function formatSecondsAsHms(totalSeconds: number): string {
+  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) return "00:00:00";
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = Math.floor(totalSeconds % 60);
+  return [h, m, s].map((n) => String(n).padStart(2, "0")).join(":");
+}
+
 function stripDiacritics(s: string): string {
   return s
     .normalize("NFD")

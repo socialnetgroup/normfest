@@ -8,7 +8,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SoftphoneDialpad } from "@/components/softphone-dialpad";
 import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { fetchDialerAgentStatuses, matchDialerAgent, type DialerAgentStatus } from "@/lib/dialer/status";
+import {
+  fetchDialerAgentStatuses,
+  formatSecondsAsHms,
+  matchDialerAgent,
+  parseDialerTimeToSeconds,
+  type DialerAgentStatus,
+} from "@/lib/dialer/status";
 import { cn } from "@/lib/utils";
 
 function IconTitle({
@@ -44,6 +50,21 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const pct = new Intl.NumberFormat("de-DE", { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const rate = new Intl.NumberFormat("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+// Group headers for the widened Live-Status table, in a deliberate order
+// (Anis, 2026-08-06: "napravi logičan, povezan redoslijed"): who/what state
+// -> how much volume -> what came out of it (business result, using our own
+// real numbers) -> how efficiently -> the raw time buckets those efficiency
+// ratios are built from -> the dialer's own separate computer-activity split.
+const COLUMN_GROUPS = [
+  { label: "Agent", span: 3 },
+  { label: "Volumen", span: 2 },
+  { label: "Ergebnis", span: 3 },
+  { label: "Effizienz", span: 2 },
+  { label: "Zeitverteilung", span: 5 },
+  { label: "Aktivität", span: 3 },
+];
 
 export default async function DialerPage() {
   const { user, profile } = await getCurrentUser();
@@ -109,89 +130,156 @@ export default async function DialerPage() {
       </div>
 
       {isAdmin ? (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <IconTitle icon={Activity}>Live-Status (Dialer)</IconTitle>
-            <Badge variant="success">Live · aktualisiert alle 4s</Badge>
-          </CardHeader>
-          <CardContent>
-            <p className="mb-3 text-sm text-muted-foreground">
-              Direkt aus dem bestehenden Dialer gelesen (schreibgeschützt - startet, steuert oder beendet
-              keine Anrufe). Nur für Admin sichtbar, gleiche Einstufung wie das Team Dashboard.{" "}
-              <span className="font-medium">Sales</span> kommt nicht vom Dialer selbst, sondern aus den
-              echten, heute erfassten Verkäufen dieses Tools (gleiche Quelle wie Rangliste/Team Dashboard).
-            </p>
-            {dialerError ? (
-              <p className="text-sm text-destructive">Dialer nicht erreichbar: {dialerError}</p>
-            ) : !sortedRows || sortedRows.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Keine Agenten aktuell im Dialer.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="text-left text-xs text-muted-foreground">
-                    <tr>
-                      <th className="px-2 py-2 font-medium">Agent</th>
-                      <th className="px-2 py-2 font-medium">Status</th>
-                      <th className="px-2 py-2 font-medium">Zeit im Status</th>
-                      <th className="px-2 py-2 font-medium">Anrufe</th>
-                      <th className="px-2 py-2 font-medium">Sales</th>
-                      <th className="px-2 py-2 font-medium">Konversion</th>
-                      <th className="px-2 py-2 font-medium">Sprechzeit</th>
-                      <th className="px-2 py-2 font-medium">Pausenzeit</th>
-                      <th className="px-2 py-2 font-medium">Wartezeit</th>
-                      <th className="px-2 py-2 font-medium">Nachbearbeitung</th>
-                      <th className="px-2 py-2 font-medium">Totzeit</th>
-                      <th className="px-2 py-2 font-medium">Aktiv</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {sortedRows.map(({ row, matched }) => {
-                      const realSales = salesByAgentId.get(matched.id) ?? 0;
-                      // Computed from realSales, not row.conversionRate - the dialer's
-                      // own conversion figure is based on ITS internal sales counter,
-                      // which no longer matches what's now shown in the Sales column
-                      // (Anis, 2026-08-06: same reasoning as the Sales fix above).
-                      const realConversion = row.totalCalls > 0 ? realSales / row.totalCalls : 0;
-                      return (
-                        <tr key={row.extension}>
-                          <td className="px-2 py-2 font-medium">
-                            <Link href={`/admin/team/${matched.id}`} className="hover:underline">
-                              {matched.full_name}
-                            </Link>
-                          </td>
-                          <td className="px-2 py-2">
-                            <Badge variant={statusVariant(row.status)}>
-                              {STATUS_LABELS[row.status.toUpperCase()] ?? row.status}
-                            </Badge>
-                          </td>
-                          <td className="px-2 py-2 tabular-nums">{row.timeInStatus}</td>
-                          <td className="px-2 py-2 tabular-nums">{row.totalCalls}</td>
-                          <td className="px-2 py-2 tabular-nums">{realSales}</td>
-                          <td className="px-2 py-2 tabular-nums">{pct.format(realConversion)}</td>
-                          <td className="px-2 py-2 tabular-nums">{row.talkTime}</td>
-                          <td className="px-2 py-2 tabular-nums">{row.pauseTime}</td>
-                          <td className="px-2 py-2 tabular-nums">{row.waitTime}</td>
-                          <td className="px-2 py-2 tabular-nums">{row.dispoTime}</td>
-                          <td className="px-2 py-2 tabular-nums">{row.deadTime}</td>
-                          <td
+        // Breaks out of the page's normal max-w-6xl container - Anis, 2026-08-06:
+        // "ima na ekranu 'mjesta' slobodno proširi sam dialer live status u
+        // širinu" - this table alone gets real screen width, the rest of the
+        // page (concept cards, softphone) stays at the normal reading width.
+        <div className="mx-[calc(50%-50vw)] w-screen px-4 md:px-8">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <IconTitle icon={Activity}>Live-Status (Dialer)</IconTitle>
+              <Badge variant="success">Live · aktualisiert alle 4s</Badge>
+            </CardHeader>
+            <CardContent>
+              <p className="mb-3 text-sm text-muted-foreground">
+                Direkt aus dem bestehenden Dialer gelesen (schreibgeschützt - startet, steuert oder beendet
+                keine Anrufe). Nur für Admin sichtbar, gleiche Einstufung wie das Team Dashboard.{" "}
+                <span className="font-medium">Sales</span>, <span className="font-medium">Konversion</span>{" "}
+                und <span className="font-medium">Verkäufe/Std.</span> kommen nicht vom Dialer selbst,
+                sondern aus den echten, heute erfassten Verkäufen dieses Tools (gleiche Quelle wie
+                Rangliste/Team Dashboard). Alle anderen Kennzahlen (Auslastung, Ø Bearbeitungszeit,
+                Anrufe/Std., Zeitanteile) sind aus den rohen Dialer-Zeiten selbst berechnet, nicht vom
+                Dialer vorgegeben.
+              </p>
+              {dialerError ? (
+                <p className="text-sm text-destructive">Dialer nicht erreichbar: {dialerError}</p>
+              ) : !sortedRows || sortedRows.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Keine Agenten aktuell im Dialer.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="text-left text-xs text-muted-foreground">
+                      <tr>
+                        {COLUMN_GROUPS.map((g, i) => (
+                          <th
+                            key={g.label}
+                            colSpan={g.span}
                             className={cn(
-                              "px-2 py-2 tabular-nums",
-                              row.status.toUpperCase() === "PAUSED"
-                                ? "text-muted-foreground"
-                                : "text-success-foreground",
+                              "px-2 pt-2 pb-1 text-[11px] font-semibold tracking-wide text-muted-foreground/70 uppercase",
+                              i > 0 && "border-l",
                             )}
                           >
-                            {row.activeTime}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                            {g.label}
+                          </th>
+                        ))}
+                      </tr>
+                      <tr>
+                        <th className="px-2 py-2 font-medium">Agent</th>
+                        <th className="px-2 py-2 font-medium">Status</th>
+                        <th className="px-2 py-2 font-medium">Zeit im Status</th>
+                        <th className="border-l px-2 py-2 font-medium">Anrufe</th>
+                        <th className="px-2 py-2 font-medium">Anrufe/Std.</th>
+                        <th className="border-l px-2 py-2 font-medium">Sales</th>
+                        <th className="px-2 py-2 font-medium">Konversion</th>
+                        <th className="px-2 py-2 font-medium">Verkäufe/Std.</th>
+                        <th className="border-l px-2 py-2 font-medium">Ø Bearbeitungszeit</th>
+                        <th className="px-2 py-2 font-medium">Auslastung</th>
+                        <th className="border-l px-2 py-2 font-medium">Sprechzeit</th>
+                        <th className="px-2 py-2 font-medium">Wartezeit</th>
+                        <th className="px-2 py-2 font-medium">Nachbearbeitung</th>
+                        <th className="px-2 py-2 font-medium">Pausenzeit</th>
+                        <th className="px-2 py-2 font-medium">Totzeit</th>
+                        <th className="border-l px-2 py-2 font-medium">Gesamtzeit</th>
+                        <th className="px-2 py-2 font-medium">Aktiv</th>
+                        <th className="px-2 py-2 font-medium">Inaktiv</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {sortedRows.map(({ row, matched }) => {
+                        const realSales = salesByAgentId.get(matched.id) ?? 0;
+                        // Computed from realSales, not row.conversionRate - the dialer's
+                        // own conversion figure is based on ITS internal sales counter,
+                        // which no longer matches what's now shown in the Sales column
+                        // (Anis, 2026-08-06: same reasoning as the Sales fix above).
+                        const realConversion = row.totalCalls > 0 ? realSales / row.totalCalls : 0;
+
+                        // Standard call-center KPIs (Anis, 2026-08-06: "predloži
+                        // par stvari sto bi po standardnoj praksi mogli
+                        // racunati" -> "dodaj sve") - all derived from the raw
+                        // time buckets the dialer already sends, confirmed live
+                        // to be additive: talk+wait+dispo+pause+dead = totalTime.
+                        const talkSec = parseDialerTimeToSeconds(row.talkTime);
+                        const waitSec = parseDialerTimeToSeconds(row.waitTime);
+                        const dispoSec = parseDialerTimeToSeconds(row.dispoTime);
+                        const pauseSec = parseDialerTimeToSeconds(row.pauseTime);
+                        const deadSec = parseDialerTimeToSeconds(row.deadTime);
+                        const totalSec = parseDialerTimeToSeconds(row.totalTime);
+                        const totalHours = totalSec / 3600;
+                        const workSec = talkSec + dispoSec + waitSec;
+
+                        // Occupancy: share of "available for a call" time (talk +
+                        // wrap-up + waiting for one) actually spent on/wrapping a
+                        // call, excluding pause - standard call-center efficiency
+                        // metric, not something the dialer itself reports.
+                        const occupancy = workSec > 0 ? (talkSec + dispoSec) / workSec : 0;
+                        // AHT: average handle time per call (talk + wrap-up).
+                        const aht = row.totalCalls > 0 ? (talkSec + dispoSec) / row.totalCalls : 0;
+                        const callsPerHour = totalHours > 0 ? row.totalCalls / totalHours : 0;
+                        const salesPerHour = totalHours > 0 ? realSales / totalHours : 0;
+                        const pauseShare = totalSec > 0 ? pauseSec / totalSec : 0;
+                        const deadShare = totalSec > 0 ? deadSec / totalSec : 0;
+
+                        return (
+                          <tr key={row.extension}>
+                            <td className="px-2 py-2 font-medium">
+                              <Link href={`/admin/team/${matched.id}`} className="hover:underline">
+                                {matched.full_name}
+                              </Link>
+                            </td>
+                            <td className="px-2 py-2">
+                              <Badge variant={statusVariant(row.status)}>
+                                {STATUS_LABELS[row.status.toUpperCase()] ?? row.status}
+                              </Badge>
+                            </td>
+                            <td className="px-2 py-2 tabular-nums">{row.timeInStatus}</td>
+                            <td className="border-l px-2 py-2 tabular-nums">{row.totalCalls}</td>
+                            <td className="px-2 py-2 tabular-nums">{rate.format(callsPerHour)}</td>
+                            <td className="border-l px-2 py-2 tabular-nums">{realSales}</td>
+                            <td className="px-2 py-2 tabular-nums">{pct.format(realConversion)}</td>
+                            <td className="px-2 py-2 tabular-nums">{rate.format(salesPerHour)}</td>
+                            <td className="border-l px-2 py-2 tabular-nums">{formatSecondsAsHms(aht)}</td>
+                            <td className="px-2 py-2 tabular-nums">{pct.format(occupancy)}</td>
+                            <td className="border-l px-2 py-2 tabular-nums">{row.talkTime}</td>
+                            <td className="px-2 py-2 tabular-nums">{row.waitTime}</td>
+                            <td className="px-2 py-2 tabular-nums">{row.dispoTime}</td>
+                            <td className="px-2 py-2 tabular-nums">
+                              {row.pauseTime} <span className="text-muted-foreground">({pct.format(pauseShare)})</span>
+                            </td>
+                            <td className="px-2 py-2 tabular-nums">
+                              {row.deadTime} <span className="text-muted-foreground">({pct.format(deadShare)})</span>
+                            </td>
+                            <td className="border-l px-2 py-2 tabular-nums">{row.totalTime}</td>
+                            <td
+                              className={cn(
+                                "px-2 py-2 tabular-nums",
+                                row.status.toUpperCase() === "PAUSED"
+                                  ? "text-muted-foreground"
+                                  : "text-success-foreground",
+                              )}
+                            >
+                              {row.activeTime}
+                            </td>
+                            <td className="px-2 py-2 tabular-nums text-muted-foreground">{row.inactiveTime}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       ) : null}
 
       <Card>

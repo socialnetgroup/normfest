@@ -2054,6 +2054,36 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     caveat. Verified live: the real 7-agent Normfest roster renders correctly with no
     unmatched rows, using a throwaway admin test account.
 
+    **Standard call-center KPIs added, table widened (2026-08-06).** Anis asked "šta
+    znači Aktiv/Totzeit" then, once those were explained, "predloži par stvari sto bi po
+    standardnoj praksi mogli racunati" -> "dodaj sve ove podatke... prosiri sam dialer
+    live status u sirinu... logičan, povezan redoslijed." First fetched the raw
+    `agents.php` payload directly (not guessed) to confirm exact field shapes:
+    `talkTime/pauseTime/waitTime/dispoTime/deadTime` are `HH:MM:SS` and sum exactly to
+    `totalTime` (`HH:MM`, confirmed additive on real data); `activeTime`/`inactiveTime`
+    are a separate `HH:MM (xx,xx%)`-formatted split (almost certainly the dialer's own
+    computer-activity heuristic, not derived from the other five buckets - a real
+    isolated data point, not something to recompute).
+
+    Added `parseDialerTimeToSeconds()`/`formatSecondsAsHms()` to `lib/dialer/status.ts`
+    and, per-row in `/dialer`: **Auslastung/Occupancy** = (talk+dispo)/(talk+dispo+wait);
+    **Ø Bearbeitungszeit/AHT** = (talk+dispo)/calls; **Anrufe/Std.** = calls/totalHours;
+    **Verkäufe/Std.** = realSales/totalHours (the one KPI here that's ours alone - the
+    dialer has no concept of our real sales); **Pausenzeit/Totzeit** now also show their
+    share of `totalTime` inline, e.g. "04:56:39 (55,6 %)". `/dialer`'s Live-Status card
+    breaks out of the page's normal `max-w-6xl` via `mx-[calc(50%-50vw)] w-screen` so the
+    now much wider table (18 columns) gets real screen width instead of just scrolling
+    inside the narrow column - the rest of the page (concept card, softphone) stays at
+    normal reading width. Columns render under a two-tier grouped header (Agent / Volumen
+    / Ergebnis / Effizienz / Zeitverteilung / Aktivität, left-bordered between groups) for
+    the "logičan, povezan redoslijed" ask, rather than one flat row of 18 labels.
+
+    Verified live against real numbers, not just "it renders": for Arnela (talk 1:41:57,
+    dispo 0:51:21, wait 0:09:53, 89 calls, totalTime 8:54) hand-checked Occupancy =
+    9198s/9791s = 93,9 % and AHT = 9198s/89 = 103s ≈ 00:01:43, both matching the live
+    page exactly; Pausenzeit-share 4:56:39/8:54(=32040s) = 55,6 % also matched. All from
+    a throwaway admin test account, deleted after.
+
 14. **QA-Bewertungen — shipped (2026-07-25).** New standalone admin menu item (real feature,
     not a placeholder — unlike QA-Anrufe/M9, nothing here is blocked on an external vendor
     decision): the TL's mandatory monthly per-agent call-quality evaluation. Anis referenced
