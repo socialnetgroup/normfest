@@ -1129,18 +1129,21 @@ background):** every item checked against the real codebase/project, not assumed
   deleted each time, per this session's established pattern) — nothing here is
   "typechecks, therefore done." Full test suite (40/40), typecheck, and lint stayed
   green throughout.
-- 🔴 **PITR / backups — NOT enabled, zero backups exist. Explicitly deferred (2026-07-23).**
-  Checked directly via the Supabase Management API
-  (`GET /v1/projects/{ref}/database/backups`): `pitr_enabled: false`, `backups: []`. Real
-  cost to fix: the org is on the **Free** plan, so this needs a Pro upgrade ($25/mo) *plus*
-  the PITR add-on itself ($100/mo for 7-day retention, up to $400/mo for 28-day) — a
-  ~$125/mo floor, checked via `GET /v1/projects/{ref}/billing/addons`. There is currently
-  no way to recover this database (13.5k+ companies, full catalog, all feedback/signals/
-  enrichment data) if something goes wrong — Anis reviewed this real cost and explicitly
-  chose to defer: "at the moment, in the testing MVP phase I don't need that." Revisit
-  before an actual go-live, not before — the "restore drill" half of this checklist item
-  is meaningless until backups exist to drill against, and won't exist until this is
-  revisited.
+- ✅ **Daily physical backups — confirmed live (2026-08-06), no PITR yet.** Anis upgraded
+  the org to Pro since the 2026-07-23 deferral above; asked to "setup a backup for
+  23:00 every night." Checked directly via `supabase backups list` rather than assuming
+  the upgrade alone turned this on: `walg_enabled: true`, 7 real completed daily physical
+  backups already present, one per day from 2026-07-30 through today, landing
+  ~05:00-05:11 UTC each day — Pro's included daily backup has been running automatically
+  for about a week, nothing needed building. Real constraint found: the backup **time
+  isn't user-configurable** — Supabase runs it on its own internal daily schedule, there
+  is no dashboard/API control to pick 23:00 specifically. `pitr_enabled: false` — true
+  continuous point-in-time recovery is still a separate paid add-on ($100/mo for 7-day
+  retention, up to $400/mo for 28-day, same figures as the original 2026-07-23 check).
+  Presented both facts to Anis; he chose to stay on the free-with-Pro daily backup for
+  now rather than add PITR cost - revisit if a tighter recovery-point requirement shows
+  up before go-live. The "restore drill" half of this checklist item is now meaningful
+  again (a real daily backup exists to drill against) but not yet done.
 
 ---
 
