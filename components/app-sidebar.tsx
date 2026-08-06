@@ -28,6 +28,7 @@ import {
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
+  CalendarCheck,
   X,
 } from "lucide-react";
 
@@ -270,6 +271,13 @@ export function AppSidebar({
                 label="Team"
                 icon={Users}
                 active={isActive(pathname, "/admin/team")}
+                onNavigate={closeMobile}
+              />
+              <NavItem
+                href="/admin/anwesenheit"
+                label="Anwesenheit"
+                icon={CalendarCheck}
+                active={isActive(pathname, "/admin/anwesenheit")}
                 onNavigate={closeMobile}
               />
               <NavItem

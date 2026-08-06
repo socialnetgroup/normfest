@@ -2533,6 +2533,144 @@ explicitly labeled "laut Agent-Feedback", or says no data).
 
 ---
 
+22. **Anwesenheit (attendance) tracking — shipped (2026-08-06).** Anis, modeled on a real
+    reference Excel (`input/NORMFEST Arbeitszeit.xlsx`, one 6-column block per agent -
+    Datum/Stunden/Minuten/Izgubljeno vrijeme/Notiz): *"TL prati dnevni dolazak na posao
+    kao i godisnje odmore da upisuje da zna kakvo je stanje da li neko treba nadoknaditi
+    itd... 1 radni dan (ponedeljak-cetvrtka) je po 8 sati, a petak je kraci 7 sati."*
+    Two semantics questions resolved via `AskUserQuestion` before writing any schema,
+    since this produces a number ("who owes hours") management treats as ground truth:
+    (1) a Urlaub day counts as satisfying that day's expected hours - no deficit in the
+    balance ("Urlaub pokriva dnevnu obavezu"). (2) "Izgubljeno vrijeme" (lost time, e.g.
+    arriving 2h late) is tracked SEPARATELY as an owed-hours debt, never subtracted from
+    `hours_worked` itself ("mislim odovojeno... ako znas npr da je neko danas kasnio 2
+    sata na posao da ti 'dodje 2 sata' da nadoklanda").
+
+    New `agent_attendance` table (migration `20260806050000_agent_attendance.sql`,
+    admin-only RLS, same HR-adjacent reasoning as `agent_daily_performance` §4.11):
+    `agent_id`, `date`, `hours_worked numeric(4,2)`, `lost_hours numeric(4,2)`, `note`,
+    unique on `(agent_id, date)`. `lib/attendance.ts` holds the shared pure logic
+    (`expectedHoursForDate()` - Mon-Thu 8h/Fri 7h/weekend 0h from `getUTCDay()`,
+    `totalExpectedHours()` capped at today so the current month doesn't expect hours for
+    days that haven't happened yet) so the overview and per-agent pages compute identical
+    numbers. `/admin/anwesenheit` - per-agent monthly summary table (Odrađeno/Soll/Saldo/
+    Nachzuholen/Urlaub-Tage) with month prev/next nav; `/admin/anwesenheit/[agentId]` -
+    one card per month (always includes the current month even if empty) with the same
+    summary line plus `AttendanceMonthCalendar` (`components/attendance/attendance-month-
+    calendar.tsx`, modeled directly on the proven `components/team/month-calendar.tsx`
+    grid shape, made editable): click a day to open an inline editor (Odrađeno h input +
+    8h/7h/0h quick-fill, Nachzuholen h input, Notiz presets Urlaub/Krankheit/Kasnio/
+    Sonstiges + free text, Speichern) that upserts directly via the RLS-scoped client
+    (admin's `for all` policy already covers it, no RPC needed - same pattern as
+    `focus-list-manage.tsx`). Urlaub-Tage counted from `note` containing "urlaub"
+    (case-insensitive), not a separate boolean - kept to the two fields Anis asked for
+    rather than adding a third column for what search on the existing note already gives.
+
+    New sidebar nav item ("Anwesenheit", `CalendarCheck` icon) under Admin, between Team
+    and Feedback.
+
+    Verified live end-to-end (throwaway admin test account, deleted after): overview page
+    correctly showed "Soll bisher in diesem Monat: 32,0 h" (hand-verified: Aug 1-2 are
+    weekend, Aug 3-6 are Mon-Thu × 8h = 32h through 2026-08-06); opened Alan Sačić's
+    detail page (initially empty, Saldo -32,0 h); clicked August 5 (a Wednesday, Soll
+    8,0 h), set Nachzuholen=2 and Notiz="Kasnio 2h", saved - confirmed directly in the DB
+    the row persisted exactly as entered (`hours_worked: 8, lost_hours: 2, note: 'Kasnio
+    2h'`), then deleted the test row and test account. Full suite green after (41/41),
+    `visibility_mode` confirmed still `'gebiet'` afterward.
+
+23. **Sidebar collapse for desktop full-screen view — shipped (2026-08-06).** Anis:
+    *"stavi mogucnost da menu u aplikaciji se moze ugasiti iako je full screen"* - the
+    sidebar was previously always-visible on desktop, only the mobile drawer could close.
+    `components/app-sidebar.tsx`: persisted via `localStorage` (`normfest-sidebar-
+    collapsed`) through a `useSyncExternalStore`-based helper (`subscribeToDesktopCollapsed`/
+    `getDesktopCollapsedSnapshot`/`getDesktopCollapsedServerSnapshot`/
+    `setDesktopCollapsedPersisted`, synced across renders via a custom `window` `Event`) -
+    not `useState`+`useEffect`, which hit a real, non-suppressible lint error
+    (`react-hooks/set-state-in-effect` from the React Compiler plugin rejected even with
+    an explicit `eslint-disable-next-line` - confirmed empirically, the disable comment
+    itself got flagged as unused while the rule still fired). `useSyncExternalStore` is
+    the React-documented correct pattern for syncing with an external mutable source like
+    `localStorage` and produced zero lint errors. Collapse/expand buttons: a
+    `PanelLeftClose` icon in the sidebar header when expanded, a floating `PanelLeftOpen`
+    button fixed top-left (outside the `<aside>`, since the aside itself collapses to
+    zero width) when collapsed. `<aside>` toggles between `md:w-60` and `md:w-0
+    md:overflow-hidden md:border-r-0`.
+
+    **Partially verified, honestly flagged.** DOM/class/localStorage assertions confirmed
+    correct (class toggling on click, persistence across reload). Full pixel-level visual
+    confirmation via screenshot could not be completed this session - the sandboxed
+    Browser pane intermittently failed to composite frames (`computer{screenshot}` erroring
+    "the Browser pane is not displayed") and `window.innerWidth` read `0` during that
+    state, a known environment/tooling limitation rather than a code issue. The compiled
+    CSS was directly inspected (curled the real `.css` chunk, confirmed the `.md\:w-0`
+    rule exists correctly inside its `@media (min-width: 48rem)` block) as an alternate
+    verification path. Worth a quick manual look by Anis on a real desktop browser before
+    treating this as fully visually confirmed.
+
+24. **Dialer Live-Status hardening + KPI expansion + daily snapshot — shipped
+    (2026-08-06).** Three related fixes/additions to `/dialer`'s Live-Status card (§13
+    item 13), same day:
+
+    a) **Cross-tenant agent leak fixed.** The shared ViciDial instance surfaces other
+    tenants' agents too (Anis: *"Normfest dialer pokazuje Jelenu Stancevic... prikazuj
+    samo ljude iz Normfesta"*) - `buildDialerAgentSummaries()` now only includes rows that
+    diacritic-match a real row in the `agents` table (already had the matching logic from
+    the original live-status build, just wasn't being used as a filter); unmatched names
+    are silently dropped rather than shown.
+
+    b) **Standard call-center KPIs added + table widened to full viewport.** Anis asked
+    for "par stvari sto bi po standardnoj praksi mogli racunati" then to add all of them
+    and widen the table (`mx-[calc(50%-50vw)] w-screen` breakout pattern, rest of the page
+    stays at the normal reading width). `lib/dialer/status.ts` gained
+    `parseDialerTimeToSeconds()`/`formatSecondsAsHms()` and `buildDialerAgentSummaries()`
+    now computes AHT, Calls/Sales per hour, Occupancy, pause/dead time shares, and splits
+    total time into active vs. inactive - 18 columns total in two logical groups
+    (`COLUMN_GROUPS`, grouped `<thead>` with colSpan): identity/status, call metrics,
+    time breakdown.
+
+    **Occupancy formula fixed same day - Anis: "Samo mi Auslastung sa 96% nejasna
+    nekako."** First version was `(talk+dispo)/(talk+dispo+wait)`, which excludes
+    `deadTime` from the denominator entirely - since this dialer's `waitTime` is near-zero
+    for every agent, the ratio always collapsed toward ~93-99.6% regardless of real day
+    quality, not a meaningful signal. Fixed to the standard call-center formula (Handle
+    Time / (Login Time - Break Time)): `(talk+dispo)/(talk+dispo+wait+dead)`. Verified
+    real numbers moved meaningfully where dead time was substantial (Arnela 93.9%→64.1%,
+    Elida 97.4%→88.9%) and barely moved where already near-zero (Rijalda/Alan ~97-99%).
+
+    c) **Daily automatic snapshot, stopgap until the dialer dev's real call-log API
+    arrives (§14 item 13's ViciDial roadmap).** Anis: *"posto nemamo logove, da li te mogu
+    zamoliti da napravis ti automatski nase logove... samo screenshot tj snap informacija
+    na kraju radnog dana"* - clarified snapshot time as 18:00 local. New
+    `dialer_daily_snapshots` table (migration `20260806040000_dialer_daily_snapshots.sql`,
+    `snapshot_date` unique, `agents jsonb`, admin-only RLS) + `/api/cron/dialer-snapshot`
+    (GET, `CRON_SECRET` bearer-token auth, calls the same `buildDialerAgentSummaries()`
+    used by the live page, upserts on `snapshot_date`) + `vercel.json` Cron config
+    (`0 16 * * *` UTC = 18:00 local).
+
+    **Real bug found + fixed:** the cron route initially redirected to `/login` -
+    `lib/supabase/proxy.ts`'s session-redirect middleware covers all of `/api/*` and
+    Vercel Cron requests carry no session cookies, so every trigger would hit the login
+    wall before the route's own auth even ran. Added `/api/cron` to `PUBLIC_PATHS`
+    (the route's own `CRON_SECRET` check remains the real auth gate). Verified: cron
+    route now returns clean 401 for bad/missing secret and 200+correct JSON for the right
+    one; normal pages still correctly redirect unauthenticated users (fix didn't broaden
+    access elsewhere). **Anis still needs to add the real `CRON_SECRET` value as a Vercel
+    project environment variable** for this to fire in production - a real value already
+    exists in `.env.local`/is documented as a placeholder in `.env.example`, but only Anis
+    can set the Vercel-side one.
+
+25. **Team Dashboard — August 2026 file imported (2026-08-06).** Anis dropped
+    `input/Team Dashboard/08 2026 - Team Dashboard.xlsx` (the new monthly export, same
+    format as June/July). Ran `scripts/import-team-dashboard.mjs` (idempotent upsert on
+    `agent_id,date`, safe to re-run with all three months' files present) - 900 agent-day
+    rows parsed/uploaded across June+July+August combined. Spot-checked the new August
+    rows directly against the DB: real Aug 3-6 revenue/sales_count per agent, including
+    Alan Sačić's already-documented 552,64€/3 sales (08-04) and 117,80€/2 sales (08-05)
+    from §14 item 19 - confirms the import is correct and consistent with what was
+    already cross-checked there.
+
+---
+
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
 Kundennummer/phone/Gebiet) · Tier 1/Tier 2 (§4A data classes) · brand profile (curated
 brand→consumption-category mapping) · Flywheel (feedback-driven self-improvement loop).

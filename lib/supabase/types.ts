@@ -93,6 +93,47 @@ export type Database = {
           },
         ]
       }
+      agent_attendance: {
+        Row: {
+          agent_id: string
+          created_at: string
+          date: string
+          hours_worked: number
+          id: string
+          lost_hours: number
+          note: string | null
+          updated_at: string
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          date: string
+          hours_worked?: number
+          id?: string
+          lost_hours?: number
+          note?: string | null
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          date?: string
+          hours_worked?: number
+          id?: string
+          lost_hours?: number
+          note?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_attendance_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_daily_performance: {
         Row: {
           agent_id: string
