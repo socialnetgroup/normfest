@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import {
   LayoutDashboard,
   Building2,
@@ -26,6 +26,8 @@ import {
   ListChecks,
   BarChart3,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   X,
 } from "lucide-react";
 
@@ -52,6 +54,37 @@ const SETTINGS_ITEMS = [
   { href: "/admin/katalog-dedup", label: "Katalog-Dedup", icon: Copy },
   { href: "/admin/katalog-qualitaet", label: "Katalog-Qualität", icon: BarChart3 },
 ];
+
+// Anis, 2026-08-06: "stavi mogucnost da menu u aplikaciji se moze ugasiti
+// iako je full screen" - the sidebar was previously always-visible on
+// desktop (only the mobile drawer could close). Persisted so the choice
+// survives navigation/reload, not just a per-session toggle.
+//
+// useSyncExternalStore rather than useState+useEffect: localStorage is a
+// mutable external source read outside React, and this is exactly the API
+// React ships for that - getServerSnapshot returns the SSR-safe default
+// (expanded) so there's no hydration mismatch, and the real persisted value
+// takes over immediately after mount without an effect-driven setState.
+const DESKTOP_COLLAPSED_KEY = "normfest-sidebar-collapsed";
+const DESKTOP_COLLAPSED_EVENT = "normfest-sidebar-collapsed-change";
+
+function subscribeToDesktopCollapsed(onChange: () => void) {
+  window.addEventListener(DESKTOP_COLLAPSED_EVENT, onChange);
+  return () => window.removeEventListener(DESKTOP_COLLAPSED_EVENT, onChange);
+}
+
+function getDesktopCollapsedSnapshot() {
+  return localStorage.getItem(DESKTOP_COLLAPSED_KEY) === "1";
+}
+
+function getDesktopCollapsedServerSnapshot() {
+  return false;
+}
+
+function setDesktopCollapsedPersisted(value: boolean) {
+  localStorage.setItem(DESKTOP_COLLAPSED_KEY, value ? "1" : "0");
+  window.dispatchEvent(new Event(DESKTOP_COLLAPSED_EVENT));
+}
 
 function isActive(pathname: string, href: string) {
   return href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -108,6 +141,15 @@ export function AppSidebar({
   const [settingsOpen, setSettingsOpen] = useState(settingsActive);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [lastPathname, setLastPathname] = useState(pathname);
+  const desktopCollapsed = useSyncExternalStore(
+    subscribeToDesktopCollapsed,
+    getDesktopCollapsedSnapshot,
+    getDesktopCollapsedServerSnapshot,
+  );
+
+  function toggleDesktopCollapsed() {
+    setDesktopCollapsedPersisted(!desktopCollapsed);
+  }
 
   // Adjusting state during render (not in an effect) on navigation, per
   // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
@@ -144,11 +186,27 @@ export function AppSidebar({
         />
       ) : null}
 
+      {/* Reopen button - lives outside <aside> since the aside itself
+          collapses to zero width and would take its own button with it. */}
+      {desktopCollapsed ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          aria-label="Menü einblenden"
+          onClick={toggleDesktopCollapsed}
+          className="fixed top-4 left-4 z-40 hidden md:flex"
+        >
+          <PanelLeftOpen className="size-4" />
+        </Button>
+      ) : null}
+
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex h-screen w-72 max-w-[85vw] flex-col border-r bg-sidebar text-sidebar-foreground transition-transform duration-200 ease-in-out",
-          "md:static md:z-auto md:w-60 md:max-w-none md:!translate-x-0",
+          "fixed inset-y-0 left-0 z-50 flex h-screen w-72 max-w-[85vw] flex-col border-r bg-sidebar text-sidebar-foreground transition-[transform,width] duration-200 ease-in-out",
+          "md:static md:z-auto md:max-w-none md:!translate-x-0",
           mobileOpen ? "translate-x-0" : "-translate-x-full",
+          desktopCollapsed ? "md:w-0 md:overflow-hidden md:border-r-0" : "md:w-60",
         )}
       >
         <div className="flex items-center justify-between px-5 py-5">
@@ -156,16 +214,28 @@ export function AppSidebar({
             <Image src="/logo.png" alt="Social Net" width={28} height={28} priority />
             <span className="font-heading text-[15px] font-semibold tracking-tight">Normfest</span>
           </Link>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label="Menü schließen"
-            className="md:hidden"
-            onClick={closeMobile}
-          >
-            <X className="size-5" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Menü ausblenden"
+              onClick={toggleDesktopCollapsed}
+              className="hidden md:inline-flex"
+            >
+              <PanelLeftClose className="size-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Menü schließen"
+              className="md:hidden"
+              onClick={closeMobile}
+            >
+              <X className="size-5" />
+            </Button>
+          </div>
         </div>
 
         <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3">

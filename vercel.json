@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/dialer-snapshot",
+      "schedule": "0 16 * * *"
+    }
+  ]
+}

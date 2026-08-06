@@ -3,7 +3,12 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import type { Database } from "@/lib/supabase/types";
 
-const PUBLIC_PATHS = ["/login"];
+// "/api/cron" isn't literally public - Vercel Cron requests carry no user
+// session at all (no cookies), so the redirect-to-login logic below would
+// otherwise 302 every cron trigger before it ever reaches the route. Each
+// route under /api/cron enforces its own auth via a CRON_SECRET bearer
+// check instead (see app/api/cron/dialer-snapshot/route.ts).
+const PUBLIC_PATHS = ["/login", "/api/cron"];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });

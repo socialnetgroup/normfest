@@ -9,10 +9,9 @@ import { SoftphoneDialpad } from "@/components/softphone-dialpad";
 import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import {
+  buildDialerAgentSummaries,
   fetchDialerAgentStatuses,
   formatSecondsAsHms,
-  matchDialerAgent,
-  parseDialerTimeToSeconds,
   type DialerAgentStatus,
 } from "@/lib/dialer/status";
 import { cn } from "@/lib/utils";
@@ -100,18 +99,16 @@ export default async function DialerPage() {
   // (Anis, 2026-08-06: "Normfest dialer pokazuje Jelenu Stancevic... prikazuj
   // samo ljude iz Normfesta") - only show rows that match a real Normfest
   // agent; an unrecognized name is someone else's project, not ours to show.
-  const knownRows = dialerRows
-    ? dialerRows
-        .map((row) => ({ row, matched: matchDialerAgent(row.fullName, agents) }))
-        .filter((r): r is { row: DialerAgentStatus; matched: (typeof agents)[number] } => r.matched !== null)
-    : null;
+  // buildDialerAgentSummaries() also computes the standard call-center KPIs
+  // below, shared with the daily snapshot cron job so the two can't drift.
+  const summaries = dialerRows ? buildDialerAgentSummaries(dialerRows, agents, salesByAgentId) : null;
 
-  const sortedRows = knownRows
-    ? [...knownRows].sort((a, b) => {
-        const pa = STATUS_ORDER[a.row.status.toUpperCase()] ?? 99;
-        const pb = STATUS_ORDER[b.row.status.toUpperCase()] ?? 99;
+  const sortedRows = summaries
+    ? [...summaries].sort((a, b) => {
+        const pa = STATUS_ORDER[a.status.toUpperCase()] ?? 99;
+        const pb = STATUS_ORDER[b.status.toUpperCase()] ?? 99;
         if (pa !== pb) return pa - pb;
-        return a.matched.full_name.localeCompare(b.matched.full_name);
+        return a.fullName.localeCompare(b.fullName);
       })
     : null;
 
@@ -195,84 +192,47 @@ export default async function DialerPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y">
-                      {sortedRows.map(({ row, matched }) => {
-                        const realSales = salesByAgentId.get(matched.id) ?? 0;
-                        // Computed from realSales, not row.conversionRate - the dialer's
-                        // own conversion figure is based on ITS internal sales counter,
-                        // which no longer matches what's now shown in the Sales column
-                        // (Anis, 2026-08-06: same reasoning as the Sales fix above).
-                        const realConversion = row.totalCalls > 0 ? realSales / row.totalCalls : 0;
-
-                        // Standard call-center KPIs (Anis, 2026-08-06: "predloži
-                        // par stvari sto bi po standardnoj praksi mogli
-                        // racunati" -> "dodaj sve") - all derived from the raw
-                        // time buckets the dialer already sends, confirmed live
-                        // to be additive: talk+wait+dispo+pause+dead = totalTime.
-                        const talkSec = parseDialerTimeToSeconds(row.talkTime);
-                        const waitSec = parseDialerTimeToSeconds(row.waitTime);
-                        const dispoSec = parseDialerTimeToSeconds(row.dispoTime);
-                        const pauseSec = parseDialerTimeToSeconds(row.pauseTime);
-                        const deadSec = parseDialerTimeToSeconds(row.deadTime);
-                        const totalSec = parseDialerTimeToSeconds(row.totalTime);
-                        const totalHours = totalSec / 3600;
-                        const workSec = talkSec + dispoSec + waitSec;
-
-                        // Occupancy: share of "available for a call" time (talk +
-                        // wrap-up + waiting for one) actually spent on/wrapping a
-                        // call, excluding pause - standard call-center efficiency
-                        // metric, not something the dialer itself reports.
-                        const occupancy = workSec > 0 ? (talkSec + dispoSec) / workSec : 0;
-                        // AHT: average handle time per call (talk + wrap-up).
-                        const aht = row.totalCalls > 0 ? (talkSec + dispoSec) / row.totalCalls : 0;
-                        const callsPerHour = totalHours > 0 ? row.totalCalls / totalHours : 0;
-                        const salesPerHour = totalHours > 0 ? realSales / totalHours : 0;
-                        const pauseShare = totalSec > 0 ? pauseSec / totalSec : 0;
-                        const deadShare = totalSec > 0 ? deadSec / totalSec : 0;
-
-                        return (
-                          <tr key={row.extension}>
-                            <td className="px-2 py-2 font-medium">
-                              <Link href={`/admin/team/${matched.id}`} className="hover:underline">
-                                {matched.full_name}
-                              </Link>
-                            </td>
-                            <td className="px-2 py-2">
-                              <Badge variant={statusVariant(row.status)}>
-                                {STATUS_LABELS[row.status.toUpperCase()] ?? row.status}
-                              </Badge>
-                            </td>
-                            <td className="px-2 py-2 tabular-nums">{row.timeInStatus}</td>
-                            <td className="border-l px-2 py-2 tabular-nums">{row.totalCalls}</td>
-                            <td className="px-2 py-2 tabular-nums">{rate.format(callsPerHour)}</td>
-                            <td className="border-l px-2 py-2 tabular-nums">{realSales}</td>
-                            <td className="px-2 py-2 tabular-nums">{pct.format(realConversion)}</td>
-                            <td className="px-2 py-2 tabular-nums">{rate.format(salesPerHour)}</td>
-                            <td className="border-l px-2 py-2 tabular-nums">{formatSecondsAsHms(aht)}</td>
-                            <td className="px-2 py-2 tabular-nums">{pct.format(occupancy)}</td>
-                            <td className="border-l px-2 py-2 tabular-nums">{row.talkTime}</td>
-                            <td className="px-2 py-2 tabular-nums">{row.waitTime}</td>
-                            <td className="px-2 py-2 tabular-nums">{row.dispoTime}</td>
-                            <td className="px-2 py-2 tabular-nums">
-                              {row.pauseTime} <span className="text-muted-foreground">({pct.format(pauseShare)})</span>
-                            </td>
-                            <td className="px-2 py-2 tabular-nums">
-                              {row.deadTime} <span className="text-muted-foreground">({pct.format(deadShare)})</span>
-                            </td>
-                            <td className="border-l px-2 py-2 tabular-nums">{row.totalTime}</td>
-                            <td
-                              className={cn(
-                                "px-2 py-2 tabular-nums",
-                                row.status.toUpperCase() === "PAUSED"
-                                  ? "text-muted-foreground"
-                                  : "text-success-foreground",
-                              )}
-                            >
-                              {row.activeTime}
-                            </td>
-                            <td className="px-2 py-2 tabular-nums text-muted-foreground">{row.inactiveTime}</td>
-                          </tr>
-                        );
-                      })}
+                      {sortedRows.map((a) => (
+                        <tr key={a.agentId}>
+                          <td className="px-2 py-2 font-medium">
+                            <Link href={`/admin/team/${a.agentId}`} className="hover:underline">
+                              {a.fullName}
+                            </Link>
+                          </td>
+                          <td className="px-2 py-2">
+                            <Badge variant={statusVariant(a.status)}>
+                              {STATUS_LABELS[a.status.toUpperCase()] ?? a.status}
+                            </Badge>
+                          </td>
+                          <td className="px-2 py-2 tabular-nums">{a.timeInStatus}</td>
+                          <td className="border-l px-2 py-2 tabular-nums">{a.totalCalls}</td>
+                          <td className="px-2 py-2 tabular-nums">{rate.format(a.callsPerHour)}</td>
+                          <td className="border-l px-2 py-2 tabular-nums">{a.realSales}</td>
+                          <td className="px-2 py-2 tabular-nums">{pct.format(a.conversion)}</td>
+                          <td className="px-2 py-2 tabular-nums">{rate.format(a.salesPerHour)}</td>
+                          <td className="border-l px-2 py-2 tabular-nums">{formatSecondsAsHms(a.ahtSeconds)}</td>
+                          <td className="px-2 py-2 tabular-nums">{pct.format(a.occupancy)}</td>
+                          <td className="border-l px-2 py-2 tabular-nums">{a.talkTime}</td>
+                          <td className="px-2 py-2 tabular-nums">{a.waitTime}</td>
+                          <td className="px-2 py-2 tabular-nums">{a.dispoTime}</td>
+                          <td className="px-2 py-2 tabular-nums">
+                            {a.pauseTime} <span className="text-muted-foreground">({pct.format(a.pauseShare)})</span>
+                          </td>
+                          <td className="px-2 py-2 tabular-nums">
+                            {a.deadTime} <span className="text-muted-foreground">({pct.format(a.deadShare)})</span>
+                          </td>
+                          <td className="border-l px-2 py-2 tabular-nums">{a.totalTime}</td>
+                          <td
+                            className={cn(
+                              "px-2 py-2 tabular-nums",
+                              a.status.toUpperCase() === "PAUSED" ? "text-muted-foreground" : "text-success-foreground",
+                            )}
+                          >
+                            {a.activeTime}
+                          </td>
+                          <td className="px-2 py-2 tabular-nums text-muted-foreground">{a.inactiveTime}</td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>

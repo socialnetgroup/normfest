@@ -2084,6 +2084,52 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     page exactly; Pausenzeit-share 4:56:39/8:54(=32040s) = 55,6 % also matched. All from
     a throwaway admin test account, deleted after.
 
+    **Occupancy formula corrected same day** - Anis: "Samo mi Auslastung sa 96% nejasna
+    nekako." The first cut used `(talk+dispo)/(talk+dispo+wait)` as Occupancy, excluding
+    `deadTime` from the "available" denominator entirely - since this dialer's own
+    `waitTime` is near-zero for every agent, that formula collapsed toward ~93-99,6 % for
+    everyone regardless of how the day actually went, not a meaningful signal. Switched to
+    the standard call-center formula (Handle Time / (Login Time - Break Time), i.e.
+    `(talk+dispo)/(talk+dispo+wait+dead)`, equivalently `totalTime-pause` as the
+    denominator) - `buildDialerAgentSummaries()` in `lib/dialer/status.ts` is the one
+    shared place this is computed, used by both the live page and the snapshot cron below,
+    so the fix applies everywhere at once. Verified against a fresh real pull: moved
+    meaningfully where `deadTime` was real (Arnela 93,9 %->64,1 %, Elida 97,4 %->88,9 %),
+    barely moved for agents whose dead time was already ~0 (Rijalda, Alan stayed ~97-99 %)
+    - a real, expected result of the fix, not a bug: for those agents essentially all
+    non-pause time genuinely was call-productive.
+
+    **Daily snapshot added (2026-08-06), a stopgap until the real call-log API lands.**
+    Anis, same conversation: "posto nemamo logove, da li te mogu zamoliti da napravis ti
+    automatski nase logove dok se dev ne vrati... samo screenshot tj snap informacija na
+    kraju radnog dana." The dialer's own Live-Status has no history behind it (already
+    confirmed earlier the same day - agents.php only ever returns the current snapshot),
+    so a real day's numbers were simply lost every midnight otherwise. New
+    `dialer_daily_snapshots` table (migration `20260806040000_dialer_daily_snapshots.sql`,
+    admin-only RLS, one row per day keyed on `snapshot_date`, `agents jsonb` holding the
+    exact `buildDialerAgentSummaries()` output - a real snapshot per Anis's own framing,
+    not a new structured analytics table) + `/api/cron/dialer-snapshot` (Vercel Cron,
+    `vercel.json`, `0 16 * * *` = 18:00 CEST currently - **will read as 17:00 once CET
+    resumes in autumn, the cron schedule itself doesn't shift with DST**, worth revisiting
+    then) upserts the current known-agent-filtered, KPI-computed rows for today.
+
+    **Real bug caught before it could break in production, not guessed:** the route
+    initially 302'd to `/login` on every request - `proxy.ts`'s matcher covers all paths
+    including `/api/*`, and `lib/supabase/proxy.ts` redirected any request with no
+    Supabase session there, which Vercel Cron triggers never have (no cookies at all).
+    Fixed by adding `/api/cron` to `PUBLIC_PATHS` (bypasses the session-redirect check,
+    not real auth - the route itself enforces a `CRON_SECRET` bearer-token check, same
+    pattern Vercel's own docs recommend for cron routes). Confirmed the fix didn't
+    accidentally open anything else: normal pages (`/`, `/dialer`) still 307 to `/login`
+    when unauthenticated. Verified the route itself live: correct 401 with no/wrong
+    secret, correct upsert (re-triggering twice still leaves exactly one row for today),
+    real KPI-populated JSON confirmed in the DB. `CRON_SECRET` added to `.env.local` for
+    local testing - **still needs to be added as a real Vercel project env var (same
+    value) for the actual cron trigger to authenticate in production**, not something
+    doable from this environment. No viewer UI built yet for past snapshots (v1 scope
+    matches Anis's own "samo screenshot" framing - capture first, prove it's useful,
+    build a browsing UI as a natural v2 if so).
+
 14. **QA-Bewertungen — shipped (2026-07-25).** New standalone admin menu item (real feature,
     not a placeholder — unlike QA-Anrufe/M9, nothing here is blocked on an external vendor
     decision): the TL's mandatory monthly per-agent call-quality evaluation. Anis referenced
@@ -2454,6 +2500,36 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     before the call" via the assistant already worked, pre-dating this feature) - what was
     missing, and what this feature adds, is a structured date + proactive surfacing rather
     than requiring the agent to remember to ask or re-read old comments.
+
+22. **Sidebar collapsible on desktop (2026-08-06).** Anis: "stavi mogucnost da menu u
+    aplikaciji se moze ugasiti iako je full screen" - the sidebar was previously
+    always-visible at `md:` widths (only the mobile drawer could close), which mattered
+    more once the dialer table (§14 item 13) started wanting real screen width. New
+    "Menü ausblenden"/"Menü einblenden" toggle (`PanelLeftClose`/`PanelLeftOpen`) collapses
+    `<aside>` to `md:w-0` (main content reflows into the freed space) with a small fixed
+    reopen button appearing top-left once collapsed (outside `<aside>`, since a
+    zero-width element can't host its own reopen control). Persisted via `localStorage`
+    (`normfest-sidebar-collapsed`) so the choice survives navigation/reload, using
+    `useSyncExternalStore` rather than `useState`+`useEffect` - the newer
+    `react-hooks/set-state-in-effect` lint rule (React Compiler ESLint plugin) flags
+    unconditional `setState` inside an effect as a non-suppressible error (a plain
+    `// eslint-disable` comment did not silence it), and `useSyncExternalStore` is the
+    React-sanctioned API for exactly this case (sync a component with a mutable source
+    read outside React) - `getServerSnapshot` returns the SSR-safe default so there's no
+    hydration mismatch, and the real persisted value takes over immediately post-mount
+    with no effect-driven re-render needed.
+
+    Verified: compiled Tailwind CSS confirmed correct byte-for-byte (`.md\:w-0 { width: 0;
+    }` and `.md\:w-60 { ... }` both present inside the real `@media (min-width: 48rem)`
+    block - checked directly against the raw served CSS chunk, not just trusted the
+    source), and the toggle correctly flips the `<aside>` className between the two
+    variants on click, with `localStorage` correctly persisting "0"/"1" across the
+    toggle. **One thing not visually confirmed:** the sandboxed preview browser's
+    viewport reported `window.innerWidth: 0` and `computer{screenshot}` failed ("Browser
+    pane is not displayed") throughout this check, so the actual on-screen reflow
+    couldn't be screenshotted this session - the CSS/class/persistence evidence above is
+    strong but is not the same as seeing it render. Worth a quick visual glance next time
+    the pane is available.
 
 ---
 

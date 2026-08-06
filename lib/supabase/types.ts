@@ -667,6 +667,27 @@ export type Database = {
           },
         ]
       }
+      dialer_daily_snapshots: {
+        Row: {
+          agents: Json
+          captured_at: string
+          id: string
+          snapshot_date: string
+        }
+        Insert: {
+          agents: Json
+          captured_at?: string
+          id?: string
+          snapshot_date: string
+        }
+        Update: {
+          agents?: Json
+          captured_at?: string
+          id?: string
+          snapshot_date?: string
+        }
+        Relationships: []
+      }
       enrichment_jobs: {
         Row: {
           company_id: string

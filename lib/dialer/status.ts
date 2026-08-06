@@ -132,3 +132,87 @@ export function matchDialerAgent<T extends { full_name: string }>(
   const norm = stripDiacritics(dialerFullName);
   return agents.find((a) => stripDiacritics(a.full_name) === norm) ?? null;
 }
+
+export type DialerAgentSummary = {
+  agentId: string;
+  fullName: string;
+  status: string;
+  timeInStatus: string;
+  totalCalls: number;
+  realSales: number;
+  conversion: number;
+  callsPerHour: number;
+  salesPerHour: number;
+  ahtSeconds: number;
+  occupancy: number;
+  talkTime: string;
+  waitTime: string;
+  dispoTime: string;
+  pauseTime: string;
+  pauseShare: number;
+  deadTime: string;
+  deadShare: number;
+  totalTime: string;
+  activeTime: string;
+  inactiveTime: string;
+};
+
+/** Known-agent filter + standard call-center KPI computation, shared between
+ * the live /dialer page and the daily snapshot cron job so the two can never
+ * silently drift apart (Anis, 2026-08-06: "dodaj sve ove podatke" on the live
+ * page, then separately asked for a daily snapshot of the same data). */
+export function buildDialerAgentSummaries(
+  dialerRows: DialerAgentStatus[],
+  agents: { id: string; full_name: string }[],
+  salesByAgentId: Map<string, number>,
+): DialerAgentSummary[] {
+  return dialerRows
+    .map((row) => ({ row, matched: matchDialerAgent(row.fullName, agents) }))
+    .filter((r): r is { row: DialerAgentStatus; matched: (typeof agents)[number] } => r.matched !== null)
+    .map(({ row, matched }) => {
+      const realSales = salesByAgentId.get(matched.id) ?? 0;
+      const conversion = row.totalCalls > 0 ? realSales / row.totalCalls : 0;
+
+      const talkSec = parseDialerTimeToSeconds(row.talkTime);
+      const waitSec = parseDialerTimeToSeconds(row.waitTime);
+      const dispoSec = parseDialerTimeToSeconds(row.dispoTime);
+      const pauseSec = parseDialerTimeToSeconds(row.pauseTime);
+      const deadSec = parseDialerTimeToSeconds(row.deadTime);
+      const totalSec = parseDialerTimeToSeconds(row.totalTime);
+      const totalHours = totalSec / 3600;
+      // Available time = everything except pause (standard call-center
+      // formula: Occupancy = Handle Time / (Login Time - Break Time)).
+      // First cut used talk+dispo+wait as the denominator, which excluded
+      // deadTime entirely and made Occupancy read implausibly high (93-99%
+      // for everyone) - Anis, 2026-08-06: "Auslastung sa 96% nejasna". Real
+      // cause: this dialer's own waitTime is near-zero for every agent, so
+      // (talk+dispo)/(talk+dispo+wait) collapses toward ~100% regardless of
+      // how the day actually went - not a meaningful signal. availableSec
+      // (talk+dispo+wait+dead = totalTime-pause) is the correct denominator.
+      const availableSec = talkSec + dispoSec + waitSec + deadSec;
+
+      return {
+        agentId: matched.id,
+        fullName: matched.full_name,
+        status: row.status,
+        timeInStatus: row.timeInStatus,
+        totalCalls: row.totalCalls,
+        realSales,
+        conversion,
+        callsPerHour: totalHours > 0 ? row.totalCalls / totalHours : 0,
+        salesPerHour: totalHours > 0 ? realSales / totalHours : 0,
+        ahtSeconds: row.totalCalls > 0 ? (talkSec + dispoSec) / row.totalCalls : 0,
+        occupancy: availableSec > 0 ? (talkSec + dispoSec) / availableSec : 0,
+        talkTime: row.talkTime,
+        waitTime: row.waitTime,
+        dispoTime: row.dispoTime,
+        pauseTime: row.pauseTime,
+        pauseShare: totalSec > 0 ? pauseSec / totalSec : 0,
+        deadTime: row.deadTime,
+        deadShare: totalSec > 0 ? deadSec / totalSec : 0,
+        totalTime: row.totalTime,
+        activeTime: row.activeTime,
+        inactiveTime: row.inactiveTime,
+      };
+    });
+}
