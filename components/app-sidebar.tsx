@@ -29,6 +29,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   CalendarCheck,
+  Mail,
   X,
 } from "lucide-react";
 
@@ -39,7 +40,6 @@ import { cn } from "@/lib/utils";
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/firmen", label: "Firmen", icon: Building2 },
-  { href: "/dialer", label: "Dialer", icon: Phone, badge: "Bald" },
   { href: "/katalog", label: "Katalog", icon: Package },
   { href: "/fokus", label: "Fokus", icon: Target },
   // Alan's pilot feedback (2026-08-08) / admin-menu scoping audit: the
@@ -49,6 +49,7 @@ const NAV_ITEMS = [
   // the Admin section, so agents had no way in except remembering that
   // tile. Moved to the shared nav to match the page's real visibility.
   { href: "/feedback", label: "Feedback", icon: MessageSquare },
+  { href: "/email-liste", label: "Email-Liste", icon: Mail },
   { href: "/wissen", label: "Wissen", icon: BookOpen },
   { href: "/skript", label: "Skript", icon: FileText },
   { href: "/assistent", label: "Assistent", icon: Sparkles },
@@ -271,6 +272,14 @@ export function AppSidebar({
                 label="Offene Reviews"
                 icon={ListChecks}
                 active={isActive(pathname, "/admin/reviews")}
+                onNavigate={closeMobile}
+              />
+              <NavItem
+                href="/dialer"
+                label="Dialer"
+                icon={Phone}
+                badge="Bald"
+                active={isActive(pathname, "/dialer")}
                 onNavigate={closeMobile}
               />
               <NavItem
