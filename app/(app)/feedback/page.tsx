@@ -19,7 +19,7 @@ const selectClassName =
 // own OUTCOME_LABELS fallback.
 const OUTCOME_OPTIONS = [
   { value: "sold", label: "Verkauft" },
-  { value: "rejected", label: "Abgelehnt (Kein Bedarf)" },
+  { value: "rejected", label: "Kein Bedarf" },
   { value: "not_relevant", label: "Nicht angetroffen" },
   { value: "keine_zeit", label: "Keine Zeit" },
   { value: "nicht_besucht", label: "Nicht besucht" },

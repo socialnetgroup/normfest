@@ -29,7 +29,7 @@ type LogFeedbackPayload = {
 const OUTCOME_LABELS: Record<string, string> = {
   sold: "Verkauft",
   interested: "Interessiert",
-  rejected: "Abgelehnt (Kein Bedarf)",
+  rejected: "Kein Bedarf",
   not_relevant: "Nicht angetroffen",
   keine_zeit: "Keine Zeit",
   nicht_besucht: "Nicht besucht",

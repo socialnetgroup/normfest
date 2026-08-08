@@ -16,7 +16,7 @@ import { createClient } from "@/lib/supabase/client";
 // orphaned - never shown as a choice going forward.
 const OUTCOMES = [
   { value: "sold", label: "Verkauft" },
-  { value: "rejected", label: "Abgelehnt (Kein Bedarf)" },
+  { value: "rejected", label: "Kein Bedarf" },
   { value: "not_relevant", label: "Nicht angetroffen" },
   { value: "keine_zeit", label: "Keine Zeit" },
   { value: "nicht_besucht", label: "Nicht besucht" },

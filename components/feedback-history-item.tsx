@@ -18,7 +18,7 @@ import { createClient } from "@/lib/supabase/client";
 // real label, but is never offered as an editable choice.
 const OUTCOMES = [
   { value: "sold", label: "Verkauft" },
-  { value: "rejected", label: "Abgelehnt (Kein Bedarf)" },
+  { value: "rejected", label: "Kein Bedarf" },
   { value: "not_relevant", label: "Nicht angetroffen" },
   { value: "keine_zeit", label: "Keine Zeit" },
   { value: "nicht_besucht", label: "Nicht besucht" },
@@ -27,7 +27,7 @@ const OUTCOMES = [
 const OUTCOME_LABELS: Record<string, string> = {
   sold: "Verkauft",
   interested: "Interessiert",
-  rejected: "Abgelehnt (Kein Bedarf)",
+  rejected: "Kein Bedarf",
   not_relevant: "Nicht angetroffen",
   keine_zeit: "Keine Zeit",
   nicht_besucht: "Nicht besucht",
