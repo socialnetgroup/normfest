@@ -61,7 +61,10 @@ function CopyField({ label, value, rows }: { label: string; value: string; rows?
 
 export function EmailTemplateBlock() {
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 rounded-lg bg-muted/30 p-3">
+      <h3 className="flex items-center gap-2 border-l-4 border-l-primary/50 pl-2.5 text-sm font-bold tracking-tight text-foreground">
+        E-Mail-Vorlage
+      </h3>
       <CopyField label="Betreff" value={SUBJECT} />
       <CopyField label="Text" value={BODY} rows={8} />
       <p className="text-xs text-muted-foreground">

@@ -80,17 +80,10 @@ export default async function EmailListePage({
           {noGebietSelected ? (
             <p className="text-sm text-muted-foreground">Bitte oben ein Gebiet auswählen.</p>
           ) : (
-            <EmailListClient rows={rows ?? []} />
+            <EmailListClient rows={rows ?? []}>
+              <EmailTemplateBlock />
+            </EmailListClient>
           )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>E-Mail-Vorlage</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <EmailTemplateBlock />
         </CardContent>
       </Card>
     </div>
