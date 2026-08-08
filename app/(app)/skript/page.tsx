@@ -4,9 +4,14 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
 
-const SUB_HEADING_STRUKTURA = /^Struktura\s+\d+:/i;
+// Skript fully translated to German 2026-08-08 (Anis: "izbaciti sav
+// bosanski jezik, ostvariti samo njemacki svugdje" - CLAUDE.md §14 item 36)
+// via scripts/translate-skript-to-german.mjs. These structural markers are
+// matched against the translated German headings/content, not the original
+// Bosnian source.
+const SUB_HEADING_STRUKTURA = /^Struktur\s+\d+:/i;
 const SUB_HEADING_ALLCAPS = /^[A-ZÄÖÜČĆĐŠŽ][A-ZÄÖÜČĆĐŠŽ0-9\s-]{3,44}!?$/;
-const SUB_HEADING_EXPLICIT = new Set(["Zlatno pravilo rasporeda", "Pravilo za cold call"]);
+const SUB_HEADING_EXPLICIT = new Set(["Goldene Regel des Zeitplans", "Regel für Kaltakquise"]);
 const LANG_PREFIX = /^(DE|BS)\b\s*(.*)$/;
 const QUOTE_LINE = /^"(.+)"$/;
 const LIST_ITEM = /^[-•]\s+|^\d+[.)]\s+/;
@@ -20,23 +25,20 @@ const TABLE_SPECS: Record<
   string,
   { headers: string[]; rowCount?: number; rowValidator?: (row: string[]) => boolean }
 > = {
-  "1. Tvoj radni dan - raspored": {
-    headers: ["Vrijeme", "Aktivnost"],
+  "1. Dein Arbeitstag - Tagesablauf": {
+    headers: ["Zeit", "Aktivität"],
     rowValidator: (row) => /^\d{2}:\d{2}/.test(row[0]),
   },
-  "4. Prigovori kupaca i kako odgovoriti": {
-    headers: ["Prigovor (DE / BS)", "Tvoj odgovor - bosanski", "Tvoj odgovor - njemački"],
-  },
-  "5. Tehnike zaključivanja prodaje": {
-    headers: ["Tehnika", "Bosanski", "Njemacki"],
+  "5. Abschlusstechniken": {
+    headers: ["Technik", "Beispiel"],
     rowCount: 5,
   },
-  "6. Prodajni vokabular - zamjena rijeci": {
-    headers: ["NE koristi", "KORISTI", "Primjer"],
+  "6. Verkaufsvokabular - Wortersatz": {
+    headers: ["VERMEIDEN", "VERWENDEN", "Beispiel"],
     rowCount: 17,
   },
-  "7. Kodiranje poziva - obavezno nakon SVAKOG poziva": {
-    headers: ["Kod", "Znacenje", "Sta radis?"],
+  "7. Anrufkodierung - nach JEDEM Anruf verpflichtend": {
+    headers: ["Code", "Bedeutung", "Was tust du?"],
   },
 };
 
@@ -267,7 +269,7 @@ export default async function SkriptPage() {
     supabase.from("kb_documents").select("id, title").eq("collection", "skript").is("deleted_at", null).maybeSingle(),
     supabase
       .from("objection_cards")
-      .select("id, objection, response_bs, response_de, category")
+      .select("id, objection, response_de, category")
       .is("deleted_at", null)
       .order("created_at"),
   ]);
@@ -280,11 +282,11 @@ export default async function SkriptPage() {
         .order("chunk_index")
     : { data: null };
 
-  // "4. Prigovori kupaca i kako odgovoriti" duplicates the Einwandbehandlung
-  // card above (same objections, same DE/BS responses) - dropped from the
-  // full guide per Anis (2026-08-01) to stop showing it twice; its opening
-  // line moved into the Einwandbehandlung card itself, see below.
-  const chunks = allChunks?.filter((c) => c.heading !== "4. Prigovori kupaca i kako odgovoriti") ?? null;
+  // "4. Kundeneinwände und wie man antwortet" duplicates the Einwandbehandlung
+  // card above (same objections, same responses) - dropped from the full
+  // guide per Anis (2026-08-01) to stop showing it twice; its opening line
+  // moved into the Einwandbehandlung card itself, see below.
+  const chunks = allChunks?.filter((c) => c.heading !== "4. Kundeneinwände und wie man antwortet") ?? null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -300,14 +302,13 @@ export default async function SkriptPage() {
               <MessageCircleQuestion className="size-4 text-primary" />
               Einwandbehandlung
             </CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Häufige Einwände mit sofort einsetzbaren Antworten (DE + BS).
-            </p>
+            <p className="text-sm text-muted-foreground">Häufige Einwände mit sofort einsetzbaren Antworten.</p>
           </CardHeader>
           <CardContent>
             <blockquote className="mb-4 rounded-md border-l-2 border-l-primary bg-muted/40 px-3 py-2 text-sm italic text-foreground">
-              Zapamti: &quot;Ne&quot; je početak pregovora, ne kraj. 80% kupaca kaže &quot;NE&quot; u prosjeku 4 puta
-              prije &quot;DA&quot;. 92% agenata odustane nakon prvog &quot;ne&quot;.
+              Denk daran: &quot;Nein&quot; ist der Anfang der Verhandlung, nicht das Ende. 80% der Kunden sagen im
+              Schnitt 4-mal &quot;NEIN&quot;, bevor sie &quot;JA&quot; sagen. 92% der Agenten geben nach dem ersten
+              &quot;Nein&quot; auf.
             </blockquote>
             <ul className="flex flex-col gap-3">
               {objections.map((o) => (
@@ -315,16 +316,9 @@ export default async function SkriptPage() {
                   <div className="flex items-center gap-2">
                     <Badge variant="warning">{o.objection}</Badge>
                   </div>
-                  <div className="mt-2.5 grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-md bg-card p-2.5 ring-1 ring-foreground/10">
-                      <p className="mb-1 text-xs font-bold tracking-wide text-primary uppercase">DE</p>
-                      <p className="text-sm">{o.response_de}</p>
-                    </div>
-                    <div className="rounded-md bg-card p-2.5 ring-1 ring-foreground/10">
-                      <p className="mb-1 text-xs font-bold tracking-wide text-muted-foreground uppercase">BS</p>
-                      <p className="text-sm">{o.response_bs}</p>
-                    </div>
-                  </div>
+                  <p className="mt-2.5 rounded-md bg-card p-2.5 text-sm ring-1 ring-foreground/10">
+                    {o.response_de}
+                  </p>
                 </li>
               ))}
             </ul>
