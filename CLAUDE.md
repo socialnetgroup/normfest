@@ -3226,6 +3226,38 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     any focus list and send it manually today - the generator was the actual ask this
     session ("lets focus on the flyer generator for now").
 
+43. **Automated-send cost/risk assessment + generic email template — 2026-08-09.** Anis
+    asked what automating the send would cost, and floated a specific idea: use the real
+    Normfest mailbox's own IMAP/SMTP credentials so the tool sends "like a normal inbox."
+    Assessed and answered directly rather than building it: sending itself is cheap either
+    way (SMTP through the existing mailbox costs nothing extra; a dedicated transactional
+    provider like SES/Resend/Postmark is also near-free at this volume, ~$0.10/1,000
+    emails on SES). The real cost is risk, not money - sending a few hundred emails
+    programmatically through a normal Outlook/Google Workspace mailbox is exactly the
+    pattern that triggers provider-side rate-limiting or a temporary account lock, which
+    would put the team's real working mailbox at risk, not just the send. Storing that
+    mailbox's real credentials server-side also has a bigger blast radius than a scoped
+    send-only API key (whoever holds it can read the inbox too, if IMAP). Recommended:
+    skip the IMAP/inbox-client idea entirely (no need to read the inbox just to send a
+    flyer); if automation is ever built, do it via a dedicated transactional provider with
+    a verified sending domain, not the personal mailbox; and given the real current volume
+    (per-agent, a few sends a month), copy-paste is honestly fine as the permanent
+    solution, not just a stopgap - only worth automating if send frequency grows enough
+    that the manual step starts costing real time. No code changed for the automation
+    question itself - Anis's own conclusion after hearing the tradeoffs, not yet a final
+    decision either way.
+
+    Separately, a real concrete ask from the same message: a copyable generic email
+    template "after the list" on `/email-liste`. New `components/email-template-block.tsx`
+    (`EmailTemplateBlock`) - a fixed, non-personalized German subject+body (references the
+    attached flyer, invites a follow-up) with its own "Kopieren" button per field, same
+    copy-to-clipboard pattern as `EmailListClient`. Rendered in its own card below the
+    address list on `/email-liste` - not tied to a specific focus list or company,
+    deliberately generic per Anis's own framing. Verified live (throwaway admin account,
+    deleted after): renders correctly with no Gebiet selected too (template doesn't depend
+    on the list), both fields hold the exact real template text. Full suite green (41/41)
+    after, typecheck/lint clean.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
