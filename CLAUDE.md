@@ -3258,6 +3258,59 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     on the list), both fields hold the exact real template text. Full suite green (41/41)
     after, typecheck/lint clean.
 
+44. **Email-Liste layout reorder — 2026-08-09.** Anis: "email vorlage nach oben shieben,
+    position 2 nach emails, die email loschen teil am ende" - the template (item 43) had
+    landed in its own card at the very bottom; wanted it sandwiched between the copy-box
+    and the per-company delete list instead. Since the copy-box and delete-list share one
+    piece of client state (`rows`, so a delete immediately updates the copy textarea too),
+    splitting them into separate page-level components would have broken that sync -
+    `EmailListClient` now accepts a `children` slot rendered between the two halves, so
+    `EmailTemplateBlock` renders inside the same component/state owner instead of a
+    sibling. `EmailTemplateBlock` gained its own inline heading (previously relied on its
+    now-removed wrapping Card's `CardTitle`). Verified live: order is copy-box → template
+    → delete-list, confirmed via the real rendered page text.
+
+45. **Fokus flyer: cover redesign + real image-quality bug fixed — 2026-08-09.** Anis
+    reviewed the first flyer version and flagged two things: "1st page just like cover
+    page, dont need that, place an atractive car picture... add photos from page 1", and
+    "the pictures are blurry bad quality... dont you pick them directly from our katalog".
+
+    **Cover redesign:** rather than source an external stock photo (real licensing
+    diligence, uncertain fit, and this app has never pulled in third-party imagery),
+    the cover now features a "Im Fokus" showcase strip - up to 3 real products (first 3
+    with both a price and a photo) in white cards with their real catalog photo, name,
+    and price, replacing the empty lower half of the gradient background. Uses real,
+    already-owned photography, so no licensing question at all.
+
+    **Real image-quality bug, found by comparing crops, not assumed:** checked the
+    downscale step in isolation first (`getFlyerImage()`'s output saved directly to disk)
+    - crisp, no visible artifacts. But the same image, once embedded in the actual PDF and
+    rendered back, was visibly blocky/pixelated. Root cause: `@napi-rs/canvas`'s PDF
+    backend appears to re-compress/re-rasterize a JPEG-encoded source image at a much
+    lower internal quality when embedding it - a double-JPEG-compression effect invisible
+    until you look at the final PDF output, not the intermediate step. Fixed by switching
+    the downscale re-encode from JPEG to PNG (lossless) - confirmed by rendering the same
+    real product photo both ways and comparing crops side by side. Also bumped the
+    downscale target from 220px/JPEG-0.82 to 380px (moot for quality now that it's
+    lossless, but higher resolution still helps the larger "Im Fokus" cover cards). Real
+    cost: full 64-product flyer went from 0.98MB (JPEG, blurry) to 4.2MB (PNG, sharp) -
+    still comfortably small for an email attachment, so kept the sharp version.
+
+    Verified end-to-end through the real API route (not just the standalone generator):
+    a throwaway, inactive test list with 6 real products, real admin session, real
+    `POST /api/admin/fokus/<id>/flyer` call - downloaded the result from Storage and
+    confirmed both the new cover layout and image sharpness held up through the full
+    route path. Never touched the real active "August Kracher 2026" list - confirmed
+    untouched in the DB before and after. Test list, its Storage file, and the test admin
+    account all deleted afterward. Full suite green (41/41), typecheck/lint clean.
+
+    **Separately, a real question answered, not built:** Anis asked what automating the
+    flyer's price-line extraction "costs" and whether it uses the Claude API - clarified
+    directly that flyer generation is pure deterministic code (canvas drawing + regex over
+    already-stored `focus_list_products.note` text), zero LLM calls, zero AI cost. No
+    image generation happens either - the product photos are real, already-owned catalog
+    assets, not AI-generated or fetched from an external API.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
