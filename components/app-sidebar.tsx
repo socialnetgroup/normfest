@@ -42,6 +42,13 @@ const NAV_ITEMS = [
   { href: "/dialer", label: "Dialer", icon: Phone, badge: "Bald" },
   { href: "/katalog", label: "Katalog", icon: Package },
   { href: "/fokus", label: "Fokus", icon: Target },
+  // Alan's pilot feedback (2026-08-08) / admin-menu scoping audit: the
+  // /feedback page itself has always been team-shared (sales_feedback's
+  // existing shared-read RLS, same data the Dashboard's "Feedback diese
+  // Woche" tile already links to) - it only had a persistent nav entry in
+  // the Admin section, so agents had no way in except remembering that
+  // tile. Moved to the shared nav to match the page's real visibility.
+  { href: "/feedback", label: "Feedback", icon: MessageSquare },
   { href: "/wissen", label: "Wissen", icon: BookOpen },
   { href: "/skript", label: "Skript", icon: FileText },
   { href: "/assistent", label: "Assistent", icon: Sparkles },
@@ -278,13 +285,6 @@ export function AppSidebar({
                 label="Anwesenheit"
                 icon={CalendarCheck}
                 active={isActive(pathname, "/admin/anwesenheit")}
-                onNavigate={closeMobile}
-              />
-              <NavItem
-                href="/feedback"
-                label="Feedback"
-                icon={MessageSquare}
-                active={isActive(pathname, "/feedback")}
                 onNavigate={closeMobile}
               />
               <NavItem

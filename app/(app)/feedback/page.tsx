@@ -23,9 +23,9 @@ const OUTCOME_OPTIONS = [
 export default async function FeedbackListPage({
   searchParams,
 }: {
-  searchParams: Promise<{ agent?: string; date?: string; outcome?: string; page?: string }>;
+  searchParams: Promise<{ agent?: string; von?: string; bis?: string; outcome?: string; page?: string }>;
 }) {
-  const { agent: agentFilter, date: dateFilter, outcome: outcomeFilter, page: pageParam } = await searchParams;
+  const { agent: agentFilter, von: vonFilter, bis: bisFilter, outcome: outcomeFilter, page: pageParam } = await searchParams;
   const page = Math.max(1, Number(pageParam) || 1);
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
@@ -44,11 +44,11 @@ export default async function FeedbackListPage({
     .range(from, to);
   if (agentFilter) feedbackBuilder = feedbackBuilder.eq("agent_id", agentFilter);
   if (outcomeFilter) feedbackBuilder = feedbackBuilder.eq("outcome", outcomeFilter);
-  if (dateFilter) {
-    feedbackBuilder = feedbackBuilder
-      .gte("created_at", `${dateFilter}T00:00:00.000Z`)
-      .lte("created_at", `${dateFilter}T23:59:59.999Z`);
-  }
+  // Alan's pilot feedback (2026-08-08): "Feedback (tag) cijeli mjesec od-do
+  // da se moze odabrati" - was single-day only, now a Von/Bis range (either
+  // side optional, so "seit X" / "bis X" work too, not just a closed range).
+  if (vonFilter) feedbackBuilder = feedbackBuilder.gte("created_at", `${vonFilter}T00:00:00.000Z`);
+  if (bisFilter) feedbackBuilder = feedbackBuilder.lte("created_at", `${bisFilter}T23:59:59.999Z`);
 
   const [{ data: agentOptions }, { data: feedbackRows, count }] = await Promise.all([
     supabase.from("agents").select("id, full_name, profile_id").not("profile_id", "is", null).order("full_name"),
@@ -57,12 +57,13 @@ export default async function FeedbackListPage({
 
   const total = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const hasFilter = Boolean(agentFilter || dateFilter || outcomeFilter);
+  const hasFilter = Boolean(agentFilter || vonFilter || bisFilter || outcomeFilter);
 
   function pageHref(p: number) {
     const params = new URLSearchParams();
     if (agentFilter) params.set("agent", agentFilter);
-    if (dateFilter) params.set("date", dateFilter);
+    if (vonFilter) params.set("von", vonFilter);
+    if (bisFilter) params.set("bis", bisFilter);
     if (outcomeFilter) params.set("outcome", outcomeFilter);
     if (p > 1) params.set("page", String(p));
     const qs = params.toString();
@@ -104,8 +105,12 @@ export default async function FeedbackListPage({
               </select>
             </div>
             <div className="flex flex-col gap-1">
-              <Label htmlFor="date">Tag</Label>
-              <Input id="date" name="date" type="date" defaultValue={dateFilter ?? ""} className="w-40" />
+              <Label htmlFor="von">Von</Label>
+              <Input id="von" name="von" type="date" defaultValue={vonFilter ?? ""} className="w-40" />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="bis">Bis</Label>
+              <Input id="bis" name="bis" type="date" defaultValue={bisFilter ?? ""} className="w-40" />
             </div>
             <Button type="submit" size="sm">
               Filtern

@@ -1,4 +1,4 @@
-import { Activity, Building2, Layers, Sparkles, TrendingDown, TrendingUp } from "lucide-react";
+import { Activity, Layers, Sparkles, TrendingDown, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -9,15 +9,19 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { AnrufenPlaceholderButton } from "@/components/anrufen-placeholder-button";
 import { BrandFocusVerifyButton } from "@/components/brand-focus-verify-button";
 import { EnrichNowButton } from "@/components/enrich-now-button";
 import { FeedbackForm } from "@/components/feedback-form";
 import { FeedbackHistoryItem } from "@/components/feedback-history-item";
 import { SignalDismissButton } from "@/components/signal-dismiss-button";
+import { StammdatenCard } from "@/components/stammdaten-card";
 import { getCurrentUser } from "@/lib/auth";
 import { signalTypeLabel, signalTypeVariant } from "@/lib/signals";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
+
+const MAX_SIGNALS_SHOWN = 8;
 
 const ratingFmt = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 1 });
 
@@ -64,11 +68,11 @@ export default async function CompanyProfilePage({
         .from("companies")
         .select(
           `id, name, call_priority, do_not_contact, kundennummer, branche_name, plz, ort, brand_focus, name_2,
-          strasse, land, telefon, email, website, gebiet, gebiet_agent_name, legacy_gebiet, branche_code,
-          cluster, verband, gruppe, size_class, potential_value, potential_utilization_pct, dunning_level,
-          revenue_prior_prior_year, revenue_prior_year, revenue_current_year, revenue_current_year_ds_cod,
-          revenue_forecast, revenue_delta, order_count, article_count, last_visit_date, last_contact_date,
-          last_invoice_period, last_review_date`,
+          strasse, land, telefon, telefon_2, telefon_3, email, website, gebiet, gebiet_agent_name, legacy_gebiet,
+          branche_code, cluster, verband, gruppe, size_class, potential_value, potential_utilization_pct,
+          dunning_level, revenue_prior_prior_year, revenue_prior_year, revenue_current_year,
+          revenue_current_year_ds_cod, revenue_forecast, revenue_delta, order_count, article_count,
+          last_visit_date, last_contact_date, last_invoice_period, last_review_date`,
         )
         .eq("id", id)
         .single(),
@@ -123,14 +127,36 @@ export default async function CompanyProfilePage({
           <span className="font-medium text-foreground">{company.kundennummer}</span> · {company.branche_name} ·{" "}
           {company.plz} {company.ort}
         </p>
-        <Link
-          href={`/assistent?company=${company.id}`}
-          className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-        >
-          <Sparkles className="size-3.5" />
-          Im Assistenten fragen →
-        </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          <AnrufenPlaceholderButton />
+          <Link
+            href={`/assistent?company=${company.id}`}
+            className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+          >
+            <Sparkles className="size-3.5" />
+            Im Assistenten fragen →
+          </Link>
+        </div>
       </div>
+
+      <StammdatenCard
+        companyId={company.id}
+        nameZwei={company.name_2}
+        kundennummer={company.kundennummer}
+        strasse={company.strasse}
+        plz={company.plz}
+        ort={company.ort}
+        land={company.land}
+        telefon={company.telefon}
+        telefon2={company.telefon_2}
+        telefon3={company.telefon_3}
+        email={company.email}
+        website={company.website}
+        gebiet={company.gebiet}
+        gebietAgentName={company.gebiet_agent_name}
+        altesGebiet={company.legacy_gebiet}
+        verband={company.verband}
+      />
 
       {(enrichment && (enrichment.places_place_id || enrichment.strengths?.length || enrichment.weaknesses?.length)) ||
       isAdmin ? (
@@ -280,7 +306,7 @@ export default async function CompanyProfilePage({
           </CardHeader>
           <CardContent>
             <ul className="flex flex-col divide-y">
-              {signals.map((s) => (
+              {signals.slice(0, MAX_SIGNALS_SHOWN).map((s) => (
                 <li key={s.id} className="flex items-start justify-between gap-3 py-2.5 text-base">
                   <div>
                     <div className="flex items-center gap-2">
@@ -309,72 +335,27 @@ export default async function CompanyProfilePage({
       ) : null}
 
       <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <IconTitle icon={Building2}>Stammdaten</IconTitle>
-          </CardHeader>
-          <CardContent>
-            <dl className="grid grid-cols-2 gap-4">
-              <Field label="Name 2" value={company.name_2} />
-              <Field label="Kundennummer" value={company.kundennummer} />
-              <Field label="Strasse" value={company.strasse} />
-              <Field label="PLZ / Ort" value={`${company.plz ?? ""} ${company.ort ?? ""}`} />
-              <Field label="Land" value={company.land} />
-              <Field label="Telefon" value={company.telefon} />
-              <Field label="E-Mail" value={company.email} />
-              <Field
-                label="Website"
-                value={
-                  company.website ? (
-                    <a
-                      href={company.website}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary hover:underline"
-                    >
-                      {company.website}
-                    </a>
-                  ) : null
-                }
-              />
-              <Field
-                label="Gebiet"
-                value={
-                  <>
-                    {company.gebiet}
-                    {company.gebiet_agent_name ? (
-                      <span className="ml-1.5 font-normal text-muted-foreground">
-                        ({company.gebiet_agent_name})
-                      </span>
-                    ) : null}
-                  </>
-                }
-              />
-              <Field label="Altes Gebiet" value={company.legacy_gebiet} />
-            </dl>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <IconTitle icon={Layers}>Segmentierung</IconTitle>
-          </CardHeader>
-          <CardContent>
-            <dl className="grid grid-cols-2 gap-4">
-              <Field label="Branche" value={`${company.branche_code ?? ""} ${company.branche_name ?? ""}`} />
-              <Field label="Cluster" value={company.cluster} />
-              <Field label="Verband" value={company.verband} />
-              <Field label="Gruppe" value={company.gruppe} />
-              <Field label="Klasse" value={company.size_class} />
-              <Field label="Potential" value={money(company.potential_value)} />
-              <Field
-                label="Potential-Ausschöpfung"
-                value={company.potential_utilization_pct !== null ? `${company.potential_utilization_pct}%` : null}
-              />
-              <Field label="Mahnstufe" value={company.dunning_level} />
-            </dl>
-          </CardContent>
-        </Card>
+        {isAdmin ? (
+          <Card>
+            <CardHeader>
+              <IconTitle icon={Layers}>Segmentierung</IconTitle>
+            </CardHeader>
+            <CardContent>
+              <dl className="grid grid-cols-2 gap-4">
+                <Field label="Branche" value={`${company.branche_code ?? ""} ${company.branche_name ?? ""}`} />
+                <Field label="Cluster" value={company.cluster} />
+                <Field label="Gruppe" value={company.gruppe} />
+                <Field label="Klasse" value={company.size_class} />
+                <Field label="Potential" value={money(company.potential_value)} />
+                <Field
+                  label="Potential-Ausschöpfung"
+                  value={company.potential_utilization_pct !== null ? `${company.potential_utilization_pct}%` : null}
+                />
+                <Field label="Mahnstufe" value={company.dunning_level} />
+              </dl>
+            </CardContent>
+          </Card>
+        ) : null}
 
         <Card>
           <CardHeader>

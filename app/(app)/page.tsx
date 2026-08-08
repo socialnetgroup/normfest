@@ -2,7 +2,6 @@ import { BellRing } from "lucide-react";
 import Link from "next/link";
 
 import { AutoRefresh } from "@/components/auto-refresh";
-import { LogCallButton } from "@/components/log-call-button";
 import { LogSaleForm } from "@/components/log-sale-form";
 import { ProgressBar } from "@/components/progress-bar";
 import { RefreshSignalsButton } from "@/components/refresh-signals-button";
@@ -122,7 +121,7 @@ export default async function DashboardPage() {
     myAgent
       ? supabase
           .from("agent_daily_performance")
-          .select("sales_count, calls_count")
+          .select("sales_count")
           .eq("agent_id", myAgent.id)
           .eq("date", todayStr)
           .maybeSingle()
@@ -303,9 +302,8 @@ export default async function DashboardPage() {
           <CardContent className="flex flex-col gap-4">
             <div className="flex flex-wrap items-end gap-3">
               <LogSaleForm />
-              <LogCallButton />
               <span className="pb-1.5 text-sm text-muted-foreground">
-                Heute: {myToday?.sales_count ?? 0} Sales · {myToday?.calls_count ?? 0} Anrufe
+                Heute: {myToday?.sales_count ?? 0} Sales
               </span>
             </div>
             {goals.agent_monthly_goal ? (

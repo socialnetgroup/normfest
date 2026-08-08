@@ -419,6 +419,8 @@ export type Database = {
           source_row_number: number | null
           strasse: string | null
           telefon: string | null
+          telefon_2: string | null
+          telefon_3: string | null
           updated_at: string
           verband: string | null
           website: string | null
@@ -464,6 +466,8 @@ export type Database = {
           source_row_number?: number | null
           strasse?: string | null
           telefon?: string | null
+          telefon_2?: string | null
+          telefon_3?: string | null
           updated_at?: string
           verband?: string | null
           website?: string | null
@@ -509,6 +513,8 @@ export type Database = {
           source_row_number?: number | null
           strasse?: string | null
           telefon?: string | null
+          telefon_2?: string | null
+          telefon_3?: string | null
           updated_at?: string
           verband?: string | null
           website?: string | null
@@ -1814,6 +1820,69 @@ export type Database = {
       fn_set_wiedervorlage_done: {
         Args: { p_done?: boolean; p_id: string }
         Returns: undefined
+      }
+      fn_update_company_contact: {
+        Args: {
+          p_company_id: string
+          p_email?: string
+          p_telefon?: string
+          p_telefon_2?: string
+          p_telefon_3?: string
+          p_website?: string
+        }
+        Returns: {
+          active: boolean
+          article_count: number | null
+          branche_code: string | null
+          branche_name: string | null
+          brand_focus: string | null
+          call_priority: boolean
+          cluster: string | null
+          created_at: string
+          do_not_contact: boolean
+          dunning_level: number | null
+          email: string | null
+          gebiet: string
+          gebiet_agent_name: string | null
+          gruppe: string | null
+          id: string
+          kundennummer: string
+          land: string
+          last_contact_date: string | null
+          last_invoice_period: string | null
+          last_review_date: string | null
+          last_visit_date: string | null
+          legacy_gebiet: string | null
+          name: string
+          name_2: string | null
+          order_count: number | null
+          ort: string | null
+          plz: string | null
+          potential_utilization_pct: number | null
+          potential_value: number | null
+          revenue_current_year: number | null
+          revenue_current_year_ds_cod: number | null
+          revenue_delta: number | null
+          revenue_forecast: number | null
+          revenue_prior_prior_year: number | null
+          revenue_prior_year: number | null
+          size_class: string | null
+          soft_deleted_at: string | null
+          source_row_number: number | null
+          strasse: string | null
+          telefon: string | null
+          telefon_2: string | null
+          telefon_3: string | null
+          updated_at: string
+          verband: string | null
+          website: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "companies"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       fn_update_sales_feedback: {
         Args: {

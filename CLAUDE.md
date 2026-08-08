@@ -2707,6 +2707,112 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     Confirmed unauthenticated
     them to `/login` first, same protection as every other admin page.
 
+27. **First real Alan pilot-feedback batch — shipped (2026-08-08).** Alan sent a large,
+    unstructured list after using the app live for a few days (§ "Waiting on Alan's 3-day
+    feedback" memory note is now resolved by this). Triaged into a well-defined "ship now"
+    bucket and a "needs confirmation first" bucket (real historical data / ambiguous
+    scope) rather than guessing on the ambiguous parts.
+
+    **Shipped this pass:**
+    - **Dashboard "Anrufe" manual counter removed** ("sada ide kroz dialer") - deleted
+      `components/log-call-button.tsx` (`fn_log_call` RPC left in place, harmless/unused)
+      and the "X Anrufe" text from the Dashboard's "Mein Ziel" card.
+    - **Dialer daily call count now synced into `agent_daily_performance.calls_count`**
+      automatically - the 18:00 `dialer-snapshot` cron (§14 item 24) now also upserts each
+      agent's real `totalCalls` for today, partial-payload (only `calls_count` in the SET
+      clause, `source_file` deliberately omitted so it never clobbers an existing row's
+      real provenance) - so "my agent stats" reflects the dialer instead of manual clicks.
+      Known, accepted trade-off: a later Team Dashboard Excel re-import can still overwrite
+      past dates if that file's own "Anzahl Anrufe" column disagrees (same source-of-truth
+      trade-off already accepted for telefon/website, §14 item 11).
+    - **Firmen phone search** - `companies.telefon_2`/`telefon_3` added (new trigram
+      indexes on all three phone columns, migration `20260808010000`), `fn_search_companies`
+      extended to match against all three (migration `20260808030000`).
+    - **`ANRUFEN` placeholder button** on the Firmenprofil header (`components/anrufen-
+      placeholder-button.tsx`) - disabled, `title="Bald verfügbar (Hybrid-Dialer)"`, ready
+      for the eventual click-to-dial integration (§14 item 13 roadmap, phase 2).
+    - **Stammdaten made editable + reordered to the first visible card.** New
+      `fn_update_company_contact()` RPC (migration `20260808020000`, security definer,
+      same `fn_company_visible` gate as read access) - deliberately scoped to CONTACT
+      fields only (telefon/telefon_2/telefon_3/email/website), not full Stammdaten. True
+      VIS master-data fields (name, kundennummer, address) stay read-only/VIS-owned, same
+      "enrichment never overwrites imported master data" principle as §3.2.6 - `companies`
+      had no UPDATE policy at all before this, and a blanket agent-write policy on
+      identity/dedup fields was rejected as too risky for what Alan actually needs (fixing
+      a wrong phone number mid-call). New `components/stammdaten-card.tsx` (client
+      component, pencil-to-edit toggle) replaces the old read-only Stammdaten card and now
+      renders directly under the header, before Firmenbrief/Signale (was 4th section down).
+    - **Verband moved into Stammdaten; rest of Segmentierung hidden from agents.** The
+      Segmentierung card (Branche/Cluster/Gruppe/Klasse/Potential/Mahnstufe) is now wrapped
+      in `isAdmin` and doesn't render for agents at all; `Verband` moved into the
+      agent-visible Stammdaten card.
+    - **Signale capped to top 8** (`MAX_SIGNALS_SHOWN`, already score-sorted, simple
+      `.slice(0, 8)`) - was unbounded, causing a long scroll on companies with many
+      matched signals.
+    - **Stärken/Schwächen prompt tightened** (`lib/enrichment/analyze.mjs`) to explicitly
+      exclude pure friendliness/mood claims without a concrete service/product link (e.g.
+      "freundlich"/"nett" alone are now excluded; "schneller technischer Notdienst auch am
+      Wochenende" - a claim tied to a real service - still passes). Forward-only for now -
+      the ~1,432 already-analyzed companies keep their existing text unless Anis wants a
+      real re-analyze pass run (real Anthropic cost, his call, not run this session).
+    - **`/feedback` date filter widened to a Von/Bis range** (was single-day only) -
+      `?von=&bis=` query params, either side optional.
+    - **Feedback product-select dropdown verified live** (Alan's uncertainty) - confirmed
+      working end-to-end via a throwaway admin account: typed "Politur", got 4 real
+      matches, selected one, input correctly updated to `"{name} ({sku})"`.
+    - **Chat latency: one real fix applied.** `runChatTurn()` (`lib/chat/core.mjs`)
+      previously awaited same-turn tool calls one at a time in a `for` loop even though
+      they're independent Supabase RPCs - switched to `Promise.all` (array order preserved,
+      so `tool_result[i]` still matches `toolUseBlocks[i]`'s `tool_use_id`; confirm-only
+      tools' `pendingAction` mutation stays synchronous, same "last one wins" edge case
+      already documented in §10). The larger latency driver - each tool call needs its own
+      full sequential model round-trip since the next action depends on the previous
+      result - is inherent to the tool-loop architecture, not a bug; not re-run through the
+      paid acceptance set this pass (logic verified via syntax check + code review only,
+      same as the earlier objection-card language fix, §10).
+    - **Admin-menu scoping audit: one real inconsistency found + fixed.** `/feedback`'s
+      own RLS has always been team-shared (§14 item 19), but its sidebar nav entry was
+      admin-only - agents had no persistent way in except remembering the Dashboard tile.
+      Moved the "Feedback" nav item from the Admin section into the shared top-level nav
+      (`components/app-sidebar.tsx`). Everything else audited (Team/Anwesenheit/QA-*/
+      Settings submenu) checked out as correctly admin-only - all touch HR-adjacent data,
+      real spend, or admin-curated master data, consistent with existing documented
+      reasoning for each.
+
+    Verified end-to-end (throwaway admin + agent test accounts, both deleted after,
+    gebiet-matched via a throwaway `agents` row/company-gebiet swap since `visibility_mode`
+    is `'gebiet'`): admin view confirmed ANRUFEN button, Stammdaten-first with Verband,
+    Segmentierung still visible to admin, Signale capped at 8; agent view confirmed the
+    same page renders correctly with Segmentierung fully absent (jumps straight from
+    Firmenbrief to Umsatz). `fn_update_company_contact` confirmed via a real write
+    (telefon_2 set, verified in DB, reverted). Full suite green after (41/41),
+    `visibility_mode` confirmed still `'gebiet'` afterward.
+
+    **Deliberately NOT touched this pass - needs Anis/Alan's explicit confirmation first
+    (real historical production data, guessing wrong would corrupt it):**
+    - **Feedback outcome taxonomy redesign.** Alan's raw message reads as: keep Verkauft;
+      delete Interessiert entirely; redefine Abgelehnt as "Kein Bedarf" (reached the real
+      contact, no sale for some reason) with its objection list trimmed from the current
+      8 (`COMMON_OBJECTIONS` in `components/feedback-form.tsx`) down to 6 - keep
+      "Schon einen Lieferanten"/"Kein Interesse"/"Zu teuer"/"Genug Vorrat"/"Schicken Sie
+      mir was per Mail"/"Ich melde mich", drop "Keine Zeit" and "Haben sowas probiert";
+      redefine `not_relevant` as "Nicht angetroffen" (nobody picked up) with its own
+      reason set (keine Verbindung/durchgeklingelt/Anrufbeantworter); add two new outcomes,
+      "Keine Zeit" (reached someone, but not the real contact person) and "Nicht besucht"
+      (mandatory comment explaining why the company wasn't contacted at all). This reading
+      resolves an apparent contradiction in his message (two different "Abgeleht ="
+      lines) by treating "Kein Interesse" as one of the kept objection reasons rather than
+      the outcome's new name - plausible, but not something to commit to a live enum
+      touching real historical feedback rows without an explicit yes.
+    - **Restoring Alan's one deleted feedback entry.** No PITR exists (daily backups only,
+      §12) and deletes are hard, side-effect-reversing (§4.7) - need the specific
+      company/date/details from him to manually re-enter it.
+    - **Email-Liste + Fokus auto-email + Fokus flyer generator.** Real customer-facing
+      communication features needing an infrastructure decision (no transactional email
+      provider exists in this app yet) and, for the auto-send specifically, explicit
+      confirmation before any live send is ever triggered - out of scope for a single pass
+      alongside everything else above.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
