@@ -335,7 +335,7 @@ export function AppSidebar({
         </nav>
 
         <div className="flex flex-col gap-2 border-t px-4 py-4">
-          <span className="truncate text-xs text-muted-foreground">{userLabel}</span>
+          <span className="truncate text-center text-xs text-muted-foreground">{userLabel}</span>
           <form action={logoutAction}>
             <Button type="submit" variant="outline" size="sm" className="w-full">
               Abmelden
