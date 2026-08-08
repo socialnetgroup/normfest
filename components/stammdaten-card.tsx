@@ -144,26 +144,26 @@ export function StammdatenCard(props: Props) {
           </div>
         ) : (
           <dl className="grid grid-cols-2 gap-4">
-            <Field label="Name 2" value={props.nameZwei} />
+            {props.nameZwei ? <Field label="Name 2" value={props.nameZwei} /> : null}
             <Field label="Kundennummer" value={props.kundennummer} />
             <Field label="Strasse" value={props.strasse} />
             <Field label="PLZ / Ort" value={`${props.plz ?? ""} ${props.ort ?? ""}`} />
             <Field label="Land" value={props.land} />
-            <Field label="Verband" value={props.verband} />
+            {props.verband ? <Field label="Verband" value={props.verband} /> : null}
             <Field label="Telefon" value={props.telefon} />
             {props.telefon2 ? <Field label="Telefon 2" value={props.telefon2} /> : null}
             {props.telefon3 ? <Field label="Telefon 3" value={props.telefon3} /> : null}
             <Field label="E-Mail" value={props.email} />
-            <Field
-              label="Website"
-              value={
-                props.website ? (
+            {props.website ? (
+              <Field
+                label="Website"
+                value={
                   <a href={props.website} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
                     {props.website}
                   </a>
-                ) : null
-              }
-            />
+                }
+              />
+            ) : null}
             <Field
               label="Gebiet"
               value={

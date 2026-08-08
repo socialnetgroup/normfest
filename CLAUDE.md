@@ -2854,6 +2854,34 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     provider before the auto-send half can be built; the Email-Liste + flyer-generator
     halves don't strictly need that decision first and can start independently.
 
+30. **Real self-inflicted regression found + fixed same day (2026-08-08): Alan's Firmen
+    page showed "Keine Firmen für dich verfügbar" instead of his book.** Root cause: when
+    phone search was added to `fn_search_companies` earlier this same session
+    (`20260808030000`), the function body was copied from the pre-fix version
+    (`20260731020000_fn_search_companies_perf.sql`), which reads the caller's own Gebiet
+    from `profiles.gebiet` - a column that's NULL for every real agent account (already
+    found and fixed once, 2026-07-31, `20260731050000_fix_gebiet_visibility_source.sql`,
+    which moved the source to `agents.gebiet` via `profile_id`). `create or replace
+    function` silently overwrote that fix since my new migration used the old body as its
+    template - a real lesson: when re-defining a function with `create or replace`, diff
+    against the CURRENT definition (or grep for every migration that's touched it since),
+    not just the most convenient prior copy to build from. Fixed in migration
+    `20260808050000_fix_fn_search_companies_gebiet_regression.sql` (restores the
+    `agents.gebiet` source, keeps the phone-search predicate). Verified by temporarily
+    repointing Alan's real `agents` row to a throwaway test account (his own login
+    untouched - the account's `profile_id`, not his `agents.gebiet`, was swapped and
+    reverted immediately after), confirming the RPC now returns real companies for his
+    Gebiet 130023 where it previously returned zero. Full suite green after (41/41),
+    `visibility_mode` confirmed still `'gebiet'`.
+
+31. **Stammdaten: empty Name 2/Verband/Website fields now hidden, not shown as "-"**
+    (Anis, same day) - same `ausgeblendet-if-empty` pattern already used for
+    telefon_2/telefon_3 (§14 item 27), extended to these three fields for a cleaner
+    read-only view when a company's VIS data doesn't have them. Verified live on a real
+    company with all three null (`A.Witt + Co. GmbH`) - Kundennummer/Strasse/PLZ/Land/
+    Telefon/E-Mail/Gebiet still render normally, Name 2/Verband/Website correctly absent
+    rather than showing empty dashes.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
