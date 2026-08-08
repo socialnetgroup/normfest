@@ -2958,6 +2958,105 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     (Gussstahl Handelsgesellschaft) - the inline numbers matched the Umsatz card's own
     Vorjahr/Laufendes Jahr row exactly (476,73 € / 52,50 €).
 
+36. **Outcome label rename + inline mini-explanations — shipped (2026-08-08).** Anis: the
+    "Abgelehnt (Kein Bedarf)" outcome label should just read "Kein Bedarf" everywhere
+    (feedback form, history list, `/feedback` filter) - renamed. Same message also asked
+    for a one-line explanation of what each outcome actually means, shown right under the
+    outcome-button row and above the Produkt field, optional/non-blocking - Anis supplied
+    rough source meanings and explicitly said to adapt/reword them to read naturally in
+    German rather than translate literally. New `OUTCOME_DESCRIPTIONS` map added to both
+    `components/feedback-form.tsx` and `components/feedback-history-item.tsx` (the latter
+    duplicates it for edit-mode, same component split as the rest of that file):
+    Kein Bedarf = "Mit dem Ansprechpartner telefoniert, aber aus irgendeinem Grund kam
+    kein Verkauf zustande."; Nicht angetroffen = "Niemand hat sich gemeldet - es kam keine
+    Verbindung zustande."; Keine Zeit = "Ein Gespräch kam zustande, aber nicht mit dem
+    eigentlichen Ansprechpartner."; Nicht besucht = "Die Firma wurde heute gar nicht
+    kontaktiert - bitte im Kommentar erklären, warum." (Verkauft intentionally has no
+    description - self-explanatory.) Verified live: selecting each outcome on the real
+    feedback form showed its exact description text.
+
+37. **Skript — fully translated to German, all Bosnian/Croatian removed (2026-08-08).**
+    Anis: *"Skript - izbaciti sav bosanski jezik, ostvariti samo njemacki svugdje."* The
+    full Agent Sales Guide (kb_chunks, collection='skript', §8 M6) had only ever existed
+    in its original Bosnian/Croatian source extraction - there was no German version to
+    fall back to, so this was a real translation pass over live production content, not a
+    delete/rewrite.
+
+    `scripts/translate-skript-to-german.mjs` (one-off, kept for reference) sent the
+    document title + all 21 chunks in one call to the `analyze` cost tier
+    (`lib/ai/provider.mjs`, currently `claude-sonnet-5`) with explicit structural rules:
+    preserve line count/order/quoted script sentences/bullet markers/"Label: Rest"
+    lead-ins/ALLCAPS sub-headings; the two chunks with a 3-column Bosnisch-vs-Deutsch
+    comparison table (Abschlusstechniken, Verkaufsvokabular) collapse to 2 columns
+    (label | German only) since there's no more Bosnian column to keep; bilingual
+    example-script lines prefixed "DE"/"BS" keep only the German line, prefix dropped.
+    Real cost: 32,000 max_tokens (16,000 silently exhausted itself entirely on extended
+    thinking with zero output text on a first attempt - real Sonnet-5 gotcha, not a
+    prompt bug); required `.stream().finalMessage()` instead of a plain `.create()` call
+    once max_tokens was raised, since the SDK's own >10-minute-duration guard rejects a
+    non-streaming call at that size (same pattern `lib/chat/core.mjs` already uses).
+    Output: 25,270-28,624 output tokens depending on run (dry-run vs. real run produced
+    different, both-valid German phrasings - expected LLM non-determinism, not a bug).
+
+    Wrote the real translated title ("Agent Sales Guide — Leitfaden für den täglichen
+    Verkauf") and all 21 chunks' heading/content directly to `kb_documents`/`kb_chunks`.
+    `objection_cards.response_bs` was left in the table (harmless, just no longer
+    selected/rendered) since `response_de` was already good German and untouched.
+
+    `app/(app)/skript/page.tsx`'s hand-built content parser is regex/string-matching
+    keyed to literal source-language headings/structure, not markdown - had to be updated
+    in lockstep with the real (as-written, not dry-run) translated text, not before it:
+    - `SUB_HEADING_STRUKTURA` regex required literal "Struktura N:" (Bosnian spelling,
+      trailing 'a'); German naturally produces "Struktur N:" (no trailing 'a') - caught by
+      reading the real translated chunk 10 content before finalizing, not by assumption.
+    - `SUB_HEADING_EXPLICIT` set updated to the real translated strings ("Goldene Regel
+      des Zeitplans", "Regel für Kaltakquise").
+    - `TABLE_SPECS` keys/headers updated to the real translated headings; the dead
+      "4. Prigovori..." entry removed (that chunk was already filtered from rendering).
+    - Objection-card JSX: removed the side-by-side DE/BS grid (now a single German
+      response block), dropped `response_bs` from the `objection_cards` select, updated
+      the card subtitle and the hardcoded quote block to German.
+    - `search_kb` chat tool's description (`lib/chat/core.mjs`) previously told the
+      assistant *"Der Inhalt der Sammlung 'skript' ist auf Bosnisch/Kroatisch geschrieben
+      ... formuliere query in der jeweiligen Sprache der Sammlung"* (from the 2026-07-24
+      fix, §10) - now factually wrong; corrected to state both `skript` and `wissen` are
+      German.
+
+    Verified end-to-end: a DB scan of all 21 translated chunks for Bosnian-specific
+    diacritics (č/ć/ž/š/đ) found zero - confirmed no leftover Bosnian text slipped
+    through. Full `/skript` page loaded live (throwaway admin test account, deleted
+    after): all 4 remaining `TABLE_SPECS` tables render correctly with German headers
+    (Zeit/Aktivität, Technik/Beispiel, VERMEIDEN/VERWENDEN/Beispiel, Code/Bedeutung/Was
+    tust du?), both `SUB_HEADING_EXPLICIT` entries and the `Struktur N:` regex both
+    detected correctly, all 21 section headings render in the TOC and full-guide list,
+    objection cards show German-only responses with the correct new subtitle and quote
+    block, "4. Kundeneinwände und wie man antwortet" still correctly filtered out of the
+    full-guide list (duplicate of the objection-card section above it). Full suite green
+    after (41/41), `visibility_mode` confirmed still `'gebiet'`. **Not yet raised with
+    Anis, a separate decision:** `kb_chunks.search_vector`'s FTS config is currently
+    `'simple'` (switched from `'german'` on 2026-07-24 specifically because `skript` used
+    to be Bosnian) - now that `skript` is genuinely German too, switching back to
+    `'german'` FTS would likely improve search-quality via stemming, but that's a real
+    migration decision, not made here.
+
+38. **Sidebar user name — real data bug fixed + centered (2026-08-08).** Anis: *"Kod
+    Abmelden lijevo u meniju nek kod mene stoji Anis Rendić i neka bude centrirano
+    umjesto mog maila, takodjer centriraj imena i kod drugi Armine, Alana itd."* Checked
+    the real `profiles` table directly rather than assuming a display-logic bug: Alan,
+    Elida, and Armina all already had a correct `full_name` ("Alan Sačić", "Elida
+    Karovic", "Armina Suljević") - only Anis's own row had `full_name` literally set to
+    his email string (`"anis@socialnetgroup.com"`), which is exactly why the sidebar
+    (`app/(app)/layout.tsx`'s `profile?.full_name ?? profile?.email ?? user.email`,
+    already correctly prioritized `full_name`) rendered his email - a real, isolated data
+    bug on one row, not a code defect. Fixed directly: `profiles.full_name` set to
+    "Anis Rendić" for that row. Separately, the sidebar's user-label `<span>`
+    (`components/app-sidebar.tsx`) had no text alignment - added `text-center`, which
+    applies to every user's name (Anis, Alan, Elida, Armina, and any future agent) since
+    it's the one shared component, not per-user styling. Verified live (throwaway admin
+    account, deleted after): the sidebar correctly showed the test account's real
+    `full_name` with `getComputedStyle(...).textAlign === "center"` confirmed via direct
+    DOM inspection.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
