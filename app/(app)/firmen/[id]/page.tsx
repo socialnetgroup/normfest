@@ -320,6 +320,13 @@ export default async function CompanyProfilePage({
                           <span className="font-medium">{(s.products as { name: string }).name}</span>
                         )
                       ) : null}
+                      {s.type === "revenue_trend_risk" ? (
+                        <span className="flex items-center gap-1 text-sm font-medium text-destructive">
+                          {money(company.revenue_prior_year)}
+                          <TrendingDown className="size-3.5" />
+                          {money(company.revenue_current_year)}
+                        </span>
+                      ) : null}
                     </div>
                     {isAdmin ? <p className="mt-1 text-muted-foreground">{s.reason}</p> : null}
                   </div>

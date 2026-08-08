@@ -2945,6 +2945,19 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     NOT delete it, confirming the auto-disarm timer works as designed, not just the
     happy path.
 
+35. **Signale: `revenue_trend_risk` now shows real numbers inline, not just a bare badge
+    — shipped (2026-08-08).** Anis: *"when it says 'Umsatzrückgang' give more context...
+    now its kinda just a tag saying nothing in the overview."* Cross-Sell/Ersatzprodukt
+    signals already show the concrete recommended product next to the badge; this type
+    had nothing next to it since it has no `product_id`. Now renders
+    `{Vorjahr} → {Laufendes Jahr}` (e.g. "476,73 € → 52,50 €") directly next to the
+    "Umsatzrückgang" badge, using `company.revenue_prior_year`/`revenue_current_year`
+    (already fetched for the Umsatz card, no new query) - visible to every user, not
+    gated behind `isAdmin` like the fuller `reason` text, matching how the cross-sell
+    product name is already agent-visible. Verified live against a real company
+    (Gussstahl Handelsgesellschaft) - the inline numbers matched the Umsatz card's own
+    Vorjahr/Laufendes Jahr row exactly (476,73 € / 52,50 €).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
