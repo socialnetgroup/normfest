@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { FocusItemRemoveButton } from "@/components/focus-item-remove-button";
 import { FocusListActivateButton } from "@/components/focus-list-activate-button";
+import { FocusListFlyerGenerateButton } from "@/components/focus-list-flyer-generate-button";
 import { FocusListManage } from "@/components/focus-list-manage";
 import { FocusProductSellForm } from "@/components/focus-product-sell-form";
 import { Badge } from "@/components/ui/badge";
@@ -136,17 +137,20 @@ export default async function FokusPage() {
               {isAdmin ? <FocusListManage listId={activeList.id} name={activeList.name} /> : null}
             </div>
             {activeList.note ? <p className="text-sm text-muted-foreground">{activeList.note}</p> : null}
-            {pdfUrl ? (
-              <a
-                href={pdfUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={cn(buttonVariants({ variant: "outline", size: "sm" }), "w-fit gap-2")}
-              >
-                <FileText className="size-4" />
-                Flyer (PDF) öffnen / an Kunden senden
-              </a>
-            ) : null}
+            <div className="flex flex-wrap items-center gap-2">
+              {pdfUrl ? (
+                <a
+                  href={pdfUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={cn(buttonVariants({ variant: "outline", size: "sm" }), "w-fit gap-2")}
+                >
+                  <FileText className="size-4" />
+                  Flyer (PDF) öffnen / an Kunden senden
+                </a>
+              ) : null}
+              {isAdmin ? <FocusListFlyerGenerateButton listId={activeList.id} /> : null}
+            </div>
           </div>
 
           <Card>

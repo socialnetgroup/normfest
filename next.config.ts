@@ -7,6 +7,14 @@ import type { NextConfig } from "next";
 // real optimization (resize/compress/modern format) for the Supabase
 // Storage host fixes this at the source.
 const nextConfig: NextConfig = {
+  // @napi-rs/canvas ships a platform-specific native binary (used by the
+  // Fokus flyer generator, lib/flyer/generate-focus-flyer.mjs). Next's route
+  // bundler can't resolve that native binding when the package is bundled
+  // normally - it works fine as a plain Node script but 500s inside the API
+  // route with "Cannot find native binding" unless the package is left
+  // external (required via plain Node module resolution at runtime instead
+  // of being bundled).
+  serverExternalPackages: ["@napi-rs/canvas"],
   images: {
     remotePatterns: [
       {
