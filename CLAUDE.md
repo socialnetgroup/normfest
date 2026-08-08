@@ -3149,6 +3149,83 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     reachable from this sandboxed dev environment, unrelated to the Verlauf feature.
     Typecheck/lint clean, full suite green (41/41) after.
 
+42. **Fokus flyer generator — shipped (2026-08-09), §14 items 29-31 closed.** Anis: "Can
+    you look at this august kracher or other normfest style flyers... use that as a
+    reference template and make it that style? since prices are on, thats why i asked to
+    put prices in the list of products and generate from it." Rather than search the web,
+    downloaded and rendered the real `august-kracher-2026.pdf` already sitting in the
+    `focus-list-files` Storage bucket (§14 item 20) page-by-page (reusing the pdfjs-dist +
+    `@napi-rs/canvas` render approach from the catalog-crop pipeline, §13 M4) and used the
+    real reference directly - hero page with "FOKUS" wordmark + validity dates, colored
+    category header bars, product grid with a big slanted red price + real price/pack note
+    as caption, dotted-style category dividers, footer disclaimer + Normfest contact bar.
+
+    New `lib/flyer/generate-focus-flyer.mjs` (`generateFocusListFlyer(supabase,
+    focusListId)`, pure deterministic layout - no LLM call) draws directly onto
+    `@napi-rs/canvas`'s native `PDFDocument` (vector text, not rasterized pages - crisp,
+    small file size) using **Poppins** (downloaded from Google Fonts, `assets/fonts/*.ttf`,
+    committed to the repo rather than relying on system fonts - Vercel's Linux runtime has
+    none of the Windows dev-machine fonts this environment defaults to, so an unbundled
+    font would have rendered fine locally and broken silently in production). The cover
+    page reuses Normfest's real navy/red palette and an original diagonal-stripe motif
+    instead of literally recreating their photographed hero background (a deliberate
+    "reference, not asset copy" choice). Price is extracted from the real
+    `focus_list_products.note` string via regex (`/(\d{1,3}(?:\.\d{3})*,\d{2})\s*€/`) for
+    the big display number; the full original note always renders as the caption too, so
+    nothing is silently dropped or misparsed even for the irregular ones (Setpreis lines,
+    per-Paar-ab-12 pricing).
+
+    **Real image-size bug found and fixed before this was usable:** a first pass embedded
+    each product's full-resolution Storage photo as-is - `drawImage`'s scale factor only
+    changes where pixels land on the page, not how many pixels get embedded in the PDF, so
+    a 64-product flyer came out at **38MB, 22s to generate** (some catalog photos are up to
+    1.2MB). Fixed by pre-downscaling every image to ~220px via an offscreen canvas and
+    re-encoding as JPEG (cached per unique `image_path` - many focus-list rows share the
+    same representative photo, §13 M4) before it ever reaches the PDF context. Real result
+    after the fix: **0.62MB, ~6-20s** for the same 64-product list (generation time varies
+    with cold vs. warm Storage image cache).
+
+    **Second real layout problem found by rendering and looking at it, not assumed away:**
+    the first pagination always force-broke to a new page per category, so any category
+    with fewer than 6 products (most of them, in the real 8-category August list) left a
+    near-empty page - 15 pages total for 64 products vs. the real reference flyer's 9 for a
+    similar count. Rewrote as a continuous-flow layout: a full-bleed header only at the top
+    of a page, a slim inline colored divider when a new category starts mid-page with room
+    to spare, and a page break only when the next row genuinely won't fit. Real result:
+    **9 pages** for the same 64 products - now matching the reference's real density.
+
+    New admin-only `/api/admin/fokus/[id]/flyer` route (POST, same auth shape as
+    `/api/admin/vis-import`) generates the PDF, uploads to
+    `focus-list-files/generated/<listId>.pdf` (upsert - regenerating just overwrites, not
+    destructive), and updates `focus_lists.pdf_path` so the existing "Flyer (PDF) öffnen"
+    link (§14 item 20) picks it up automatically. New `FocusListFlyerGenerateButton`
+    (admin-only) added next to that link on `/fokus`.
+
+    **Third real bug, only surfaced once wired into the actual route (not the standalone
+    test script):** `@napi-rs/canvas` ships a platform-specific native binary - Next's
+    route bundler couldn't resolve it ("Cannot find native binding... could not resolve
+    @napi-rs/canvas-win32-x64-msvc"), a 500 that never happened running the generator as a
+    plain `node -e` script. Fixed by adding `serverExternalPackages: ["@napi-rs/canvas"]`
+    to `next.config.ts` (Next 16's stable key for "require this at runtime via plain Node
+    resolution instead of bundling it").
+
+    Verified live end-to-end through the real route (not just the standalone generator):
+    created a throwaway, inactive test focus list with 6 rows copied from the real active
+    list's real products/prices, logged in as a throwaway admin test account, called
+    `POST /api/admin/fokus/<id>/flyer` via `fetch` from the actual running app (real
+    session, real auth-gate, real Storage write) - got a real 200, downloaded the uploaded
+    PDF back from Storage, rendered a page and visually confirmed the design held up
+    through the full route path too. **Never touched the real active "August Kracher 2026"
+    list or its real `pdf_path`** during any of this testing - confirmed directly in the DB
+    both before and after that it was untouched. Test list, its generated Storage file, and
+    the test admin account all deleted afterward. Full suite green (41/41) after,
+    typecheck/lint clean project-wide.
+
+    **Not yet built** (§14 item 29's other half, still pending the email-provider
+    decision): the auto-email-to-Email-Liste send. Anis can already generate a flyer for
+    any focus list and send it manually today - the generator was the actual ask this
+    session ("lets focus on the flyer generator for now").
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
