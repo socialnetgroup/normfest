@@ -42,6 +42,16 @@ const OUTCOME_REASONS: Partial<Record<Outcome, string[]>> = {
   not_relevant: NOT_RELEVANT_REASONS,
 };
 
+// Anis (2026-08-08): "Dodaj kao mini objasnjenje, sta znaci taj feedback" -
+// a one-line reminder of each outcome's real meaning, shown right under the
+// outcome buttons. "sold" needs no explanation (self-evident).
+const OUTCOME_DESCRIPTIONS: Partial<Record<Outcome, string>> = {
+  rejected: "Mit dem Ansprechpartner telefoniert, aber aus irgendeinem Grund kam kein Verkauf zustande.",
+  not_relevant: "Niemand hat sich gemeldet - es kam keine Verbindung zustande.",
+  keine_zeit: "Ein Gespräch kam zustande, aber nicht mit dem eigentlichen Ansprechpartner.",
+  nicht_besucht: "Die Firma wurde heute gar nicht kontaktiert - bitte im Kommentar erklären, warum.",
+};
+
 type ProductOption = { id: string; name: string; sku: string };
 
 export function FeedbackForm({ companyId }: { companyId: string }) {
@@ -138,6 +148,10 @@ export function FeedbackForm({ companyId }: { companyId: string }) {
 
       {outcome ? (
         <div className="flex flex-col gap-3 border-t pt-4">
+          {OUTCOME_DESCRIPTIONS[outcome] ? (
+            <p className="text-sm text-muted-foreground">{OUTCOME_DESCRIPTIONS[outcome]}</p>
+          ) : null}
+
           <div className="flex flex-col gap-1">
             <Label htmlFor="product-search">Produkt (optional)</Label>
             <Input

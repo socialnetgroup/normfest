@@ -49,6 +49,13 @@ const OUTCOME_REASONS: Partial<Record<string, string[]>> = {
   not_relevant: NOT_RELEVANT_REASONS,
 };
 
+const OUTCOME_DESCRIPTIONS: Partial<Record<string, string>> = {
+  rejected: "Mit dem Ansprechpartner telefoniert, aber aus irgendeinem Grund kam kein Verkauf zustande.",
+  not_relevant: "Niemand hat sich gemeldet - es kam keine Verbindung zustande.",
+  keine_zeit: "Ein Gespräch kam zustande, aber nicht mit dem eigentlichen Ansprechpartner.",
+  nicht_besucht: "Die Firma wurde heute gar nicht kontaktiert - bitte im Kommentar erklären, warum.",
+};
+
 const eur = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
 const dateTimeFmt = new Intl.DateTimeFormat("de-DE", {
   day: "2-digit",
@@ -203,6 +210,10 @@ export function FeedbackHistoryItem({
             </Button>
           ))}
         </div>
+
+        {OUTCOME_DESCRIPTIONS[formOutcome] ? (
+          <p className="text-sm text-muted-foreground">{OUTCOME_DESCRIPTIONS[formOutcome]}</p>
+        ) : null}
 
         <div className="flex flex-col gap-1">
           <Label htmlFor={`product-${id}`}>Produkt (optional)</Label>
