@@ -3057,6 +3057,64 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     `full_name` with `getComputedStyle(...).textAlign === "center"` confirmed via direct
     DOM inspection.
 
+39. **Dialer nav item hidden from agents (2026-08-08).** Anis: *"Hide 'dialer' menu thing
+    for agents, since they wont have dialer menu point, just do 'anrufen' thought firmen
+    profile I guess. If I find use later on, we revert."* `/dialer` (§13 item 13, §14 item
+    13 — softphone placeholder + admin-only Live-Status card) was still listed in the
+    shared `NAV_ITEMS` array in `components/app-sidebar.tsx`, visible to every role even
+    though the page's own Live-Status card was already `isAdmin`-gated inline. Moved the
+    nav entry out of the shared list into the existing admin-only nav block (same section
+    as Team/Anwesenheit/QA-Bewertungen) - agents now only reach Anrufen via the
+    Firmenprofil's existing `ANRUFEN` placeholder button (§14 item 27). Page itself left
+    unguarded at the route level (softphone demo + concept card have no sensitive data);
+    only the nav entry was scoped, per Anis's own framing ("just hide the menu thing").
+    Verified live: a throwaway agent account's sidebar no longer lists Dialer at all,
+    while an admin account still sees it under the Admin section with its "Bald" badge.
+
+40. **Email-Liste — shipped (2026-08-08).** Anis: *"EMAIL LISTA - lista svih emailova sa
+    agentovog gebieta + opcija brisanja maila sa te liste."* Then, clarifying scope before
+    build: *"they would use all those emails to kinda copy paste into mail client. We can
+    do that smarter too, but lets for now just build a copiable list per gebiet per
+    agent"* - and, on format: *"keep in mind they would send through outlook."* Deliberately
+    the smallest useful slice: no auto-send (§14 item 29, still pending an email-provider
+    decision), just a fast, correct copy source scoped to real VIS-sourced `companies.email`
+    data for a manual send.
+
+    New `email_list_exclusions` table (migration `20260808060000_email_list.sql`) - a
+    suppression table, not a mutation of `companies.email` itself, same "delete = hide,
+    never touch VIS master data" principle as `signal_dismissals` vs. deleting a `signals`
+    row. Team-shared read, any authenticated user can insert (any agent/admin can mark an
+    email as bad/excluded), admin-only delete (no self-serve "undo" in v1 - not asked for).
+    New `fn_email_list(p_gebiet text default null)` RPC (security definer, same
+    evaluate-visibility-once pattern as `fn_search_companies`/`fn_dashboard_company_counts`
+    rather than relying on `companies` RLS row-by-row, given this project's repeated history
+    of that path degrading at scale, §12): non-admins always get their own Gebiet via
+    `agents.gebiet` (param ignored, same safety pattern as the `fn_search_companies`
+    regression fix, §14 item 30); admins pass an explicit `p_gebiet` (they have no `agents`
+    row of their own). Filters out `do_not_contact`, inactive, soft-deleted, empty-email,
+    and already-excluded companies.
+
+    New `/email-liste` page + `components/email-list-client.tsx`: a readonly textarea with
+    every email joined by `"; "` (Outlook's "An:"-field default separator, per Anis's note)
+    plus a "Kopieren" button (`navigator.clipboard.writeText`), and a list of every
+    company/email pair below with a `ConfirmButton`-gated (two-click) remove action that
+    inserts into `email_list_exclusions` (with `excluded_by` set from the caller's own
+    session) and optimistically drops the row from view. Admins get a Gebiet picker
+    (populated from the real `agents` table, already team-readable per existing RLS);
+    non-admins see their own Gebiet's list directly, no picker. New sidebar nav item
+    (`Mail` icon) in the shared nav, next to Feedback.
+
+    Verified live end-to-end with real data (throwaway admin + agent test accounts,
+    Alan's real `agents` row temporarily repointed to the test agent account and reverted
+    after, same pattern as the §14 item 30 regression fix): agent view correctly showed
+    1000 real emails for Gebiet 130023, semicolon-joined and Outlook-ready; admin view's
+    Gebiet picker listed the real 10-agent roster and correctly loaded the same 1000 rows
+    for the selected Gebiet; the two-click delete correctly dropped a row from 1000 to 999
+    in the UI AND persisted a real `email_list_exclusions` row (confirmed via direct DB
+    query, including a real `excluded_by` value) rather than only removing it client-side;
+    test exclusion rows cleaned up after each check to restore the true empty state. Full
+    suite green after (41/41), `visibility_mode` confirmed still `'gebiet'`.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
