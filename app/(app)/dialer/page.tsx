@@ -1,20 +1,16 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Activity, PhoneCall, Sparkles } from "lucide-react";
+import { Activity, History, PhoneCall, Sparkles } from "lucide-react";
 
 import { AutoRefresh } from "@/components/auto-refresh";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { DialerStatusTable } from "@/components/dialer-status-table";
 import { SoftphoneDialpad } from "@/components/softphone-dialpad";
 import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import {
-  buildDialerAgentSummaries,
-  fetchDialerAgentStatuses,
-  formatSecondsAsHms,
-  type DialerAgentStatus,
-} from "@/lib/dialer/status";
-import { cn } from "@/lib/utils";
+import { buildDialerAgentSummaries, fetchDialerAgentStatuses, type DialerAgentSummary } from "@/lib/dialer/status";
 
 function IconTitle({
   icon: Icon,
@@ -31,86 +27,57 @@ function IconTitle({
   );
 }
 
-const STATUS_ORDER: Record<string, number> = { INCALL: 0, DISPO: 1, PAUSED: 2 };
+const selectClassName =
+  "h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
 
-function statusVariant(status: string): "success" | "default" | "warning" | "muted" {
-  const s = status.toUpperCase();
-  if (s === "INCALL") return "success";
-  if (s === "DISPO") return "default";
-  if (s === "PAUSED") return "warning";
-  return "muted";
-}
+const dateLabelFormat = new Intl.DateTimeFormat("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" });
 
-const STATUS_LABELS: Record<string, string> = {
-  INCALL: "Im Gespräch",
-  DISPO: "Nachbearbeitung",
-  PAUSED: "Pause",
-  OFFLINE: "Abgemeldet",
-};
-
-const pct = new Intl.NumberFormat("de-DE", { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 });
-const rate = new Intl.NumberFormat("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-
-// Group headers for the widened Live-Status table, in a deliberate order
-// (Anis, 2026-08-06: "napravi logičan, povezan redoslijed"): who/what state
-// -> how much volume -> what came out of it (business result, using our own
-// real numbers) -> how efficiently -> the raw time buckets those efficiency
-// ratios are built from -> the dialer's own separate computer-activity split.
-const COLUMN_GROUPS = [
-  { label: "Agent", span: 3 },
-  { label: "Volumen", span: 2 },
-  { label: "Ergebnis", span: 3 },
-  { label: "Effizienz", span: 2 },
-  { label: "Zeitverteilung", span: 5 },
-  { label: "Aktivität", span: 3 },
-];
-
-export default async function DialerPage() {
+export default async function DialerPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ datum?: string }>;
+}) {
+  const { datum: datumParam } = await searchParams;
   const { user, profile } = await getCurrentUser();
   if (!user) notFound();
   const isAdmin = profile?.role === "admin";
 
-  let dialerRows: DialerAgentStatus[] | null = null;
+  let liveRows: DialerAgentSummary[] | null = null;
   let dialerError: string | null = null;
-  let agents: { id: string; full_name: string }[] = [];
-  let salesByAgentId = new Map<string, number>();
+  let snapshotDates: string[] = [];
+  let selectedSnapshotRows: DialerAgentSummary[] | null = null;
+  let selectedSnapshotCapturedAt: string | null = null;
 
   if (isAdmin) {
     const supabase = await createClient();
     const todayStr = new Date().toISOString().slice(0, 10);
-    const [{ data: dialerData, error: fetchError }, { data: agentRows }, { data: perfRows }] = await Promise.all([
-      fetchDialerAgentStatuses(),
-      supabase.from("agents").select("id, full_name").eq("active", true),
-      supabase.from("agent_daily_performance").select("agent_id, sales_count").eq("date", todayStr),
-    ]);
-    dialerRows = dialerData;
+    const [{ data: dialerData, error: fetchError }, { data: agentRows }, { data: perfRows }, { data: snapshotRows }] =
+      await Promise.all([
+        fetchDialerAgentStatuses(),
+        supabase.from("agents").select("id, full_name").eq("active", true),
+        supabase.from("agent_daily_performance").select("agent_id, sales_count").eq("date", todayStr),
+        // Verlauf (2026-08-08): "posto nemamo logove" stopgap (§14 item 24) had
+        // no viewer built yet - just capture. Anis: "How to get that?" -> "sure,
+        // viewer page now", "do it in dialer menu" (same page, not a new nav item).
+        supabase.from("dialer_daily_snapshots").select("snapshot_date").order("snapshot_date", { ascending: false }),
+      ]);
     dialerError = fetchError;
-    agents = agentRows ?? [];
-    // "Sales" in the dialer's own API is the dialer's own internal counter,
-    // disconnected from what this app actually tracks (Anis, 2026-08-06:
-    // wants it pulled from the same real source as the Rangliste/Team
-    // Dashboard - today's agent_daily_performance.sales_count - not the
-    // dialer's own number). Falls back to the dialer's raw count only if a
-    // row's name doesn't match a real agent.
-    salesByAgentId = new Map((perfRows ?? []).map((r) => [r.agent_id, r.sales_count]));
+    const agents = agentRows ?? [];
+    const salesByAgentId = new Map((perfRows ?? []).map((r) => [r.agent_id, r.sales_count]));
+    liveRows = dialerData ? buildDialerAgentSummaries(dialerData, agents, salesByAgentId) : null;
+    snapshotDates = (snapshotRows ?? []).map((r) => r.snapshot_date);
+
+    const selectedDate = datumParam && snapshotDates.includes(datumParam) ? datumParam : (snapshotDates[0] ?? null);
+    if (selectedDate) {
+      const { data: snapshot } = await supabase
+        .from("dialer_daily_snapshots")
+        .select("agents, captured_at")
+        .eq("snapshot_date", selectedDate)
+        .single();
+      selectedSnapshotRows = (snapshot?.agents as DialerAgentSummary[] | undefined) ?? null;
+      selectedSnapshotCapturedAt = snapshot?.captured_at ?? null;
+    }
   }
-
-  // Other teams share this same ViciDial instance for unrelated mini-projects
-  // (Anis, 2026-08-06: "Normfest dialer pokazuje Jelenu Stancevic... prikazuj
-  // samo ljude iz Normfesta") - only show rows that match a real Normfest
-  // agent; an unrecognized name is someone else's project, not ours to show.
-  // buildDialerAgentSummaries() also computes the standard call-center KPIs
-  // below, shared with the daily snapshot cron job so the two can't drift.
-  const summaries = dialerRows ? buildDialerAgentSummaries(dialerRows, agents, salesByAgentId) : null;
-
-  const sortedRows = summaries
-    ? [...summaries].sort((a, b) => {
-        const pa = STATUS_ORDER[a.status.toUpperCase()] ?? 99;
-        const pb = STATUS_ORDER[b.status.toUpperCase()] ?? 99;
-        if (pa !== pb) return pa - pb;
-        return a.fullName.localeCompare(b.fullName);
-      })
-    : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -127,10 +94,6 @@ export default async function DialerPage() {
       </div>
 
       {isAdmin ? (
-        // Breaks out of the page's normal max-w-6xl container - Anis, 2026-08-06:
-        // "ima na ekranu 'mjesta' slobodno proširi sam dialer live status u
-        // širinu" - this table alone gets real screen width, the rest of the
-        // page (concept cards, softphone) stays at the normal reading width.
         <div className="mx-[calc(50%-50vw)] w-screen px-4 md:px-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
@@ -150,91 +113,63 @@ export default async function DialerPage() {
               </p>
               {dialerError ? (
                 <p className="text-sm text-destructive">Dialer nicht erreichbar: {dialerError}</p>
-              ) : !sortedRows || sortedRows.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Keine Agenten aktuell im Dialer.</p>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="text-left text-xs text-muted-foreground">
-                      <tr>
-                        {COLUMN_GROUPS.map((g, i) => (
-                          <th
-                            key={g.label}
-                            colSpan={g.span}
-                            className={cn(
-                              "px-2 pt-2 pb-1 text-[11px] font-semibold tracking-wide text-muted-foreground/70 uppercase",
-                              i > 0 && "border-l",
-                            )}
-                          >
-                            {g.label}
-                          </th>
+                <DialerStatusTable rows={liveRows ?? []} sortByStatus />
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
+      {isAdmin ? (
+        <div className="mx-[calc(50%-50vw)] w-screen px-4 md:px-8">
+          <Card>
+            <CardHeader>
+              <IconTitle icon={History}>Verlauf (Tages-Snapshots)</IconTitle>
+              <p className="text-sm text-muted-foreground">
+                Ein Snapshot der obigen Live-Status-Daten, automatisch jeden Tag um 18:00 Uhr gespeichert -
+                der Dialer selbst hat keine eigene Historie, also läuft dieser Snapshot als
+                Übergangslösung mit, bis eine echte Anruflog-API vom Dialer-Entwickler bereitsteht.
+              </p>
+            </CardHeader>
+            <CardContent>
+              {snapshotDates.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Noch kein Snapshot vorhanden - der erste wird beim nächsten 18:00-Uhr-Lauf gespeichert.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  <form action="/dialer" className="flex flex-wrap items-end gap-3">
+                    <div className="flex flex-col gap-1">
+                      <Label htmlFor="datum">Datum</Label>
+                      <select
+                        id="datum"
+                        name="datum"
+                        defaultValue={datumParam ?? snapshotDates[0]}
+                        className={selectClassName}
+                      >
+                        {snapshotDates.map((d) => (
+                          <option key={d} value={d}>
+                            {dateLabelFormat.format(new Date(`${d}T00:00:00`))}
+                          </option>
                         ))}
-                      </tr>
-                      <tr>
-                        <th className="px-2 py-2 font-medium">Agent</th>
-                        <th className="px-2 py-2 font-medium">Status</th>
-                        <th className="px-2 py-2 font-medium">Zeit im Status</th>
-                        <th className="border-l px-2 py-2 font-medium">Anrufe</th>
-                        <th className="px-2 py-2 font-medium">Anrufe/Std.</th>
-                        <th className="border-l px-2 py-2 font-medium">Sales</th>
-                        <th className="px-2 py-2 font-medium">Konversion</th>
-                        <th className="px-2 py-2 font-medium">Verkäufe/Std.</th>
-                        <th className="border-l px-2 py-2 font-medium">Ø Bearbeitungszeit</th>
-                        <th className="px-2 py-2 font-medium">Auslastung</th>
-                        <th className="border-l px-2 py-2 font-medium">Sprechzeit</th>
-                        <th className="px-2 py-2 font-medium">Wartezeit</th>
-                        <th className="px-2 py-2 font-medium">Nachbearbeitung</th>
-                        <th className="px-2 py-2 font-medium">Pausenzeit</th>
-                        <th className="px-2 py-2 font-medium">Totzeit</th>
-                        <th className="border-l px-2 py-2 font-medium">Gesamtzeit</th>
-                        <th className="px-2 py-2 font-medium">Aktiv</th>
-                        <th className="px-2 py-2 font-medium">Inaktiv</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                      {sortedRows.map((a) => (
-                        <tr key={a.agentId}>
-                          <td className="px-2 py-2 font-medium">
-                            <Link href={`/admin/team/${a.agentId}`} className="hover:underline">
-                              {a.fullName}
-                            </Link>
-                          </td>
-                          <td className="px-2 py-2">
-                            <Badge variant={statusVariant(a.status)}>
-                              {STATUS_LABELS[a.status.toUpperCase()] ?? a.status}
-                            </Badge>
-                          </td>
-                          <td className="px-2 py-2 tabular-nums">{a.timeInStatus}</td>
-                          <td className="border-l px-2 py-2 tabular-nums">{a.totalCalls}</td>
-                          <td className="px-2 py-2 tabular-nums">{rate.format(a.callsPerHour)}</td>
-                          <td className="border-l px-2 py-2 tabular-nums">{a.realSales}</td>
-                          <td className="px-2 py-2 tabular-nums">{pct.format(a.conversion)}</td>
-                          <td className="px-2 py-2 tabular-nums">{rate.format(a.salesPerHour)}</td>
-                          <td className="border-l px-2 py-2 tabular-nums">{formatSecondsAsHms(a.ahtSeconds)}</td>
-                          <td className="px-2 py-2 tabular-nums">{pct.format(a.occupancy)}</td>
-                          <td className="border-l px-2 py-2 tabular-nums">{a.talkTime}</td>
-                          <td className="px-2 py-2 tabular-nums">{a.waitTime}</td>
-                          <td className="px-2 py-2 tabular-nums">{a.dispoTime}</td>
-                          <td className="px-2 py-2 tabular-nums">
-                            {a.pauseTime} <span className="text-muted-foreground">({pct.format(a.pauseShare)})</span>
-                          </td>
-                          <td className="px-2 py-2 tabular-nums">
-                            {a.deadTime} <span className="text-muted-foreground">({pct.format(a.deadShare)})</span>
-                          </td>
-                          <td className="border-l px-2 py-2 tabular-nums">{a.totalTime}</td>
-                          <td
-                            className={cn(
-                              "px-2 py-2 tabular-nums",
-                              a.status.toUpperCase() === "PAUSED" ? "text-muted-foreground" : "text-success-foreground",
-                            )}
-                          >
-                            {a.activeTime}
-                          </td>
-                          <td className="px-2 py-2 tabular-nums text-muted-foreground">{a.inactiveTime}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </select>
+                    </div>
+                    <Button type="submit" size="sm">
+                      Anzeigen
+                    </Button>
+                    {selectedSnapshotCapturedAt ? (
+                      <span className="pb-1.5 text-xs text-muted-foreground">
+                        Gespeichert um{" "}
+                        {new Date(selectedSnapshotCapturedAt).toLocaleTimeString("de-DE", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}{" "}
+                        Uhr
+                      </span>
+                    ) : null}
+                  </form>
+                  <DialerStatusTable rows={selectedSnapshotRows ?? []} />
                 </div>
               )}
             </CardContent>
