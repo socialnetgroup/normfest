@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { EmailListClient } from "@/components/email-list-client";
+import { EmailTemplateBlock } from "@/components/email-template-block";
 import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
@@ -81,6 +82,15 @@ export default async function EmailListePage({
           ) : (
             <EmailListClient rows={rows ?? []} />
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>E-Mail-Vorlage</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <EmailTemplateBlock />
         </CardContent>
       </Card>
     </div>
