@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { ConfirmButton } from "@/components/confirm-button";
 import { createClient } from "@/lib/supabase/client";
 
 export function FocusItemRemoveButton({
@@ -17,7 +18,6 @@ export function FocusItemRemoveButton({
   const [pending, setPending] = useState(false);
 
   async function remove() {
-    if (!confirm("Diesen Eintrag aus der Fokusliste entfernen?")) return;
     setPending(true);
     const supabase = createClient();
     await supabase.from(table).delete().eq("id", id);
@@ -26,14 +26,15 @@ export function FocusItemRemoveButton({
   }
 
   return (
-    <button
-      type="button"
-      onClick={remove}
+    <ConfirmButton
+      size="icon-xs"
+      variant="ghost"
+      onConfirm={remove}
       disabled={pending}
-      aria-label="Entfernen"
-      className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+      aria-label="Entfernen (zweimal klicken zum Bestätigen)"
+      className="rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
     >
       <X className="size-3.5" />
-    </button>
+    </ConfirmButton>
   );
 }

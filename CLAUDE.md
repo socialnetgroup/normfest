@@ -2882,6 +2882,69 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     Telefon/E-Mail/Gebiet still render normally, Name 2/Verband/Website correctly absent
     rather than showing empty dashes.
 
+32. **Stärken/Schwächen pure-pleasantry cleanup on existing enrichment data — shipped
+    (2026-08-08), no re-analysis cost.** Anis asked whether the ~1,432 already-analyzed
+    companies' existing Stärken/Schwächen text could be cleaned up to match the tightened
+    prompt (item 27) without a real Anthropic re-analysis. Yes for the clear cases: a
+    conservative keyword classifier (`scripts/strip-pleasantry-claims.mjs`) that only
+    strips a claim when the ENTIRE claim (not a substring) is pure friendliness/mood
+    language with zero concrete service content (e.g. "Freundliches Team", "Kompetentes
+    Personal") - any mixed claim that also names something concrete is left untouched,
+    since a keyword match can't judge that as reliably as the LLM could.
+
+    **Real bug caught mid-run:** the first pass fetched `company_enrichment` rows with no
+    pagination, silently capped at PostgREST's default 1000-row limit - only 1,000 of the
+    real 1,432 rows were ever checked, and the "5,276 total claims" figure reported to
+    Anis beforehand was itself wrong for the same reason (the true figure was ~7,167).
+    Fixed by paginating the fetch in 1000-row pages; a second run against the corrected
+    full dataset found 48 more matches the first pass had silently missed. Total: **141
+    pure-pleasantry claims removed across 92 companies**, out of the real ~7,167. Verified
+    directly against the DB afterward: zero rows still contain any of the exact stripped
+    claims (spot-checked "Freundliche Mitarbeiter", "Freundliches Team", "Kompetentes
+    Team", "Freundlicher Kundenservice").
+
+33. **`/feedback` scoped to "my own" for non-admin agents — shipped (2026-08-08).** Anis:
+    the page/data has always been team-shared (item 19), but agents wanted their own
+    feedback consolidated in one place ("umjesto od firme do firme") rather than seeing
+    the whole team's. Non-admins now get `effectiveAgentFilter` force-set to their own
+    `user.id` (any `?agent=` param they might pass is ignored) and the Agent picker
+    dropdown doesn't render for them at all; admins keep the full picker, unchanged.
+    Verified live: a throwaway agent account correctly showed exactly its own 1 real row
+    (out of the team's 156, all of which currently belong to Alan - the only agent with
+    real sustained usage so far) with no Agent filter visible.
+
+34. **Two-click confirm replaces `window.confirm()` on every destructive delete — shipped
+    (2026-08-08).** Anis: *"Make a 'Are you sure'/confirm deletation... since I misslicked
+    and deleted 1 Feedback and now cant revert it."* This is the same incident as the
+    still-open item 27 "restore Alan's deleted feedback" - a native browser `confirm()`
+    dialog existed already on every destructive action in the app, but is apparently easy
+    to click through without reading. New `components/confirm-button.tsx`: a click-to-arm
+    pattern - first click turns the button destructive-red/pulsing (no side effect yet,
+    auto-disarms after 3.5s if nothing else happens), a second deliberate click within
+    that window actually runs the action. Swapped into all 6 places `confirm()` was used:
+    `feedback-history-item.tsx`, `focus-list-manage.tsx`, `focus-item-remove-button.tsx`,
+    `evaluation-delete-button.tsx`, `brand-profile-manager.tsx`,
+    `katalog-dedup-review.tsx` (the last one covers both irreversible merge-and-delete
+    buttons, not just plain deletes). Also always calls `preventDefault`/`stopPropagation`
+    on both the arming and confirming click, since several of these buttons sit inside a
+    clickable row/Link and must never trigger that navigation.
+
+    **Real bug caught during verification, not assumed away:** the component's
+    armed-state `aria-label` was being silently overridden by `{...props}` spreading
+    *after* it, since the call sites always pass their own static `aria-label` - fixed by
+    destructuring `aria-label` out of props explicitly so the armed-state label can win
+    when armed. **Also a real environment gotcha hit while testing:** the sandboxed dev
+    server's HMR websocket was failing silently, so the first two live-click tests were
+    unknowingly running against the *old* pre-edit bundle (which still had the old
+    `confirm()` code - itself a no-op in this sandbox, since native `confirm()` doesn't
+    block here, explaining the observed "nothing happens on click" before a hard reload
+    picked up the new bundle). Verified for real after a hard reload, using a throwaway
+    `sales_feedback` row: a single click left the row in the database (armed but not
+    executed, confirmed via direct query); two clicks within the 3.5s window deleted it
+    for real; two clicks separated by tool-latency-induced delay (>3.5s) correctly did
+    NOT delete it, confirming the auto-disarm timer works as designed, not just the
+    happy path.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

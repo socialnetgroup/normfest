@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { ConfirmButton } from "@/components/confirm-button";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
 
@@ -30,8 +31,6 @@ export function FocusListManage({ listId, name }: { listId: string; name: string
   }
 
   async function deleteList() {
-    if (!confirm(`Fokusliste "${name}" wirklich löschen? Das entfernt auch alle Firmen/Produkte in dieser Liste.`))
-      return;
     setPending(true);
     const supabase = createClient();
     await supabase.from("focus_lists").delete().eq("id", listId);
@@ -73,17 +72,16 @@ export function FocusListManage({ listId, name }: { listId: string; name: string
       <Button type="button" size="icon-xs" variant="ghost" onClick={() => setEditing(true)} aria-label="Umbenennen">
         <Pencil className="size-3.5" />
       </Button>
-      <Button
-        type="button"
+      <ConfirmButton
         size="icon-xs"
         variant="ghost"
-        onClick={deleteList}
+        onConfirm={deleteList}
         disabled={pending}
-        aria-label="Liste löschen"
+        aria-label="Liste löschen (zweimal klicken zum Bestätigen)"
         className="hover:bg-destructive/10 hover:text-destructive"
       >
         <Trash2 className="size-3.5" />
-      </Button>
+      </ConfirmButton>
     </div>
   );
 }

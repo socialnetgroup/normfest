@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ConfirmButton } from "@/components/confirm-button";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/lib/supabase/types";
@@ -37,7 +38,6 @@ function EditableRow({ row }: { row: Row }) {
   }
 
   async function remove() {
-    if (!confirm(`Profil "${row.brand} -> ${row.category}" wirklich löschen?`)) return;
     setPending(true);
     const supabase = createClient();
     await supabase.from("brand_consumption_profiles").delete().eq("id", row.id);
@@ -68,17 +68,16 @@ function EditableRow({ row }: { row: Row }) {
           >
             <ShieldCheck className={row.verified ? "size-3.5 text-success-foreground" : "size-3.5"} />
           </Button>
-          <Button
-            type="button"
+          <ConfirmButton
             size="icon-xs"
             variant="ghost"
-            onClick={remove}
+            onConfirm={remove}
             disabled={pending}
-            aria-label="Löschen"
+            aria-label="Löschen (zweimal klicken zum Bestätigen)"
             className="hover:bg-destructive/10 hover:text-destructive"
           >
             <Trash2 className="size-3.5" />
-          </Button>
+          </ConfirmButton>
         </div>
       </div>
 

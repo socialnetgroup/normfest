@@ -7,6 +7,7 @@ import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ConfirmButton } from "@/components/confirm-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
@@ -161,7 +162,6 @@ export function FeedbackHistoryItem({
   }
 
   async function remove() {
-    if (!confirm("Diesen Feedback-Eintrag wirklich löschen?")) return;
     setPending(true);
     setErrorMessage(null);
     const supabase = createClient();
@@ -394,17 +394,16 @@ export function FeedbackHistoryItem({
           >
             <Pencil className="size-3.5" />
           </Button>
-          <Button
-            type="button"
+          <ConfirmButton
             size="icon-xs"
             variant="ghost"
-            onClick={remove}
+            onConfirm={remove}
             disabled={pending}
-            aria-label="Feedback löschen"
+            aria-label="Feedback löschen (zweimal klicken zum Bestätigen)"
             className="hover:bg-destructive/10 hover:text-destructive"
           >
             <Trash2 className="size-3.5" />
-          </Button>
+          </ConfirmButton>
         </div>
       ) : null}
     </li>

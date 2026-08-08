@@ -4,7 +4,7 @@ import { Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { ConfirmButton } from "@/components/confirm-button";
 import { createClient } from "@/lib/supabase/client";
 
 export function EvaluationDeleteButton({
@@ -19,10 +19,7 @@ export function EvaluationDeleteButton({
   const router = useRouter();
   const [pending, setPending] = useState(false);
 
-  async function remove(e: React.MouseEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!confirm(`Bewertung für ${agentName} wirklich löschen?`)) return;
+  async function remove() {
     setPending(true);
     const supabase = createClient();
     await supabase.from("agent_evaluations").delete().eq("id", id);
@@ -34,16 +31,15 @@ export function EvaluationDeleteButton({
   }
 
   return (
-    <Button
-      type="button"
+    <ConfirmButton
       size="icon-xs"
       variant="ghost"
-      onClick={remove}
+      onConfirm={remove}
       disabled={pending}
-      aria-label="Bewertung löschen"
+      aria-label={`Bewertung für ${agentName} löschen (zweimal klicken zum Bestätigen)`}
       className="hover:bg-destructive/10 hover:text-destructive"
     >
       <Trash2 className="size-3.5" />
-    </Button>
+    </ConfirmButton>
   );
 }

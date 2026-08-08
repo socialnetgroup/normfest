@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ConfirmButton } from "@/components/confirm-button";
 import { createClient } from "@/lib/supabase/client";
 
 type ProductInfo = {
@@ -43,13 +44,6 @@ function CandidateRow({ candidate }: { candidate: Candidate }) {
   async function merge(keepSide: "a" | "b") {
     const keep = keepSide === "a" ? candidate.product_a : candidate.product_b;
     const remove = keepSide === "a" ? candidate.product_b : candidate.product_a;
-    if (
-      !confirm(
-        `"${remove.name}" (${remove.sku}) wirklich löschen und durch "${keep.name}" (${keep.sku}) ersetzen? ` +
-          `Alle Feedback-/Signal-/Beziehungs-Einträge werden übernommen. Das kann nicht rückgängig gemacht werden.`,
-      )
-    )
-      return;
     setPending(true);
     const supabase = createClient();
     const { error } = await supabase.rpc("fn_merge_duplicate_products", {
@@ -91,12 +85,24 @@ function CandidateRow({ candidate }: { candidate: Candidate }) {
         <ProductCard product={candidate.product_b} />
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => merge("a")}>
+        <ConfirmButton
+          size="sm"
+          variant="outline"
+          disabled={pending}
+          onConfirm={() => merge("a")}
+          confirmLabel="Wirklich zusammenführen?"
+        >
           Zusammenführen (PDF-Katalog behalten)
-        </Button>
-        <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => merge("b")}>
+        </ConfirmButton>
+        <ConfirmButton
+          size="sm"
+          variant="outline"
+          disabled={pending}
+          onConfirm={() => merge("b")}
+          confirmLabel="Wirklich zusammenführen?"
+        >
           Zusammenführen (Webshop behalten)
-        </Button>
+        </ConfirmButton>
         <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={reject}>
           Kein Duplikat
         </Button>

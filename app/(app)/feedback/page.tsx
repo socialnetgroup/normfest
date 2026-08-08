@@ -39,6 +39,14 @@ export default async function FeedbackListPage({
   const isAdmin = profile?.role === "admin";
   const supabase = await createClient();
 
+  // Anis (2026-08-08): the page/data itself has always been team-shared
+  // (sales_feedback's own RLS), but non-admin agents were seeing everyone's
+  // feedback here too - the ask was to see their own in one place ("umjesto
+  // od firme do firme"), not the whole team's. Force-scope to self for
+  // non-admins (ignore any ?agent= param they might pass) - admins keep the
+  // full picker, defaulting to "Alle" as before.
+  const effectiveAgentFilter = isAdmin ? agentFilter : user?.id;
+
   let feedbackBuilder = supabase
     .from("sales_feedback")
     .select(
@@ -47,7 +55,7 @@ export default async function FeedbackListPage({
     )
     .order("created_at", { ascending: false })
     .range(from, to);
-  if (agentFilter) feedbackBuilder = feedbackBuilder.eq("agent_id", agentFilter);
+  if (effectiveAgentFilter) feedbackBuilder = feedbackBuilder.eq("agent_id", effectiveAgentFilter);
   if (outcomeFilter) feedbackBuilder = feedbackBuilder.eq("outcome", outcomeFilter);
   // Alan's pilot feedback (2026-08-08): "Feedback (tag) cijeli mjesec od-do
   // da se moze odabrati" - was single-day only, now a Von/Bis range (either
@@ -56,7 +64,9 @@ export default async function FeedbackListPage({
   if (bisFilter) feedbackBuilder = feedbackBuilder.lte("created_at", `${bisFilter}T23:59:59.999Z`);
 
   const [{ data: agentOptions }, { data: feedbackRows, count }] = await Promise.all([
-    supabase.from("agents").select("id, full_name, profile_id").not("profile_id", "is", null).order("full_name"),
+    isAdmin
+      ? supabase.from("agents").select("id, full_name, profile_id").not("profile_id", "is", null).order("full_name")
+      : Promise.resolve({ data: null }),
     feedbackBuilder,
   ]);
 
@@ -80,24 +90,28 @@ export default async function FeedbackListPage({
       <div>
         <h1 className="font-heading text-2xl font-semibold tracking-tight">Feedback</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Alle erfassten Verkaufsergebnisse - team-weit sichtbar (Flywheel).
+          {isAdmin
+            ? "Alle erfassten Verkaufsergebnisse - team-weit sichtbar (Flywheel)."
+            : "Deine erfassten Verkaufsergebnisse - alles an einem Ort statt von Firma zu Firma."}
         </p>
       </div>
 
       <Card>
         <CardContent className="pt-4">
           <form action="/feedback" className="flex flex-wrap items-end gap-3">
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="agent">Agent</Label>
-              <select id="agent" name="agent" defaultValue={agentFilter ?? ""} className={selectClassName}>
-                <option value="">Alle</option>
-                {(agentOptions ?? []).map((a) => (
-                  <option key={a.id} value={a.profile_id!}>
-                    {a.full_name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {isAdmin ? (
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="agent">Agent</Label>
+                <select id="agent" name="agent" defaultValue={agentFilter ?? ""} className={selectClassName}>
+                  <option value="">Alle</option>
+                  {(agentOptions ?? []).map((a) => (
+                    <option key={a.id} value={a.profile_id!}>
+                      {a.full_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
             <div className="flex flex-col gap-1">
               <Label htmlFor="outcome">Ergebnis</Label>
               <select id="outcome" name="outcome" defaultValue={outcomeFilter ?? ""} className={selectClassName}>
