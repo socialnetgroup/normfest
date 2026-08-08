@@ -735,6 +735,42 @@ export type Database = {
         }
         Relationships: []
       }
+      email_list_exclusions: {
+        Row: {
+          company_id: string
+          created_at: string
+          excluded_by: string | null
+          id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          excluded_by?: string | null
+          id?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          excluded_by?: string | null
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_list_exclusions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_list_exclusions_excluded_by_fkey"
+            columns: ["excluded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       enrichment_jobs: {
         Row: {
           company_id: string
@@ -1705,6 +1741,14 @@ export type Database = {
       fn_dismiss_signal: {
         Args: { p_company_id: string; p_product_id?: string; p_type: string }
         Returns: undefined
+      }
+      fn_email_list: {
+        Args: { p_gebiet?: string }
+        Returns: {
+          company_id: string
+          company_name: string
+          email: string
+        }[]
       }
       fn_flag_representative_images: { Args: never; Returns: undefined }
       fn_get_agent_login_status: {
