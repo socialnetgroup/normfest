@@ -11,32 +11,42 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 
+// Taxonomy redesigned 2026-08-08 - kept in sync manually with
+// feedback-form.tsx (small, static lists). "interested" stays in
+// OUTCOME_LABELS only so any pre-existing historical row still renders a
+// real label, but is never offered as an editable choice.
 const OUTCOMES = [
   { value: "sold", label: "Verkauft" },
-  { value: "interested", label: "Interessiert" },
-  { value: "rejected", label: "Abgelehnt" },
-  { value: "not_relevant", label: "Nicht relevant" },
+  { value: "rejected", label: "Abgelehnt (Kein Bedarf)" },
+  { value: "not_relevant", label: "Nicht angetroffen" },
+  { value: "keine_zeit", label: "Keine Zeit" },
+  { value: "nicht_besucht", label: "Nicht besucht" },
 ] as const;
 
 const OUTCOME_LABELS: Record<string, string> = {
   sold: "Verkauft",
   interested: "Interessiert",
-  rejected: "Abgelehnt",
-  not_relevant: "Nicht relevant",
+  rejected: "Abgelehnt (Kein Bedarf)",
+  not_relevant: "Nicht angetroffen",
+  keine_zeit: "Keine Zeit",
+  nicht_besucht: "Nicht besucht",
 };
 
-// From the agent sales script's objection table (§2 Agent-Priručnik) -
-// same list as feedback-form.tsx, kept in sync manually (small, static list).
-const COMMON_OBJECTIONS = [
+const REJECTED_REASONS = [
   "Schon einen Lieferanten",
   "Kein Interesse",
-  "Keine Zeit",
   "Zu teuer",
   "Genug Vorrat",
   "Schicken Sie mir was per Mail",
   "Ich melde mich",
-  "Haben sowas probiert",
 ];
+
+const NOT_RELEVANT_REASONS = ["Keine Verbindung", "Durchgeklingelt", "Anrufbeantworter"];
+
+const OUTCOME_REASONS: Partial<Record<string, string[]>> = {
+  rejected: REJECTED_REASONS,
+  not_relevant: NOT_RELEVANT_REASONS,
+};
 
 const eur = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
 const dateTimeFmt = new Intl.DateTimeFormat("de-DE", {
@@ -123,6 +133,10 @@ export function FeedbackHistoryItem({
   }
 
   async function save() {
+    if (formOutcome === "nicht_besucht" && !formComment.trim()) {
+      setErrorMessage('Kommentar ist bei "Nicht besucht" Pflicht.');
+      return;
+    }
     setPending(true);
     setErrorMessage(null);
     const supabase = createClient();
@@ -246,11 +260,11 @@ export function FeedbackHistoryItem({
           </div>
         ) : null}
 
-        {formOutcome === "rejected" ? (
+        {formOutcome && OUTCOME_REASONS[formOutcome] ? (
           <div className="flex flex-col gap-1.5">
-            <Label>Einwand</Label>
+            <Label>Grund</Label>
             <div className="flex flex-wrap gap-1.5">
-              {COMMON_OBJECTIONS.map((o) => (
+              {OUTCOME_REASONS[formOutcome]!.map((o) => (
                 <button type="button" key={o} onClick={() => setFormObjection(o)}>
                   <Badge variant={formObjection === o ? "default" : "secondary"}>{o}</Badge>
                 </button>
@@ -260,18 +274,21 @@ export function FeedbackHistoryItem({
               type="text"
               value={formObjection}
               onChange={(e) => setFormObjection(e.target.value)}
-              placeholder="oder eigener Einwand..."
+              placeholder="oder eigener Grund..."
             />
           </div>
         ) : null}
 
         <div className="flex flex-col gap-1">
-          <Label htmlFor={`comment-${id}`}>Kommentar (optional)</Label>
+          <Label htmlFor={`comment-${id}`}>
+            Kommentar {formOutcome === "nicht_besucht" ? "(Pflicht - warum nicht kontaktiert?)" : "(optional)"}
+          </Label>
           <Input
             id={`comment-${id}`}
             value={formComment}
             onChange={(e) => setFormComment(e.target.value)}
-            placeholder="z.B. Rückruf nächste Woche..."
+            placeholder={formOutcome === "nicht_besucht" ? "z.B. Kunde im Urlaub, keine Zeit heute..." : "z.B. Rückruf nächste Woche..."}
+            required={formOutcome === "nicht_besucht"}
           />
         </div>
 
@@ -318,14 +335,24 @@ export function FeedbackHistoryItem({
           </p>
         ) : null}
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={outcome === "sold" ? "success" : outcome === "rejected" ? "destructive" : "secondary"}>
+          <Badge
+            variant={
+              outcome === "sold"
+                ? "success"
+                : outcome === "rejected"
+                  ? "destructive"
+                  : outcome === "nicht_besucht"
+                    ? "warning"
+                    : "secondary"
+            }
+          >
             {OUTCOME_LABELS[outcome] ?? outcome}
           </Badge>
           {productName ? <span className="font-medium">{productName}</span> : null}
           {qty ? <span className="text-muted-foreground">×{qty}</span> : null}
           {valueNet ? <span className="text-muted-foreground">{eur.format(valueNet)}</span> : null}
         </div>
-        {objection ? <p className="mt-1 text-muted-foreground">Einwand: {objection}</p> : null}
+        {objection ? <p className="mt-1 text-muted-foreground">Grund: {objection}</p> : null}
         {comment ? <p className="mt-1 text-muted-foreground">{comment}</p> : null}
         {wiedervorlageDate && !wiedervorlageDone ? (
           <div className="mt-1.5 flex items-center gap-2">

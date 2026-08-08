@@ -2790,28 +2790,69 @@ explicitly labeled "laut Agent-Feedback", or says no data).
 
     **Deliberately NOT touched this pass - needs Anis/Alan's explicit confirmation first
     (real historical production data, guessing wrong would corrupt it):**
-    - **Feedback outcome taxonomy redesign.** Alan's raw message reads as: keep Verkauft;
-      delete Interessiert entirely; redefine Abgelehnt as "Kein Bedarf" (reached the real
-      contact, no sale for some reason) with its objection list trimmed from the current
-      8 (`COMMON_OBJECTIONS` in `components/feedback-form.tsx`) down to 6 - keep
-      "Schon einen Lieferanten"/"Kein Interesse"/"Zu teuer"/"Genug Vorrat"/"Schicken Sie
-      mir was per Mail"/"Ich melde mich", drop "Keine Zeit" and "Haben sowas probiert";
-      redefine `not_relevant` as "Nicht angetroffen" (nobody picked up) with its own
-      reason set (keine Verbindung/durchgeklingelt/Anrufbeantworter); add two new outcomes,
-      "Keine Zeit" (reached someone, but not the real contact person) and "Nicht besucht"
-      (mandatory comment explaining why the company wasn't contacted at all). This reading
-      resolves an apparent contradiction in his message (two different "Abgeleht ="
-      lines) by treating "Kein Interesse" as one of the kept objection reasons rather than
-      the outcome's new name - plausible, but not something to commit to a live enum
-      touching real historical feedback rows without an explicit yes.
     - **Restoring Alan's one deleted feedback entry.** No PITR exists (daily backups only,
       §12) and deletes are hard, side-effect-reversing (§4.7) - need the specific
       company/date/details from him to manually re-enter it.
     - **Email-Liste + Fokus auto-email + Fokus flyer generator.** Real customer-facing
       communication features needing an infrastructure decision (no transactional email
       provider exists in this app yet) and, for the auto-send specifically, explicit
-      confirmation before any live send is ever triggered - out of scope for a single pass
-      alongside everything else above.
+      confirmation before any live send is ever triggered - Anis confirmed to start
+      planning/building this, provider choice still pending (see item 29 below).
+
+28. **Feedback outcome taxonomy redesigned — shipped (2026-08-08), confirmed with Anis
+    before touching real historical data (156 real rows at the time: rejected=19,
+    not_relevant=133, sold=3, interested=1).** New 5-outcome set:
+    - `sold` - unchanged.
+    - `rejected` ("Abgelehnt (Kein Bedarf)") - keeps its DB value, but now means "reached
+      the real contact person, no sale for some reason" - reason list trimmed from 8 to 6
+      (`REJECTED_REASONS`: Schon einen Lieferanten/Kein Interesse/Zu teuer/Genug Vorrat/
+      Schicken Sie mir was per Mail/Ich melde mich - dropped "Keine Zeit", now its own
+      outcome, and "Haben sowas probiert").
+    - `not_relevant` ("Nicht angetroffen") - kept as the DB value (renaming would be a
+      destructive migration of 133 real rows for no functional gain), but now DISPLAYED
+      with a new meaning (nobody answered/connected) and a new reason set
+      (`NOT_RELEVANT_REASONS`: Keine Verbindung/Durchgeklingelt/Anrufbeantworter). This is
+      a real, deliberate relabeling of those 133 existing rows' displayed meaning - Anis
+      was told this explicitly before confirming, not discovered after the fact.
+    - `interested` - REMOVED from every UI selection (feedback-form.tsx, feedback-history-
+      item.tsx, /feedback filter, chat-assistant.tsx, the chat tool's outcome enum) but
+      kept as a legal DB value (CHECK constraint still allows it) so the 1 existing
+      historical row isn't orphaned by a constraint violation on its next edit - never
+      offered as a choice going forward.
+    - `keine_zeit` (NEW) - reached someone, but not the real contact person.
+    - `nicht_besucht` (NEW) - company wasn't contacted at all - comment is mandatory,
+      enforced in BOTH `fn_log_sales_feedback`/`fn_update_sales_feedback` (raises a real
+      exception, not just a UI hint) and client-side in both feedback-form.tsx and
+      feedback-history-item.tsx's edit mode.
+
+    Migration `20260808040000_feedback_outcome_taxonomy.sql`: drops/recreates the
+    `sales_feedback_outcome_check` CHECK constraint, and `fn_log_sales_feedback`/
+    `fn_chat_log_sales_feedback`/`fn_update_sales_feedback` (explicit `drop function` first
+    for the same reason as the earlier Wiedervorlage overload bug, §14 item 21 - `create or
+    replace` doesn't replace a function whose parameter list is unchanged but body logic
+    changes are fine; the drop here is defensive since these signatures didn't actually
+    change, but keeps the pattern consistent and self-documenting). Also updated:
+    `/api/chat/confirm`'s zod enum, the `log_sales_feedback` chat tool's description +
+    enum + `TOOLS` array (`lib/chat/core.mjs`), and the Firmenprofil's badge variant
+    mapping (`nicht_besucht` renders `warning`).
+
+    Verified live end-to-end (throwaway admin account, deleted after): direct RPC calls
+    confirmed all four cases - `nicht_besucht` without a comment correctly rejected
+    ("Kommentar ist bei \"Nicht besucht\" Pflicht"), the same call WITH a comment
+    succeeded, a real `keine_zeit` row inserted cleanly, and a garbage outcome string was
+    still correctly rejected by the CHECK constraint (proving the constraint update took
+    effect, not just the RPC-level guard). Then confirmed the real UI: all 5 new outcome
+    buttons render on `/firmen/[id]`'s Feedback erfassen form, clicking "Nicht angetroffen"
+    shows the correct 3 new reason chips, and clicking "Nicht besucht" correctly flips the
+    comment field to `required` with the Pflicht label and the new placeholder text. Full
+    suite green after (41/41, including the pre-existing `outcome: "interested"` RLS test,
+    confirming that value is still legally insertable as designed).
+
+29. **Not yet built this pass:** Email-Liste (per-Gebiet email address list with delete),
+    Fokus auto-email to that list with the generated flyer, and the Fokus flyer generator
+    itself. Anis confirmed to proceed - next real step is choosing a transactional email
+    provider before the auto-send half can be built; the Email-Liste + flyer-generator
+    halves don't strictly need that decision first and can start independently.
 
 ---
 

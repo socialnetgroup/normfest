@@ -15,7 +15,7 @@ type PendingAction =
 
 type LogFeedbackPayload = {
   company_id: string;
-  outcome: "sold" | "interested" | "rejected" | "not_relevant";
+  outcome: "sold" | "interested" | "rejected" | "not_relevant" | "keine_zeit" | "nicht_besucht";
   product_id?: string;
   qty?: number;
   value_net?: number;
@@ -23,11 +23,16 @@ type LogFeedbackPayload = {
   comment?: string;
 };
 
+// Taxonomy redesigned 2026-08-08 (CLAUDE.md §14 item 27). "interested" kept
+// only so an old-model response referencing it (unlikely post-fix) still
+// renders a real label instead of the raw enum string.
 const OUTCOME_LABELS: Record<string, string> = {
   sold: "Verkauft",
   interested: "Interessiert",
-  rejected: "Abgelehnt",
-  not_relevant: "Nicht relevant",
+  rejected: "Abgelehnt (Kein Bedarf)",
+  not_relevant: "Nicht angetroffen",
+  keine_zeit: "Keine Zeit",
+  nicht_besucht: "Nicht besucht",
 };
 
 function parseSseBuffer(buffer: string, onFrame: (event: string, data: unknown) => void) {

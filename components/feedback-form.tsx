@@ -9,26 +9,38 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 
+// Taxonomy redesigned 2026-08-08 per Alan's real-usage pilot feedback,
+// confirmed with Anis before touching the live outcome CHECK constraint
+// (CLAUDE.md §14 item 27). "interested" was removed from selection here but
+// stays a legal DB value so the one pre-existing historical row isn't
+// orphaned - never shown as a choice going forward.
 const OUTCOMES = [
   { value: "sold", label: "Verkauft" },
-  { value: "interested", label: "Interessiert" },
-  { value: "rejected", label: "Abgelehnt" },
-  { value: "not_relevant", label: "Nicht relevant" },
+  { value: "rejected", label: "Abgelehnt (Kein Bedarf)" },
+  { value: "not_relevant", label: "Nicht angetroffen" },
+  { value: "keine_zeit", label: "Keine Zeit" },
+  { value: "nicht_besucht", label: "Nicht besucht" },
 ] as const;
 
 type Outcome = (typeof OUTCOMES)[number]["value"];
 
-// From the agent sales script's objection table (§2 Agent-Priručnik).
-const COMMON_OBJECTIONS = [
+// "Abgelehnt" = reached the real contact person, no sale for some reason.
+const REJECTED_REASONS = [
   "Schon einen Lieferanten",
   "Kein Interesse",
-  "Keine Zeit",
   "Zu teuer",
   "Genug Vorrat",
   "Schicken Sie mir was per Mail",
   "Ich melde mich",
-  "Haben sowas probiert",
 ];
+
+// "Nicht angetroffen" = nobody picked up / no connection established.
+const NOT_RELEVANT_REASONS = ["Keine Verbindung", "Durchgeklingelt", "Anrufbeantworter"];
+
+const OUTCOME_REASONS: Partial<Record<Outcome, string[]>> = {
+  rejected: REJECTED_REASONS,
+  not_relevant: NOT_RELEVANT_REASONS,
+};
 
 type ProductOption = { id: string; name: string; sku: string };
 
@@ -77,6 +89,11 @@ export function FeedbackForm({ companyId }: { companyId: string }) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!outcome) return;
+    if (outcome === "nicht_besucht" && !comment.trim()) {
+      setStatus("error");
+      setErrorMessage('Kommentar ist bei "Nicht besucht" Pflicht.');
+      return;
+    }
 
     setStatus("saving");
     setErrorMessage(null);
@@ -179,11 +196,11 @@ export function FeedbackForm({ companyId }: { companyId: string }) {
             </div>
           ) : null}
 
-          {outcome === "rejected" ? (
+          {outcome && OUTCOME_REASONS[outcome] ? (
             <div className="flex flex-col gap-1.5">
-              <Label>Einwand</Label>
+              <Label>Grund</Label>
               <div className="flex flex-wrap gap-1.5">
-                {COMMON_OBJECTIONS.map((o) => (
+                {OUTCOME_REASONS[outcome]!.map((o) => (
                   <button
                     type="button"
                     key={o}
@@ -197,19 +214,22 @@ export function FeedbackForm({ companyId }: { companyId: string }) {
                 type="text"
                 value={objection}
                 onChange={(e) => setObjection(e.target.value)}
-                placeholder="oder eigener Einwand..."
+                placeholder="oder eigener Grund..."
               />
             </div>
           ) : null}
 
           <div className="flex flex-col gap-1">
-            <Label htmlFor="comment">Kommentar (optional)</Label>
+            <Label htmlFor="comment">
+              Kommentar {outcome === "nicht_besucht" ? "(Pflicht - warum nicht kontaktiert?)" : "(optional)"}
+            </Label>
             <Input
               id="comment"
               type="text"
               value={comment}
               onChange={(e) => setComment(e.target.value)}
-              placeholder="z.B. Rückruf nächste Woche..."
+              placeholder={outcome === "nicht_besucht" ? "z.B. Kunde im Urlaub, keine Zeit heute..." : "z.B. Rückruf nächste Woche..."}
+              required={outcome === "nicht_besucht"}
             />
           </div>
 

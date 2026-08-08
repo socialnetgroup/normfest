@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/server";
 // this route is a confirmation gate, not a privilege escalation.
 const payloadSchema = z.object({
   company_id: z.string().uuid(),
-  outcome: z.enum(["sold", "interested", "rejected", "not_relevant"]),
+  outcome: z.enum(["sold", "rejected", "not_relevant", "keine_zeit", "nicht_besucht"]),
   product_id: z.string().uuid().optional(),
   qty: z.number().int().optional(),
   value_net: z.number().optional(),

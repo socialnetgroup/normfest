@@ -13,11 +13,16 @@ const PAGE_SIZE = 30;
 const selectClassName =
   "h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
 
+// Taxonomy redesigned 2026-08-08 (CLAUDE.md §14 item 27) - "interested" kept
+// out of the filter options (no longer selectable going forward) but any
+// pre-existing row with that outcome still renders via FeedbackHistoryItem's
+// own OUTCOME_LABELS fallback.
 const OUTCOME_OPTIONS = [
   { value: "sold", label: "Verkauft" },
-  { value: "interested", label: "Interessiert" },
-  { value: "rejected", label: "Abgelehnt" },
-  { value: "not_relevant", label: "Nicht relevant" },
+  { value: "rejected", label: "Abgelehnt (Kein Bedarf)" },
+  { value: "not_relevant", label: "Nicht angetroffen" },
+  { value: "keine_zeit", label: "Keine Zeit" },
+  { value: "nicht_besucht", label: "Nicht besucht" },
 ] as const;
 
 export default async function FeedbackListPage({
