@@ -3115,6 +3115,40 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     test exclusion rows cleaned up after each check to restore the true empty state. Full
     suite green after (41/41), `visibility_mode` confirmed still `'gebiet'`.
 
+41. **Dialer-Verlauf (daily-snapshot viewer) — shipped (2026-08-08).** Anis asked how to
+    view the internal dialer log (`dialer_daily_snapshots`, §14 item 24 - a stopgap daily
+    capture of Live-Status, built as a placeholder for the real ViciDial call-log API,
+    §14 item 13) - answer at the time was "no viewer exists yet, only a raw DB row per
+    day." Confirmed live too: only 1 real snapshot existed (2026-08-06, from testing the
+    cron route), consistent with "it was just 1 day since we setup" - not a sign the cron
+    is broken. Anis: "sure, viewer page now" then "do it in dialer menu" (same `/dialer`
+    page, not a new nav item).
+
+    Extracted the Live-Status table's markup into a new shared `components/dialer-status-
+    table.tsx` (`DialerStatusTable`, takes a plain `DialerAgentSummary[]` and an optional
+    `sortByStatus` flag) so the live view and the history view render identically instead
+    of drifting apart - both already consume the exact same `buildDialerAgentSummaries()`
+    output shape (live from `fetchDialerAgentStatuses()`, historical from a stored
+    `dialer_daily_snapshots.agents` jsonb column). `/dialer` (`app/(app)/dialer/page.tsx`)
+    gained a second admin-only, full-width card "Verlauf (Tages-Snapshots)" below
+    Live-Status: a `<select>` of every real `snapshot_date` (newest first, same GET-form
+    pattern as `/email-liste`'s Gebiet picker) + "Gespeichert um HH:MM Uhr" from
+    `captured_at`, defaulting to the most recent date when no `?datum=` is given. Empty
+    state ("Noch kein Snapshot vorhanden...") handled explicitly rather than showing an
+    empty table.
+
+    Verified live (throwaway admin test account, deleted after - had to log in through
+    the real `/login` form this time since cookie-injection landed on the login page for
+    an unexplained reason, unlike every earlier use of that technique this session; not
+    investigated further since the UI-login path is always available as a fallback):
+    the real 2026-08-06 snapshot rendered correctly - date-select showed "Do., 06.08.2026",
+    "Gespeichert um 16:18 Uhr", and all 7 real agents' full KPI row (Anrufe/Sales/
+    Konversion/Auslastung/Zeitverteilung/Aktivität) matched what the original snapshot
+    capture would have stored. Live-Status itself showed "Keine Agenten-Daten vorhanden"
+    in this same check - expected, not a regression: the live ViciDial endpoint isn't
+    reachable from this sandboxed dev environment, unrelated to the Verlauf feature.
+    Typecheck/lint clean, full suite green (41/41) after.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
