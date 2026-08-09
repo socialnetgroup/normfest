@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 import { placeToRecord, mergeCandidates, scoreNameMatch } from "@/lib/enrichment/places.mjs";
 
 const HIGHLIGHT_THRESHOLD = 0.8;
+const MAX_SHOWN = 5;
 
 type Review = { rating?: number; text?: { text?: string }; publishTime?: string };
 type Candidate = {
@@ -74,10 +75,20 @@ export function AmbiguousCandidatePicker({
     router.refresh();
   }
 
+  // Cap to the top 5 by name-match relevance (2026-08-09), Anis: "don't
+  // list more then 5, it's usually in the first 3 suggestions" - some rows
+  // had 12-20 raw Places candidates, most of them unrelated businesses that
+  // just matched a loose text search; sorting by the real match score
+  // before truncating means the likely-correct one is never the one cut.
+  const scored = candidates
+    .map((c) => ({ c, score: companyName ? scoreNameMatch(companyName, c.displayName?.text) : 0 }))
+    .sort((a, b) => b.score - a.score);
+  const shown = scored.slice(0, MAX_SHOWN);
+  const hiddenCount = scored.length - shown.length;
+
   return (
     <div className="flex flex-col gap-2">
-      {candidates.map((c) => {
-        const score = companyName ? scoreNameMatch(companyName, c.displayName?.text) : 0;
+      {shown.map(({ c, score }) => {
         const highlighted = score >= HIGHLIGHT_THRESHOLD;
         return (
           <div
@@ -121,6 +132,12 @@ export function AmbiguousCandidatePicker({
           </div>
         );
       })}
+      {hiddenCount > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          {hiddenCount} weitere{hiddenCount === 1 ? "r" : ""} Kandidat{hiddenCount === 1 ? "" : "en"} mit
+          niedrigerer Namensähnlichkeit ausgeblendet.
+        </p>
+      ) : null}
       <div className="flex flex-wrap items-center gap-2">
         <Button
           type="button"

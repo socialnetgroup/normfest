@@ -3666,6 +3666,97 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     pick instead of requiring the admin to read every candidate's address closely).
     Typecheck/lint clean, full suite green (41/41).
 
+52. **Enrichment queue: soft-match tier + top-5 candidate cap — 2026-08-09.** Anis: "don't
+    list more then 5, it's usually in the first 3 suggestions" + "do the soft match you
+    suggested to clean up a bit, since 1k too much by hand." Added a second, looser
+    auto-resolve tier (`NAME_MATCH_SOFT_THRESHOLD = 0.7`, `NAME_MATCH_SOFT_MARGIN = 1.3`,
+    `lib/enrichment/places.mjs`) alongside item 50's decisive tier - fires when the top
+    candidate's name match is high in absolute terms (≥70%) even without a strict 2x
+    margin over the runner-up, since a high absolute score is real signal on its own.
+    Refactored `pickResolution()`/the rescan script/the admin UI to share one
+    `bestNameMatch()` (decisive, then soft) so none of the three can drift apart on what
+    counts as a match. Ran the dry-run first, spot-checked the real matches (all looked
+    genuinely correct - punctuation/word-order variants of the same real business, e.g.
+    "Transporte Weber GmbH" → "Weber Transporte GmbH", "Nobilia-Werke J. Stickling
+    GmbH+Co. KG" → "nobilia-Werke J. Stickling GmbH & Co. KG"), then applied for real:
+    **28 more resolved, queue 1,047 → 1,019 → 986** (a few more had already resolved from
+    live testing in between). A modest additional cut on top of item 50's 244, honestly
+    reported as such - most of what's left genuinely has no decisive automatic answer.
+
+    Separately, `components/ambiguous-candidate-picker.tsx` now sorts candidates by real
+    name-match score and shows only the top 5 (`MAX_SHOWN`), with a small
+    "N weitere Kandidaten mit niedrigerer Namensähnlichkeit ausgeblendet" note when
+    truncated - some rows had 12-20 raw Places candidates (most of them unrelated
+    businesses that matched a loose text search), and Anis confirmed the real answer is
+    always near the top once sorted by relevance. Verified live: a real row showed "9
+    weitere Kandidaten... ausgeblendet" correctly, and the real total dropped to 986 in
+    the page header. Typecheck/lint clean, full suite green (41/41).
+
+53. **Fokus flyer, 2nd round of design feedback — shipped 2026-08-09.** Anis reviewed the
+    AI-art version (item 49) and gave five concrete notes, plus asked to see a fresh
+    AI-generated hero/accent set once done:
+    - **Logo aspect ratio was actually broken** - `drawCoverPage()`'s logo card computed
+      `drawImage`'s width from `cardH * aspect` but its height from a different base
+      (`cardH - 8`), so the two dimensions didn't share the source ratio and the logo
+      rendered visibly stretched. Fixed by deriving both width and height from the same
+      inner box (`innerH = 58`, `innerW = innerH * aspect`) and enlarged per "needs to be
+      bigger."
+    - **Sidebar texture**: the cover's dark text panel was a flat fill - added a subtle
+      off-center radial glow plus very faint diagonal hairlines (clipped to just that
+      panel, low enough opacity to never compete with the text on top).
+    - **Banner rearranged**: `drawOnlineOrderBanner()` redrawn full-bleed (edge to edge,
+      like the category header bars) instead of a MARGIN-indented box, with a left accent
+      bar and better-proportioned text - no longer reads as a leftover strip glued
+      between the product grid and the footer.
+    - **Real product descriptions added**: `products.description` (already
+      bullet-formatted text from `scripts/generate-product-descriptions.mjs`) is now
+      parsed into real bullets (`parseBullets()`) and rendered in the card when a
+      category earns the "detailed" layout.
+    - **Grid varies by real content, not a coin flip**: a category where ≥50% of its
+      cells have a description gets a wider 2-column "detailed" card (bigger image, room
+      for bullets); one without stays on the denser 3-column "compact" card - and every
+      row's height is now measured from its own real content (`drawProductCard()` called
+      once with `measureOnly=true` per card, same font/wrap logic as the real draw pass
+      so the two can never disagree) instead of one fixed height for every card in the
+      flyer.
+
+    Real bugs found via direct rendering, not assumed: forgot to actually send the
+    regenerated PDF the first time (generated it, reviewed it myself, moved on to other
+    work without using `SendUserFile`) - Anis had to ask "what happened with the flyer
+    generation fixes." Sent the real file once caught. Separately, the "show me a fresh
+    AI hero" ask hit a real wall: the $5 OpenAI credit from item 49's testing had run out
+    mid-session (`429 You have no credits remaining`) - the flyer correctly degraded to
+    the static fallback photo and plain category bars (the resilience built in item 49
+    working exactly as designed), but couldn't demonstrate fresh AI art until Anis adds
+    more credit. Reported this plainly rather than silently sending a fallback-only
+    render without explanation.
+
+    **A sixth, unprompted-by-the-punch-list finding from Anis mid-review**: "when there
+    is kinda same product with variations like the Schleifpapier, don't do 10 times same
+    picture, do it over the description x1 product." Checked the real active list before
+    building anything: multiple genuine same-photo variant families exist (e.g.
+    "Klett-Scheiben Normfest" - 7 rows, one per Art.-Nr., all sharing one image; two
+    "Mechanikerhandschuhe „NAPPA"" size families and two "Kupplungskopf" variants, 4 rows
+    each). New `groupByImage()` groups focus-list rows within a category by exact,
+    shared `products.image_path` (a real, exact signal - not a fuzzy name guess) into one
+    cell each; `drawProductCard()` now takes a cell (1 row, or a same-photo variant
+    family) and, for a family, draws the shared photo once with each variant's own
+    SKU/price/note as a compact line below (capped at 6 lines, "+N weitere Varianten" if
+    more) instead of N nearly-identical cards repeating the same photo. Description
+    bullets (when the category has them) still render once per family, since the real
+    description text is genuinely shared across size/pack-size variants of the same
+    product.
+
+    Verified end-to-end via the standalone generator against the real active list (no
+    writes) - rendered every page and visually confirmed all five fixes plus the variant
+    grouping: the logo renders at the correct proportions, the sidebar texture is visible
+    but subtle, the banner sits well-spaced and full-bleed on the last page, real
+    description bullets render under each detailed card, and - directly inspected on the
+    real "Fahrzeugteile NFZ" and "Werkstattausrüstung" pages - "Kupplungskopf Automatik,
+    mit Rückschlagventil" and "Mechanikerhandschuhe „NAPPA"" each now show one photo with
+    4 compact variant price lines instead of 4 duplicate cards. Typecheck/lint clean,
+    full suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

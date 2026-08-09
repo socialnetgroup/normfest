@@ -13,16 +13,16 @@
 //
 // This re-scores already-stored places_candidates (no new Places API calls -
 // same "free, safe to run any time" shape as the address-merge script),
-// reusing the exact same scoring (rankByNameMatch/decisive-match rule) that
-// lib/enrichment/places.mjs's pickResolution() now applies live during new
-// resolutions - one implementation, never two that can drift apart
-// (§3.2.6). This script exists to sweep the *existing* ambiguous backlog;
-// pickResolution() prevents new ones from needing it in the first place.
+// reusing the exact same scoring (bestNameMatch: decisive tier, then a
+// softer tier) that lib/enrichment/places.mjs's pickResolution() now
+// applies live during new resolutions - one implementation, never two that
+// can drift apart (§3.2.6). This script exists to sweep the *existing*
+// ambiguous backlog; pickResolution() prevents new ones from needing it.
 //
 // Usage: node scripts/rescan-ambiguous-by-name.mjs [--dry-run]
 import { createClient } from "@supabase/supabase-js";
 
-import { rankByNameMatch, NAME_MATCH_DECISIVE_THRESHOLD, NAME_MATCH_DECISIVE_MARGIN } from "../lib/enrichment/places.mjs";
+import { bestNameMatch } from "../lib/enrichment/places.mjs";
 
 process.loadEnvFile(".env.local");
 
@@ -83,29 +83,22 @@ async function main() {
       continue;
     }
 
-    const ranked = rankByNameMatch(candidates, companyName);
-    const top = ranked[0];
-    const runnerUp = ranked[1]?.score ?? 0;
-    const decisive =
-      top.score >= NAME_MATCH_DECISIVE_THRESHOLD && (runnerUp === 0 || top.score >= runnerUp * NAME_MATCH_DECISIVE_MARGIN);
-
-    if (!decisive) {
+    const match = bestNameMatch(candidates, companyName);
+    if (!match) {
       staysAmbiguous++;
       continue;
     }
 
     resolved++;
-    console.log(
-      `  [Name-Match ${top.score.toFixed(2)} vs. ${runnerUp.toFixed(2)}] "${companyName}" -> "${top.place.displayName?.text}" (${top.place.formattedAddress})`,
-    );
+    console.log(`  [Name-Match] "${companyName}" -> "${match.displayName?.text}" (${match.formattedAddress})`);
 
     if (!DRY_RUN) {
-      const { error } = await admin.from("company_enrichment").update(mergeSingle(top.place)).eq("id", row.id);
+      const { error } = await admin.from("company_enrichment").update(mergeSingle(match)).eq("id", row.id);
       if (error) console.log(`    Fehler: ${error.message}`);
     }
   }
 
-  console.log(`\nAufgelöst (eindeutiger Namens-Match): ${resolved}`);
+  console.log(`\nAufgelöst (Namens-Match): ${resolved}`);
   console.log(`Bleibt echt mehrdeutig: ${staysAmbiguous}`);
   if (DRY_RUN) console.log("\n--dry-run: keine Schreibvorgänge.");
 }
