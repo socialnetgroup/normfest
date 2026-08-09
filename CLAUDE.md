@@ -3311,6 +3311,86 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     image generation happens either - the product photos are real, already-owned catalog
     assets, not AI-generated or fetched from an external API.
 
+46. **Fokus flyer: full visual redesign to a "premium automotive B2B" system, per a
+    detailed 21-section brief — 2026-08-09.** Anis provided an explicit design brief
+    ("modern, premium... German workshop... Swiss/German editorial design... avoid cheap
+    supermarket flyer... avoid rainbow palette... premium B2B e-commerce cards") with hard
+    constraints: never change product names/SKUs/prices/validity dates, never invent or
+    remove products, preserve the Normfest brand.
+
+    **Real image-sourcing finding, decided before writing any code:** the brief's §2/§20
+    asked for a real "modern European workshop, car on lift" stock photo as the cover
+    hero. Searched Openverse (CC0/PDM/BY-licensed sources) with several query variations -
+    every result was either clipart/stickers or unrelated old-car/historic photos, nothing
+    resembling "premium commercial photography." Rather than ship a mediocre photo that
+    would undercut the brief's own "premium" goal, built an original illustrated hero
+    instead: a dark charcoal gradient, a subtle blueprint grid texture, a soft red
+    spotlight glow, and a simplified line-art car-on-a-lift icon (geometric shapes -
+    rounded-rect body, trapezoid cabin, two wheel circles, two lift posts - deliberately
+    abstract rather than attempting a photorealistic silhouette, which is safer to render
+    correctly in canvas and reads as a technical diagram, matching the brief's own
+    "industrial precision" language). Flagged this deviation to Anis directly rather than
+    silently substituting.
+
+    **What changed, following the brief section by section:**
+    - **Design tokens** (`TOKENS` object in `lib/flyer/generate-focus-flyer.mjs`):
+      charcoal/white/neutral-gray palette + one red accent (brief §4/§14/§15) - the old
+      6-color `CATEGORY_COLORS` rotation was removed entirely (violated the brief's
+      explicit "avoid rainbow palette, restrained" instruction).
+    - **Cover** (§2-3): campaign name (`list.name`, real data) is now the dominant
+      headline at 58px bold, not a generic "FOKUS" wordmark: NORMFEST® → campaign name →
+      validity → real product/category stat row → "Im Fokus" showcase (unchanged from the
+      prior pass). Dark charcoal hero replaces the earlier navy-blue gradient.
+    - **Category banners** (§7): numbered (01, 02, ...) charcoal bars with a blueprint-
+      grid texture and red accent underline, replacing the per-category color rotation -
+      one consistent dark treatment instead of "rainbow." No fabricated taglines under
+      category names (the brief's own example subtitles are explicitly "placeholders...
+      only if derivable from actual content" - nothing in the source data supports one, so
+      none was added, consistent with §6/§12's "do not invent marketing claims").
+    - **Product cards** (§5): white cards with a real drop shadow (`shadowBlur`/
+      `shadowOffsetY`), rounded corners, generous padding, price now upright bold (not the
+      old italic "discount flyer" slant) at ~2x the visual weight of the product name,
+      anchored to a fixed baseline near the card bottom so prices align across a row
+      regardless of name-wrap length (§15's "all prices in a column should align").
+    - **Badges** (§12): a "SET" badge (`detectBadge()`) fires only when the real price
+      note contains the literal word "Setpreis" - no invented "TOP-ANGEBOT"/percentage
+      claims, per the brief's own "only use claims factually supported by the source."
+    - **Typography**: kept Poppins (already bundled, in the brief's spirit of "modern
+      professional sans-serif") rather than fetching a new font family - no functional
+      difference from Inter/Manrope for this use.
+    - Page count, pagination algorithm, image downscale/PNG-embedding fix (item 45), and
+      footer are unchanged - already met the brief's requirements (multi-page, no single-
+      poster reduction, sharp real photos, unchanged contact block).
+
+    Verified end-to-end through the real API route with a throwaway inactive test list
+    (never the real active "August Kracher 2026" list - confirmed untouched in the DB
+    before/after): rendered cover and category pages, confirmed the numbered banners,
+    shadowed cards, dominant upright price, and SET badge all render correctly. Full suite
+    green (41/41), typecheck/lint clean.
+
+47. **Fokus product price/note editable before flyer generation — shipped same day.**
+    Anis, mid-redesign: "ich muss irgendwo, vor dem erstellen des flyers, die moglichkeit
+    haben, preise einzufugen/oder wegzulassen. Falls ich preis anschreibe, dann wir es bei
+    der erstellugn des flyers uebernommen." The flyer's price display has always been
+    extracted from `focus_list_products.note` via regex - there was just no UI to edit
+    that field after a product was added to a list, only to remove the whole row. New
+    `components/focus-product-note-edit.tsx` (`FocusProductNoteEdit`, admin-only, same
+    pencil-toggle pattern as `FocusListManage`'s rename) replaces the previously read-only
+    "SKU · note" line on `/fokus` with a clickable/editable one; saving with an empty
+    value sets `note` to `null` via a direct RLS-scoped update, which makes
+    `extractPrice()` return `null` and the price/divider section is cleanly omitted from
+    that product's card on the next-generated flyer - exactly "add or leave out a price"
+    per Anis's ask, no separate "hide price" flag needed since the existing extraction
+    logic already handles a missing note gracefully.
+
+    Verified live end-to-end (throwaway admin account + inactive test list, temporarily
+    activated to exercise the real `/fokus` UI and reverted immediately after - confirmed
+    the real active list untouched before/after): edited one product's note to a test
+    price and confirmed it persisted to the DB; cleared a second product's note entirely
+    and confirmed `note` became `null`; regenerated the flyer through the real API route
+    and confirmed the edited price showed correctly on the card and the cleared one
+    rendered cleanly with no price line and no layout gap. Full suite green (41/41) after.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
