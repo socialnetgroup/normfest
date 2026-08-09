@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { Activity, History, PhoneCall, Sparkles } from "lucide-react";
+import { Activity, History } from "lucide-react";
 
 import { AutoRefresh } from "@/components/auto-refresh";
 import { Badge } from "@/components/ui/badge";
@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { DialerStatusTable } from "@/components/dialer-status-table";
-import { SoftphoneDialpad } from "@/components/softphone-dialpad";
 import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { buildDialerAgentSummaries, fetchDialerAgentStatuses, type DialerAgentSummary } from "@/lib/dialer/status";
@@ -83,14 +82,7 @@ export default async function DialerPage({
     <div className="flex flex-col gap-6">
       {isAdmin ? <AutoRefresh intervalMs={4_000} /> : null}
       <div>
-        <h1 className="font-heading flex items-center gap-2 text-2xl font-semibold tracking-tight">
-          Dialer
-          <Badge variant="warning">Bald</Badge>
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Konzept-Vorschau: Anrufe direkt aus diesem Fenster starten, ohne zwischen Tools zu wechseln. Noch
-          nicht verbunden - unten ein Eindruck, wie das Softphone aussehen könnte.
-        </p>
+        <h1 className="font-heading text-2xl font-semibold tracking-tight">Dialer</h1>
       </div>
 
       {isAdmin ? (
@@ -176,34 +168,6 @@ export default async function DialerPage({
           </Card>
         </div>
       ) : null}
-
-      <Card>
-        <CardHeader>
-          <IconTitle icon={Sparkles}>Wie das funktionieren soll</IconTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
-          Anbindung an den bestehenden Dialer über dessen API, direkt aus diesem Fenster - Anruf starten
-          (z.B. per Klick von der Firmenprofil-Seite mit vorausgefüllter Nummer), Status live sehen, nach dem
-          Gespräch direkt Feedback eintragen, ohne das Tool zu wechseln. Ersetzt nicht den bestehenden Dialer
-          (der bleibt System of Record fürs eigentliche Telefonieren, CLAUDE.md §1) - reine
-          Bedienoberfläche/Anbindung. Live-Status ist seit heute angebunden (oben, nur Admin) - Anrufe direkt
-          auslösen fehlt noch, dafür wird eine separate Dialer-Funktion gebraucht, die bisher nicht bestätigt
-          ist.
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <IconTitle icon={PhoneCall}>Softphone (Beispiel-Layout)</IconTitle>
-          <p className="text-sm text-muted-foreground">
-            Ziffernblock funktioniert schon zur Eingabe - der Anruf-Button ist bewusst deaktiviert, es besteht
-            noch keine echte Verbindung.
-          </p>
-        </CardHeader>
-        <CardContent>
-          <SoftphoneDialpad />
-        </CardContent>
-      </Card>
     </div>
   );
 }
