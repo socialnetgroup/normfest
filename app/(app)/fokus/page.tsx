@@ -5,6 +5,7 @@ import { FocusItemRemoveButton } from "@/components/focus-item-remove-button";
 import { FocusListActivateButton } from "@/components/focus-list-activate-button";
 import { FocusListFlyerGenerateButton } from "@/components/focus-list-flyer-generate-button";
 import { FocusListManage } from "@/components/focus-list-manage";
+import { FocusProductNoteEdit } from "@/components/focus-product-note-edit";
 import { FocusProductSellForm } from "@/components/focus-product-sell-form";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -181,10 +182,12 @@ export default async function FokusPage() {
                                 <Link href={`/katalog/${row.products.id}`} className="font-medium hover:underline">
                                   {row.products.name}
                                 </Link>
-                                <div className="text-sm text-muted-foreground">
-                                  {row.products.sku}
-                                  {row.note ? ` · ${row.note}` : ""}
-                                </div>
+                                <div className="text-sm text-muted-foreground">{row.products.sku}</div>
+                                {isAdmin ? (
+                                  <FocusProductNoteEdit id={row.id} note={row.note} />
+                                ) : row.note ? (
+                                  <div className="text-sm text-muted-foreground">{row.note}</div>
+                                ) : null}
                               </div>
                               <div className="flex shrink-0 items-center gap-2">
                                 <Badge variant={soldCounts.get(row.products.id) ? "success" : "muted"}>
