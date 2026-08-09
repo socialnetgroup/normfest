@@ -3995,6 +3995,38 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     flat `cellW` became dead code once width became proportional), full
     suite green (41/41).
 
+    **Same-day follow-up: real validity-badge overflow bug.** Anis: "the
+    Gültig vom 01.08 is out of boundaries" - the bumped 14px badge font from
+    earlier in this round measured wider than `textPanelW` for the real
+    label ("Gültig vom 01.08. bis 31.08.2026"); the badge BOX width was
+    capped via `Math.min()`, but the TEXT itself was drawn uncapped and
+    visibly spilled past the box and the whole cover text panel. Measured
+    directly with the real registered font before guessing a fix: even at
+    10px the label was right at the edge of fitting, confirming this wasn't
+    a one-size-away miss. Fixed properly rather than picking a smaller fixed
+    size: the badge font now shrinks in 0.5px steps (14px→9px) until the
+    real label actually measures within bounds, so it can't recur for a
+    differently-worded validity string on a future list either. Also
+    increased the gap before the stat pills (26→36) per "shift the 64 and 8
+    a bit down." Typecheck/lint clean, no new PDF generated for this pass
+    per Anis's explicit ask (code fix only, verified by direct text-width
+    measurement against the real font/label rather than a fresh render).
+
+57. **Dialer softphone concept preview removed (2026-08-09).** Anis: "Softphone
+    im dialer entfernen und Wie das funktionieren soll. Brauchen wir nicht
+    mehr im menu" - the `/dialer` page (§13 item 13) originally shipped as a
+    concept-preview page (intro paragraph, a "Wie das funktionieren soll"
+    explainer card, and a working-but-disabled softphone dial-pad demo)
+    ahead of any real dialer integration; the Live-Status/Verlauf sections
+    added later (§14 items 13/24) are real, shipped features, not concept
+    previews. Removed the intro paragraph, the "Bald" heading badge (nothing
+    left on the page is actually "coming soon" - Live-Status/Verlauf are
+    both live today), the "Wie das funktionieren soll" card, and the
+    "Softphone (Beispiel-Layout)" card. `components/softphone-dialpad.tsx`
+    deleted outright (confirmed via grep it had no other usage) rather than
+    left as dead code. `/dialer` now shows only the real Live-Status and
+    Verlauf cards. Typecheck/lint clean, full suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
