@@ -3469,9 +3469,18 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     names/pricing drift fast, confirmed via web search + the official
     `developers.openai.com` docs rather than trusting a remembered/guessed model string):
     `gpt-image-1` is being retired Oct 2026, so `gpt-image-1.5` is the correct current
-    flagship - real per-image pricing verified at ~$0.03/image medium quality vs.
+    flagship - per-image pricing quoted online was ~$0.03/image medium quality vs.
     ~$0.13/image high, which is why `lib/ai/provider.mjs`'s new `IMAGE_QUALITY` constant
     defaults to `"medium"`.
+
+    **Real cost correction (2026-08-09, item 53's follow-up), Anis checked the actual
+    OpenAI billing dashboard:** a single full flyer regeneration (1 hero + 8 category
+    accents = 9 images at medium quality) cost **$0.49 real, not the ~$0.27-0.36
+    estimate** the $0.03/image quoted figure implied - roughly 1.5-2x higher, the same
+    class of "trust a real bill over a quoted/estimated rate" correction this project has
+    hit before with Anthropic and GCP costs (§13 M5/M8). At $0.49/regeneration, $5 of
+    credit covers roughly 10 full flyer regenerations - relevant since Anis's explicit
+    ask was to regenerate art on every single "Flyer generieren" click, not cache it.
 
     New `lib/ai/provider.mjs` additions: `IMAGE_MODEL = "gpt-image-1.5"`,
     `IMAGE_QUALITY = "medium"`, `getOpenAIClient()` - same one-place-to-swap-the-model
