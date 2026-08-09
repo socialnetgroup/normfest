@@ -3930,6 +3930,71 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     list and all temp files deleted after. Typecheck/lint clean, full suite
     green (41/41).
 
+56. **Fokus flyer round 4: hero scene variety, cover pill fixes, and a real
+    grid-alignment bug (stranded single cards) fixed — shipped 2026-08-09.**
+    Anis's next punch-list, testing item 55's output:
+    - **Hero scene variety.** Every generation had used the exact same
+      framing ("close-up on wheel/brake area"), which read as repetitive
+      even though each was a genuinely fresh AI call. `buildHeroPrompt()`
+      now picks randomly from 5 real workshop scenes each time (`HERO_
+      SCENES` in `lib/ai/flyer-images.mjs`): the original brake close-up,
+      a wide shot of a car on a lift, an open-engine-bay shot, a workbench
+      shot with a car visible behind, and two mechanics working together -
+      all still real, plausible workshop settings, never fabricated.
+      Verified: the very next generation came back as a genuinely different
+      composition (open engine bay, mechanic's face visible, "NORMFEST"
+      correctly readable on both cap and shirt).
+    - **Cover text sizing.** The validity badge ("Gültig vom...") hadn't
+      grown when the surrounding headline/tagline got bigger in item 55 -
+      bumped its font (12px→14px) and box size to match. The Aktions-
+      produkte/Kategorien stat pills were still cramped from being placed
+      side-by-side (each only getting half the panel width) - stacked them
+      vertically instead, each now using the full text-panel width and a
+      taller pill (42px→48px), per Anis: "you have more room, place them
+      one underneath the other."
+    - **Real grid-alignment bug found and fixed.** Anis: "the group photo
+      might have caused other products to move place so its kinda not well
+      gridded... merge some 2 tiles/products in 1 tile for those group
+      photos" - the round-3 fix gave every family cell the FULL page width
+      as its own row, which broke the surrounding grid rhythm. Reworked to
+      column-span packing instead: a family cell spans `min(2, cols)`
+      columns and can share a row with a single-product cell when there's
+      room, instead of always claiming the entire row (`generateFocus
+      ListFlyer`'s per-category loop). **Checked the real data before
+      assuming this alone would fix it, and found the actual root cause of
+      what Anis was seeing**: ~99.8% of the catalog now has a real
+      description (§13 M3/M4's bulk description-generation pass), so
+      `hasDesc` evaluates true for essentially every category in the real
+      active list, putting every category in 2-column "detailed" mode - and
+      a family cell's 2-column span exactly equals a 2-column grid's total
+      width, so it can never actually share a row with anything regardless
+      of the column-span fix. The real symptom this produced: a single
+      product landing right before a family in the cell order would get
+      stranded alone at half the row's width with a visible empty gap next
+      to it (confirmed directly against real category data, all 8 real
+      categories in the active list are 100% description coverage → 2-col
+      mode). Anis, once shown this: "its ok for family to fill row, but the
+      single products have to adapt. not 1 product in line." Fixed by
+      making each row's card widths proportional to the row's actual total
+      column-span used rather than the nominal column count - when a row is
+      fully packed this unit width equals the normal column width (no
+      change from before), but when a row has leftover columns (a lone
+      single stranded before a family, or a category's uneven last row) the
+      leftover width distributes across that row's own cards instead of
+      sitting empty. Verified: a single product that previously sat at half
+      width with a gap next to it now stretches to the row's full width;
+      normal fully-packed 2-up single/single rows are pixel-identical to
+      before; families still correctly fill their own row when nothing else
+      can share it.
+
+    Verified end-to-end: rendered the full real active list ("August
+    Kracher 2026", read-only, no writes) and visually confirmed every fix
+    together across all 7 pages - no stranded singles anywhere, families
+    still read cleanly, cover pills/badge properly sized. Typecheck/lint
+    clean (one real `no-unused-vars` warning surfaced and fixed - the old
+    flat `cellW` became dead code once width became proportional), full
+    suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
