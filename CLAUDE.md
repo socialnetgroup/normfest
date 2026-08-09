@@ -3836,6 +3836,100 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     confirmed unchanged before and after, test list and all temp files deleted after.
     Typecheck/lint clean, full suite green (41/41).
 
+55. **Fokus flyer round 3: reliable AI hero + real workwear branding, real
+    background removal for grouped photos, full-width family cards, cover
+    redesign — shipped 2026-08-09.** Anis's punch-list from testing item 54's
+    output:
+    - **Hero repeating the same photo, root-caused.** `generateHeroImage()`
+      silently falls back to a static reference photo whenever the OpenAI
+      call fails - and what Anis saw twice was exactly that fallback, not a
+      duplicate generation (the fallback file was still the item-48-era
+      cropped ChatGPT reference mockup, easy to recognize as "the same
+      picture" once flagged). Retries bumped from 1 to 2 (3 attempts total,
+      `lib/ai/flyer-images.mjs`'s `RETRY_DELAYS_MS`) to survive Tier-1
+      per-minute rate-limit bursts (up to ~9 images requested per flyer) more
+      often before falling back at all. Separately, generated a **fresh**
+      static fallback photo (same style/prompt, own real AI generation, not
+      reused pixels) to replace the recognizable reference crop, so even a
+      rare fallback doesn't look like an obvious repeat.
+    - **Real NORMFEST branding on workwear, per Anis's ask** ("if possible
+      and showing on things like tshirts, caps... write Normfest in white
+      font on the dark shirt"): added a narrow, explicit exception to the
+      hero prompt's no-text rule (`WORKWEAR_BRAND_DIRECTIVE`) - only the real
+      company name, only on the mechanic's visible workwear, never other
+      random/fabricated text. Real risk flagged to Anis and accepted: text
+      rendering in image models is imperfect even for short real words, so a
+      given generation can occasionally come out slightly garbled - the
+      practical remedy is the same as any AI-art miss, regenerate. First real
+      test came out perfectly legible ("NORMFEST" correctly spelled on the
+      shirt back) - not guaranteed every time, but working as intended.
+    - **Real background removal for grouped/staged photos** (2026-08-09,
+      Anis: "the background is pure white, should be super easy and
+      precise... move it closer so it looks more staged" - accepting the
+      risk flagged when this was proposed). `removeWhiteBackground()` reads
+      raw pixel data and makes near-white pixels transparent with a soft
+      feathered edge band (not a hard cutoff) - deterministic thresholding,
+      not AI, so no real product pixel is ever altered, only background
+      pixels are dropped. Applied only inside the fanned/overlapping group
+      compositing (`getGroupCutoutImage()`, cached per image like the
+      existing downscale cache) - single-product tiles keep their plain
+      white-background photo untouched, exactly as before. With real
+      collision no longer possible, `drawImageGroup()`'s fan spacing was
+      tightened (offset 0.4x → 0.27x) so the staged group reads tighter/more
+      deliberate. Verified visually across several real families with very
+      different photo content (Aerofit scent cans, metallic Kupplungskopf
+      connectors, fabric/leather gloves) - clean cutouts with no visible
+      seams or holes in this pass; the known risk (a product with white
+      elements on it losing a chunk) simply didn't occur on the real photos
+      tested, not proof it never will on some future one.
+    - **Family/variant cards now span the full row width** instead of
+      matching a single grid cell (2026-08-09, Anis: "they need to take more
+      place... mix it up so the whole flyer doesn't look boring in only one
+      layout raster"). The row-packing loop
+      (`generateFocusListFlyer`'s per-category loop) now gives any cell with
+      `cellRows.length > 1` its own full-width row (`FAMILY_IMG_BOX = 120`,
+      bigger than either grid's normal image box) while ordinary single-
+      product cells keep packing the normal 2/3-column grid - this is what
+      actually produces the visual variety, not a coin flip: some rows are
+      wide feature cards, others the denser normal grid, driven by which
+      products are real variant families. Verified: the real Aerofit family
+      (now with room to spare) shows its full 7-scent list with zero
+      truncation needed; the Kupplungskopf/glove same-image families render
+      as clean wide rows with no layout overflow.
+    - **Cover redesign**, per Anis's punch-list: headline bumped 34px→42px
+      (with proportionally bigger line height), general cover text sizes
+      bumped throughout. The tagline moved from a small fixed line pinned to
+      the page bottom up to directly under the heading, and turned into a
+      real designed element: **FAIR / ONLINE / KUNDENORIENTIERT /
+      UNSCHLAGBAR / SYMPATHISCH**, one word per line with a blue accent rail
+      and each word's first letter drawn bold/bright-white against the
+      rest of the word in a muted tone - spelling **F-O-K-U-S** down the
+      first letters (Anis's own catch on the existing four words; "
+      Sympathisch" added specifically to complete the acrostic). The stat
+      row (Aktionsprodukte/Kategorien) was rebuilt from two bare number/
+      label pairs into two separated pill cards, each with a small hand-
+      drawn vector icon (a price-tag icon for Aktionsprodukte, a 2x2 grid
+      icon for Kategorien) - per Anis: "add symbols... separate it."
+      **Confirmed unchanged, not a new risk:** `productCount`/
+      `categoryCount` were already computed live from the real list's actual
+      rows/categories at generation time (`generateFocusListFlyer`, not
+      hardcoded) before this redesign - verified this stayed true (real
+      counts 64/8 on the real list, 15/4 on a throwaway test list with
+      different content) rather than assuming it.
+
+    Verified end-to-end: rendered the full real active list ("August Kracher
+    2026", read-only, no writes) across all these changes together and
+    visually confirmed every page - sharp fresh hero photo with correct
+    "NORMFEST" branding, FOKUS acrostic tagline, icon stat pills, wide clean
+    family cards with no white-box seams. Separately generated against a
+    throwaway inactive test list (a real mix of a scent family, a same-image
+    family, and singles, across 4 categories) to confirm the generator works
+    standalone with different real content, not just against the active
+    list's specific data - correct output, correct dynamic counts (15/4),
+    real active list's `pdf_path` confirmed unchanged before and after, test
+    list and all temp files deleted after. Typecheck/lint clean, full suite
+    green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
