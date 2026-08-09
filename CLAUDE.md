@@ -3391,6 +3391,61 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     and confirmed the edited price showed correctly on the card and the cleared one
     rendered cleanly with no price line and no layout gap. Full suite green (41/41) after.
 
+48. **Fokus flyer: item 46's "premium" redesign rejected, replaced with a 1:1 copy of
+    Anis's own reference mockup — 2026-08-09.** Anis, after seeing item 46's charcoal/
+    editorial redesign live: "I mean the last one was better, you did shit designing.
+    changed literraly the color of the front page lol." Reverted
+    `lib/flyer/generate-focus-flyer.mjs` to the prior, previously-approved version (`git
+    show 3e662ee:lib/flyer/generate-focus-flyer.mjs`, byte-identical PDF output confirmed
+    against the pre-redesign baseline) rather than trying to patch the rejected direction.
+
+    Anis then supplied a real reference: a ChatGPT-generated mockup image (a 3x3 grid of
+    9 flyer pages, built from this app's own real product/price data) saved to
+    `input/ChatGPT Image Aug 9, 2026, 12_51_01 PM.png`, with the explicit instruction:
+    "copy it 1:1 in flyer format... just make the prices red" (the reference itself shows
+    plain black prices - red is Anis's one deliberate deviation). Cropped and visually
+    inspected individual cells at 2-3x zoom (cover, a mid-page category spread, the final
+    page) before writing any code, rather than guessing from the thumbnail - this
+    surfaced a real structural finding: the reference's product cards are laid out
+    **image-LEFT / text-RIGHT** (name, Art.-Nr., price, unit note stacked beside the
+    photo), fundamentally different from every card layout built earlier this session
+    (which stacked the image on top of the text). Full rebuild of
+    `lib/flyer/generate-focus-flyer.mjs` around this reference:
+    - **Category headers**: near-black bar (`DARK_BAR`) with a blue rounded-square
+      numbered badge (`BLUE_BADGE`, "01", "02", ...) + bold white category name -
+      replaces both the earlier `CATEGORY_COLORS` rainbow rotation and item 46's charcoal
+      treatment.
+    - **Product cards**: light gray card (`CARD_BG`/`CARD_BORDER`) with the photo boxed
+      on the left and name/Art.-Nr./price/note stacked to its right - a genuine rewrite
+      of `drawProductCell`, not a palette swap.
+    - **Prices**: bold red (`RED`), the one explicit deviation from the reference.
+    - **Closing CTA banner**: a new `drawOnlineOrderBanner()` - dark bar with a
+      vector-drawn cart icon + "ALLES ONLINE BESTELLEN: www.normfest-shop.com", matching
+      the reference's final page, rendered once between the last product grid and the
+      footer.
+    - **Cover**: real photo, not baked reference text. The reference's own cover cell has
+      Anis's chosen headline/dates/stats already rendered as pixels (it's an AI-generated
+      image) - a naive full-cell crop as a background produced double text once this
+      code's own dynamic vector text (real `list.name`/dates/counts, so the flyer stays
+      data-driven for any future list) was drawn on top. Fixed by cropping only the
+      clean photographic region (the mechanic-and-car portion, avoiding the reference's
+      own wordmark/badge/stat-row pixels) to `assets/flyer/cover-bg.png`, then rebuilding
+      the cover as a two-panel layout - solid dark left panel for our own text, the real
+      cropped photo as a right-hand strip with a soft seam gradient - rather than a
+      full-bleed background, since the crop's own aspect ratio doesn't stretch cleanly to
+      full A4 without distorting the photo. Anis's explicit go-ahead to use this specific
+      file covers only this cropped photo region, not the reference's baked-in text.
+
+    Verified end-to-end: rendered the standalone generator's output to PNG (cover +
+    interior + final page) and visually confirmed no leftover baked text, correct
+    image-left/text-right cards, and the CTA banner in the right place - then re-verified
+    through the real `POST /api/admin/fokus/[id]/flyer` route (throwaway inactive test
+    list with 6 real products cloned from the real active list, throwaway admin session
+    created and deleted after) to confirm the route's own auth/Storage-upload path
+    produces the same result, not just the standalone script. Confirmed the real active
+    "August Kracher 2026" list's `pdf_path` was byte-identical before and after every
+    test run. Typecheck/lint clean, full suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
