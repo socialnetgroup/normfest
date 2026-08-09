@@ -3,9 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
-import { placeToRecord, mergeCandidates } from "@/lib/enrichment/places.mjs";
+import { placeToRecord, mergeCandidates, scoreNameMatch } from "@/lib/enrichment/places.mjs";
+
+const HIGHLIGHT_THRESHOLD = 0.8;
 
 type Review = { rating?: number; text?: { text?: string }; publishTime?: string };
 type Candidate = {
@@ -21,9 +24,11 @@ type Candidate = {
 
 export function AmbiguousCandidatePicker({
   companyId,
+  companyName,
   candidates,
 }: {
   companyId: string;
+  companyName?: string;
   candidates: Candidate[];
 }) {
   const router = useRouter();
@@ -71,36 +76,51 @@ export function AmbiguousCandidatePicker({
 
   return (
     <div className="flex flex-col gap-2">
-      {candidates.map((c) => (
-        <div key={c.id} className="flex items-center justify-between gap-3 rounded-lg border p-2.5 text-sm">
-          <label className="flex min-w-0 items-center gap-2">
-            <input
-              type="checkbox"
-              checked={checked.has(c.id)}
-              onChange={() => toggle(c.id)}
-              className="size-4 shrink-0"
-              aria-label={`${c.displayName?.text ?? "Kandidat"} für Zusammenführung auswählen`}
-            />
-            <span className="min-w-0">
-              <span className="font-medium">{c.displayName?.text ?? "(ohne Namen)"}</span>{" "}
-              <span className="text-muted-foreground">{c.formattedAddress}</span>
-              {c.rating !== undefined ? (
-                <span className="text-muted-foreground"> · {c.rating}/5 ({c.userRatingCount ?? 0})</span>
-              ) : null}
-            </span>
-          </label>
-          <Button
-            type="button"
-            variant="outline"
-            size="xs"
-            className="shrink-0"
-            disabled={pending !== null}
-            onClick={() => choose(c)}
+      {candidates.map((c) => {
+        const score = companyName ? scoreNameMatch(companyName, c.displayName?.text) : 0;
+        const highlighted = score >= HIGHLIGHT_THRESHOLD;
+        return (
+          <div
+            key={c.id}
+            className={
+              "flex items-center justify-between gap-3 rounded-lg border p-2.5 text-sm" +
+              (highlighted ? " border-success-foreground/40 bg-success/10" : "")
+            }
           >
-            {pending === c.id ? "..." : "Auswählen"}
-          </Button>
-        </div>
-      ))}
+            <label className="flex min-w-0 items-center gap-2">
+              <input
+                type="checkbox"
+                checked={checked.has(c.id)}
+                onChange={() => toggle(c.id)}
+                className="size-4 shrink-0"
+                aria-label={`${c.displayName?.text ?? "Kandidat"} für Zusammenführung auswählen`}
+              />
+              <span className="min-w-0">
+                {highlighted ? (
+                  <Badge variant="success" className="mr-1.5 align-middle">
+                    Name-Match {Math.round(score * 100)}%
+                  </Badge>
+                ) : null}
+                <span className="font-medium">{c.displayName?.text ?? "(ohne Namen)"}</span>{" "}
+                <span className="text-muted-foreground">{c.formattedAddress}</span>
+                {c.rating !== undefined ? (
+                  <span className="text-muted-foreground"> · {c.rating}/5 ({c.userRatingCount ?? 0})</span>
+                ) : null}
+              </span>
+            </label>
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              className="shrink-0"
+              disabled={pending !== null}
+              onClick={() => choose(c)}
+            >
+              {pending === c.id ? "..." : "Auswählen"}
+            </Button>
+          </div>
+        );
+      })}
       <div className="flex flex-wrap items-center gap-2">
         <Button
           type="button"

@@ -12,17 +12,17 @@
 // matches the real company.
 //
 // This re-scores already-stored places_candidates (no new Places API calls -
-// same "free, safe to run any time" shape as the address-merge script) using
-// the same normalize/jaccard word-overlap approach already proven elsewhere
-// in this app (scripts/detect-catalog-duplicates.mjs,
-// scripts/fill-representative-images.mjs). Auto-resolves only when the top
-// candidate's name match is DECISIVE (score >= 0.5 AND at least double the
-// runner-up's score) - conservative on purpose, since a wrong auto-pick here
-// means showing an agent someone else's Google reviews as if they were the
-// real company's. Anything else stays in the manual queue.
+// same "free, safe to run any time" shape as the address-merge script),
+// reusing the exact same scoring (rankByNameMatch/decisive-match rule) that
+// lib/enrichment/places.mjs's pickResolution() now applies live during new
+// resolutions - one implementation, never two that can drift apart
+// (§3.2.6). This script exists to sweep the *existing* ambiguous backlog;
+// pickResolution() prevents new ones from needing it in the first place.
 //
 // Usage: node scripts/rescan-ambiguous-by-name.mjs [--dry-run]
 import { createClient } from "@supabase/supabase-js";
+
+import { rankByNameMatch, NAME_MATCH_DECISIVE_THRESHOLD, NAME_MATCH_DECISIVE_MARGIN } from "../lib/enrichment/places.mjs";
 
 process.loadEnvFile(".env.local");
 
@@ -30,39 +30,6 @@ const DRY_RUN = process.argv.includes("--dry-run");
 const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
-
-const SCORE_THRESHOLD = 0.5;
-const MARGIN_MULTIPLIER = 2;
-
-// Legal-form and generic Kfz-industry words are near-universal in this
-// dataset ("Autohaus", "KFZ", "GmbH"...) and would inflate the overlap score
-// between two completely unrelated shops if not filtered - the whole point
-// is to find the DISTINGUISHING part of the name.
-const STOPWORDS = new Set([
-  "gmbh", "co", "kg", "ohg", "ek", "ug", "ag", "gbr", "mbh", "und", "der",
-  "die", "das", "von", "im", "in", "auto", "autos", "autohaus", "kfz",
-  "werkstatt", "meisterbetrieb", "service", "servicecenter", "center",
-  "technik", "handel", "vertrieb", "reparatur", "fahrzeug", "fahrzeuge",
-  "kraftfahrzeuge", "e", "k", "inh",
-]);
-
-function normalize(name) {
-  return new Set(
-    (name ?? "")
-      .toLowerCase()
-      .replace(/[^a-z0-9äöüß\s]/g, " ")
-      .split(/\s+/)
-      .filter((w) => w.length > 1 && !STOPWORDS.has(w)),
-  );
-}
-
-function jaccard(a, b) {
-  if (a.size === 0 || b.size === 0) return 0;
-  let intersection = 0;
-  for (const t of a) if (b.has(t)) intersection++;
-  const union = a.size + b.size - intersection;
-  return union === 0 ? 0 : intersection / union;
-}
 
 async function fetchAllAmbiguous() {
   const rows = [];
@@ -111,19 +78,16 @@ async function main() {
   for (const row of rows) {
     const companyName = row.companies?.name;
     const candidates = row.places_candidates ?? [];
-    if (!companyName || candidates.length === 0) {
+    if (!companyName || candidates.length < 2) {
       staysAmbiguous++;
       continue;
     }
 
-    const companyTokens = normalize(companyName);
-    const scored = candidates
-      .map((c) => ({ place: c, score: jaccard(companyTokens, normalize(c.displayName?.text)) }))
-      .sort((a, b) => b.score - a.score);
-
-    const top = scored[0];
-    const runnerUp = scored[1]?.score ?? 0;
-    const decisive = top.score >= SCORE_THRESHOLD && (runnerUp === 0 || top.score >= runnerUp * MARGIN_MULTIPLIER);
+    const ranked = rankByNameMatch(candidates, companyName);
+    const top = ranked[0];
+    const runnerUp = ranked[1]?.score ?? 0;
+    const decisive =
+      top.score >= NAME_MATCH_DECISIVE_THRESHOLD && (runnerUp === 0 || top.score >= runnerUp * NAME_MATCH_DECISIVE_MARGIN);
 
     if (!decisive) {
       staysAmbiguous++;

@@ -3614,6 +3614,58 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     Typecheck/lint clean, full suite green (41/41) - this pass only touched
     `company_enrichment` data via existing legitimate script paths, no schema/RLS changes.
 
+51. **Same-day follow-up on item 50: fixed the display cap, baked the fix into live
+    resolution (not just the backlog sweep), and added confidence highlighting -
+    2026-08-09.** Anis: "in the enrichment menu tab, if make it to show number greater
+    then 1000, atm it just shows 1000 while beeing 1000+" + "i will do the api enrichment
+    for all agents, what need to be done to minimazie this in preparation to the massive
+    import" + "can you highlight where you think the match is 80%+ for manual check."
+
+    **The display bug was the same PostgREST-1000-row-cap class of bug as item 50's
+    script fix, just in the UI this time.** `/admin/enrichment`
+    (`app/(app)/admin/enrichment/page.tsx`) fetched the ambiguous list with no
+    `count`/`.range()` and used `ambiguous.length` as the displayed total - both the
+    displayed count AND the fully-rendered list (all 1,047+ rows on one page) were real
+    problems at this scale, not just the count. Fixed both: a real
+    `count: "exact", head: true` query for the header ("Unklare Treffer (1047)" - verified
+    live, no longer capped), and actual pagination (`PAGE_SIZE = 20`, `?page=` param,
+    Zurück/Weiter links) so the page renders one page's worth of candidate pickers at a
+    time instead of all 1,047+.
+
+    **"Minimize this before the massive import"**: the real fix was moving item 50's
+    name-similarity scoring from an after-the-fact backlog sweep into the LIVE resolver
+    itself. Extracted the scoring (`scoreNameMatch`, `rankByNameMatch`,
+    `NAME_MATCH_DECISIVE_THRESHOLD`/`_MARGIN`) into `lib/enrichment/places.mjs` -
+    `pickResolution()` now tries a decisive name match as one more auto-resolve step
+    before falling through to `ambiguous`, right alongside the existing PLZ/address
+    checks. Both real entry points Anis would use for the upcoming run
+    (`scripts/enrich-pilot.mjs`/`scripts/enrich-places.mjs` for the CLI batch,
+    `app/api/enrich/route.ts` for the on-demand button) call this same
+    `pickResolution()` under the hood, so every company resolved from now on gets this
+    check automatically - no separate rescan needed afterward for new companies.
+    `scripts/rescan-ambiguous-by-name.mjs` (item 50) was refactored to import and reuse
+    this same shared logic instead of its own copy, so the live path and the backlog-sweep
+    script can never drift apart on what counts as a match (§3.2.6) - re-ran it after the
+    refactor to confirm identical behavior (0 new matches, since the 244 real ones were
+    already cleared by item 50).
+
+    **80%+ highlighting**: `components/ambiguous-candidate-picker.tsx` now takes a
+    `companyName` prop, scores every candidate against it with the same shared
+    `scoreNameMatch()`, and renders a green `Badge` ("Name-Match NN%") + a tinted card
+    border on any candidate scoring ≥80% - a visual nudge for the fast, common case
+    without ever auto-picking on the admin's behalf (still fully manual - the picker
+    still requires a real click).
+
+    Verified live end-to-end (throwaway admin test account, deleted after): the real
+    page now shows the correct total (1,047), real pagination ("Seite 1 von 53" -
+    1,047/20 ≈ 52.35, correctly rounds up), and real 80%+ badges rendering on genuine
+    close-name-match rows still sitting in the queue (e.g. "Autozentrum Köln" showing
+    two different 100%-match candidates - a case that's still genuinely ambiguous
+    between two near-identically-named businesses, correctly held back from
+    auto-resolving by the decisive-margin rule, now visually flagged for a fast manual
+    pick instead of requiring the admin to read every candidate's address closely).
+    Typecheck/lint clean, full suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
