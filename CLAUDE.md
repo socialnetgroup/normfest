@@ -3766,6 +3766,76 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     4 compact variant price lines instead of 4 duplicate cards. Typecheck/lint clean,
     full suite green (41/41).
 
+54. **Fokus flyer: scent/flavor variant families grouped onto one card, real photo
+    "group shot" compositing, and a real truncation bug fixed - shipped 2026-08-09.**
+    Anis, after seeing item 53's polish pass: "5 same products (for example air
+    freshener) to stand out etc... could be wrong product or?" then, once told
+    AI-altering real product photos would risk misrepresenting them, confirmed:
+    "Grouping same family photos as well, since mainly just difference in 'smell',
+    this could be done with one sentence available in scent 1, 2, 3, 4, 5 etc... And
+    that would break the 'same boring' look."
+
+    Deliberately did NOT reach for AI image generation/editing on actual product
+    photos for this - same reasoning as never letting AI touch real catalog data
+    elsewhere in this app (§3.2.6/§9's guardrails): a model asked to "combine" or
+    "restyle" real product photos can drift on exact visual details (wrong color,
+    garbled label), which would misrepresent what a customer actually receives. Item
+    53's AI image calls (hero + category accent art, gpt-image-1.5) stay scoped to
+    decorative art only, never product photography.
+
+    `groupByImage()` (item 53, exact-same-`image_path` families like glove sizes)
+    already existed; added a second, narrower grouping pass, `groupByScentVariant()`,
+    for families whose photos genuinely DIFFER (each scent has its own can color) but
+    are still the same real product line. **Real finding, tested before writing any
+    production code:** name-similarity alone is NOT a safe signal here - scored the
+    real "Geruchsvernichter und Lufterfrischer Aerofit" scent family (7 real SKUs)
+    against the real "Hochdruck-Haftschmierfett Black/Protect/Ultra" grease line (a
+    genuinely different product line) and found the grease line scores a HIGHER
+    Jaccard word-overlap (max 0.80) than some true same-family scent pairs (min
+    0.27) - both patterns are structurally "shared base phrase + one differentiator
+    word," so no single threshold could separate them safely. Used a combined signal
+    instead, requiring both to agree: the same 8-character SKU prefix (Normfest's own
+    real numbering scheme) AND an explicit `(Duft N: Scent)` marker already present in
+    the source `note` text (the data's own statement "this is a scent choice," not an
+    inference). Verified against the real active list: correctly groups all 7 real
+    Aerofit rows and correctly leaves the grease line ungrouped (its notes carry no
+    "Duft" marker) - confirmed visually in the rendered PDF, not just by code review.
+
+    New `drawImageGroup()` fans up to 5 real, already-downscaled photos within a card
+    (rotation/offset/drop-shadow) so even a single repeated photo reads as a staged
+    product group instead of one flat image - used for every variant family, same-
+    image or different-image. 100% real, unaltered product photos; only their on-page
+    arrangement is synthetic. `sharedBaseName()` computes the real shared family name
+    (every word from the first member's name that also appears, case/ligature-
+    normalized, in every other member's name - e.g. correctly yields "Geruchsvernichter
+    und Lufterfrischer Aerofit," always a real substring, never an invented summary).
+    The scent card shows one price (min, "ab X €" if prices vary), one "Erhältlich in:
+    ..." sentence, and the real SKU list - instead of 7 near-identical cards.
+
+    **Real bug found and fixed by rendering and visually inspecting the output before
+    trusting it, same discipline as everywhere else in this app:** the first version's
+    "Erhältlich in:" and "Art.-Nr." lines used a plain `wrapText(...).slice(0, N)` /
+    first-line-only extraction, which silently cut off mid-list with no indication -
+    e.g. "Art.-Nr. 2000-309-410," rendered with a dangling trailing comma and 6 real
+    SKUs missing, looking like corrupted data rather than a deliberate truncation.
+    Fixed with a new `fitItemList(ctx, items, prefix, maxWidth, maxLines)` helper that
+    tries the full real list first, and only if it doesn't fit, progressively drops
+    trailing items and appends an honest `+N weitere` until it fits - so the card
+    always shows either the complete real list or a clearly-labeled partial one, never
+    a silent cutoff. Re-verified after the fix: the same Aerofit card now correctly
+    shows "Coolwater, Zitrus, Kirsche +4 weitere" and "Art.-Nr. 2000-309-410 +6
+    weitere."
+
+    Verified end-to-end: rendered the full real active list ("August Kracher 2026",
+    read-only, no writes) and visually confirmed every page, including the grease line
+    staying correctly ungrouped next to the correctly-grouped Aerofit card and an
+    existing `groupByImage` family's own "+1 weitere Varianten" line rendering
+    unaffected. Separately generated against a throwaway, inactive test list (7 real
+    Aerofit rows copied over) to confirm the generator works standalone, not just as a
+    read against the active list - correct output, real active list's `pdf_path`
+    confirmed unchanged before and after, test list and all temp files deleted after.
+    Typecheck/lint clean, full suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
