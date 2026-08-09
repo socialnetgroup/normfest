@@ -10,8 +10,11 @@ import { createClient } from "@/lib/supabase/server";
 // (reads every product/image in the list regardless of RLS, same as the
 // VIS import's "a full refresh legitimately touches rows RLS isn't meant to
 // gate for admins" reasoning). Image downloads (one Storage round-trip per
-// unique product photo) can make a large list take a while.
-export const maxDuration = 60;
+// unique product photo) can make a large list take a while - bumped from 60s
+// (2026-08-09, AI hero/category art): real gpt-image-1.5 calls for a hero +
+// up to ~8 category accents run partly in parallel but can still take
+// 30-90s total, especially with a Tier 1 OpenAI rate-limit retry.
+export const maxDuration = 300;
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

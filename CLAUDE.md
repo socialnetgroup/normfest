@@ -3446,6 +3446,106 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     "August Kracher 2026" list's `pdf_path` was byte-identical before and after every
     test run. Typecheck/lint clean, full suite green (41/41).
 
+49. **Fokus flyer: real AI image generation (OpenAI gpt-image-1.5) for the hero + category
+    accent photos — shipped 2026-08-09.** Anis, after item 48: "not the quality I expect
+    (low resolution hero image etc.)... Lets use AI image generation etc where its needed
+    to make it a real deal flyer... take the best of 2 worlds" - proposed a fuller
+    "design director" architecture (a planning LLM call + generated design-spec JSON +
+    multiple generated images). Recommended a narrower v1 instead (confirmed via
+    `AskUserQuestion`): keep every deterministic element from item 48 exactly as-is (dark
+    numbered category bars, image-left/text-right product cards, prices/SKUs/names -
+    never AI-rendered, same §3.2.6 "never fabricate" discipline that already ruled out
+    letting a model draw real prices) and only replace the **cover hero photo** with a
+    real generated image. Anis's actual answer: go further than that baseline too - "Hero
+    + category accent images" (one generated photo per category, blended into that
+    category's header bar) and **regenerate on every click, not cached** ("so every flyer
+    looks different... seasonal themes where applicable"), explicitly not price-sensitive
+    ("dont worry about the price, i have 5euro credit"). He also uploaded the real
+    Normfest logo file (`input/Normfest Logo.png`) specifically so it - not an
+    AI-fabricated wordmark - appears on the cover.
+
+    `OPENAI_API_KEY` added to `.env.local` (gitignored, same as every other provider key
+    per §12 key hygiene). Researched the current real API before writing any code (model
+    names/pricing drift fast, confirmed via web search + the official
+    `developers.openai.com` docs rather than trusting a remembered/guessed model string):
+    `gpt-image-1` is being retired Oct 2026, so `gpt-image-1.5` is the correct current
+    flagship - real per-image pricing verified at ~$0.03/image medium quality vs.
+    ~$0.13/image high, which is why `lib/ai/provider.mjs`'s new `IMAGE_QUALITY` constant
+    defaults to `"medium"`.
+
+    New `lib/ai/provider.mjs` additions: `IMAGE_MODEL = "gpt-image-1.5"`,
+    `IMAGE_QUALITY = "medium"`, `getOpenAIClient()` - same one-place-to-swap-the-model
+    pattern as the existing Anthropic tiers, kept as its own export since image generation
+    doesn't fit the bulk/analyze/chat text-tier enum. New `lib/ai/flyer-images.mjs`:
+    `generateHeroImage(listName)` (portrait `1024x1536`) and
+    `generateCategoryAccentImages(categoryNames)` (landscape `1536x1024` each, concurrency
+    capped at 3 - a brand-new OpenAI org sits on a low Tier 1 images-per-minute cap).
+    Every prompt carries an explicit "no text, no numbers, no logos, no watermarks"
+    directive - gpt-image models are known to garble rendered text, and this app was
+    never going to let an AI draw a real price anyway. Both functions degrade gracefully
+    per-image on failure (`null` in the Map/return value) rather than failing the whole
+    flyer - a category simply renders its header without a photo texture, the cover falls
+    back to the item-45/46 static cropped photo.
+
+    **Three real bugs found and fixed via direct testing, not assumed away** (same
+    "test 2-3 before scaling" discipline as every earlier AI-batch feature in this app):
+    1. **Silent-failure gap in the fallback path.** The first cut only fell back to the
+       static cover photo when `heroImageBuffer` was `null` (i.e. when
+       `generateHeroImage` itself had already given up) - but if the AI buffer came back
+       non-null and merely failed to *decode*, the code fell straight to the plain
+       gradient instead of trying the static photo. Fixed: `drawCoverPage` now tries the
+       AI buffer, then the static file, then the gradient, in that order, with the
+       intermediate failure logged instead of silently swallowed.
+    2. **Real, reproducible decode failure, root-caused by inspecting raw PNG bytes, not
+       guessed:** `@napi-rs/canvas`'s `loadImage()` threw a misleading `"Invalid SVG
+       image"` error on every gpt-image-1.5 output. Dumped the PNG chunk list directly
+       (`IHDR/caBX/IDAT/IEND`) and found the cause - OpenAI embeds a `caBX` chunk (a real,
+       spec-legal, ~25KB C2PA content-provenance manifest) ahead of `IDAT`, and
+       `@napi-rs/canvas`'s parser can't handle a PNG carrying it. Fixed by stripping every
+       chunk except `IHDR/PLTE/tRNS/IDAT/IEND` before decoding
+       (`stripUnsupportedPngChunks()`) - confirmed by re-testing the exact same buffer
+       before/after the strip (fails / succeeds). Also broadened the existing 429-only
+       retry to retry once on any failure, since this is exactly the class of transient,
+       real-world API flakiness that warrants one.
+    3. **Unscaled embeds produced a 22.8MB PDF** - the same "PDFDocument embeds pixel data
+       at face value" bug already fixed once for product photos (item in §13 M4) recurred
+       here, since the hero/accent images are fresh ~2MB PNGs each and nothing was
+       downscaling them before `drawImage`. Added `downscaleToPng()` (same
+       offscreen-canvas + lossless-PNG-reencode approach as `getFlyerImage()` in
+       `generate-focus-flyer.mjs`, not JPEG - the JPEG-double-compression bug from item 45
+       applies here too) with different real targets per use: hero capped at 900px long
+       side, category accents at 500px (they render into a ~58pt-tall bar, so a full
+       1536px source is pure waste). Brought the full 64-product flyer from 22.8MB back
+       down to ~7MB.
+
+    `drawTopCategoryHeader()` gained an `accentImage` parameter - the photo is clipped
+    into the right ~68% of the dark bar at 55% opacity with a left-edge fade back into
+    `DARK_BAR` so the numbered badge and category name stay fully legible, mirroring how
+    the original reference mockup (item 46 predecessor) blended a shared texture into its
+    bars, but with a real distinct photo per category now. `drawCoverPage()`'s old plain
+    "NORMFEST®" text wordmark was replaced with the real logo file
+    (`assets/flyer/normfest-logo.png`, copied from Anis's upload) composited onto a small
+    white rounded card - falls back to the text wordmark only if the logo file itself
+    can't load, never to an AI-drawn substitute.
+
+    `app/api/admin/fokus/[id]/flyer/route.ts`'s `maxDuration` bumped 60s → 300s - a full
+    generation (1 hero + up to ~8 category accents, partially parallel at concurrency 3)
+    measured 85-98s across several real runs in this session, comfortably under budget but
+    well past the old 60s ceiling.
+
+    Verified end-to-end exactly like item 48: first the standalone generator against the
+    real active "August Kracher 2026" list's real 64 products (read-only, nothing
+    written) - rendered pages visually confirmed the sharp AI hero, the real logo card,
+    and real category-relevant accent photos (bolts/washers for "DIN- & Normteile",
+    tools for "Werkstattausrüstung") blended correctly into each bar, with every product
+    name/SKU/price still 100% deterministic and unchanged. Then re-verified through the
+    real `POST /api/admin/fokus/[id]/flyer` route with a throwaway inactive test list (4
+    real products cloned from the real active list, throwaway admin session created and
+    deleted after) - confirmed a *second*, genuinely different AI hero photo rendered
+    correctly through the full auth/Storage-upload path, and confirmed the real active
+    list's `pdf_path` was untouched before and after. Typecheck/lint clean, full suite
+    green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
