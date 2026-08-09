@@ -24,12 +24,30 @@ function addressKey(formattedAddress) {
   return `${street}|${plzMatch[0]}`;
 }
 
+async function fetchAllAmbiguous() {
+  // PostgREST defaults to a 1000-row cap - the whole-book Places rollout
+  // (2026-07-27) grew the ambiguous queue to 1,291, so an unpaginated
+  // fetch here silently truncates and produces misleading results (same
+  // class of bug already hit and fixed elsewhere in this app, e.g. the
+  // company_gebiet_coverage / strip-pleasantry-claims scripts).
+  const rows = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await admin
+      .from("company_enrichment")
+      .select("id, company_id, places_candidates, companies(name)")
+      .eq("places_ambiguous", true)
+      .range(from, from + 999);
+    if (error) throw error;
+    rows.push(...data);
+    if (data.length < 1000) break;
+    from += 1000;
+  }
+  return rows;
+}
+
 async function main() {
-  const { data: rows, error } = await admin
-    .from("company_enrichment")
-    .select("id, company_id, places_candidates, companies(name)")
-    .eq("places_ambiguous", true);
-  if (error) throw error;
+  const rows = await fetchAllAmbiguous();
 
   console.log(`${rows.length} ambiguous Einträge werden geprüft...\n`);
 

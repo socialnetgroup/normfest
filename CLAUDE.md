@@ -3546,6 +3546,74 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     list's `pdf_path` was untouched before and after. Typecheck/lint clean, full suite
     green (41/41).
 
+50. **Ambiguous Places queue: real scale discovered + a free name-similarity
+    auto-resolve pass — 2026-08-09.** Anis, looking at Alan's 1,000-company book: "you
+    left me with 1000 companies to decide by hand whats the right google maps" - flagged
+    as too much manual labor. Investigated with real numbers rather than guessing: the
+    ambiguous queue (§9, `company_enrichment.places_ambiguous`) is **1,291 companies
+    whole-book**, not the 55 last documented (§14 item 5's memory note) - the whole-book
+    Places rollout (§13 M5, 2026-07-27, 13,546 companies) grew this ~23x and it was never
+    flagged back as a new backlog. Alan's own book only accounts for 52 of the 1,291 - the
+    rest is spread across the other nine agents.
+
+    Ran the existing free same-address auto-merge script
+    (`scripts/rescan-ambiguous-same-address.mjs`) first - **found a real bug in that
+    script itself**: an unpaginated fetch silently capped at PostgREST's 1000-row default
+    (same class of bug already hit and fixed multiple times elsewhere in this app),
+    understating the real 1,291 as 1,000. Fixed via the same `.range()` pagination
+    pattern used everywhere else. Re-run against the full, correct set: **0 matches** -
+    a real, notable finding, not a bug this time. Diagnosed why by inspecting real
+    `places_candidates` payloads directly: for the whole-book rollout, many companies got
+    3-20 Places search candidates spread across genuinely different addresses/postal
+    codes/even different towns (e.g. "KFZ Style Hamm" got 12 candidates across 6 streets
+    and 3 postal codes in Hamm; another company's candidates spanned three unrelated
+    towns) - these are different, unrelated businesses that happened to match a loose
+    text search, not the same real business under two Google listings. `pickResolution()`
+    (`lib/enrichment/places.mjs`) only ever auto-resolved on exact PLZ match or identical
+    address - it never checked candidate NAME similarity against the real company name,
+    the most obviously decisive signal for telling "wrong business" apart from "right
+    business, different listing."
+
+    New `scripts/rescan-ambiguous-by-name.mjs` - same "free, re-reads already-stored
+    `places_candidates`, zero new Places API calls" shape as the address-merge script,
+    reusing the exact normalize/Jaccard word-overlap scoring already proven in
+    `scripts/detect-catalog-duplicates.mjs`/`fill-representative-images.mjs`, with a
+    company-name-appropriate stopword list (legal-form words like `gmbh`/`kg`/`ohg` and
+    generic Kfz-industry words like `auto`/`autohaus`/`kfz`/`werkstatt` filtered out -
+    without this, two unrelated auto shops would score artificially high just from
+    sharing "autohaus"). Deliberately conservative auto-resolve rule: only fires when the
+    top-scoring candidate's name match is decisive (score ≥ 0.5 AND at least double the
+    runner-up) - a wrong auto-pick here means showing an agent a stranger's Google
+    reviews as if they were the real company's, so it errs toward leaving genuinely
+    unclear cases in the manual queue rather than guessing.
+
+    Dry-run first, inspected the real output before writing anything: **244 of 1,291
+    (19%) auto-resolved**, the vast majority exact or near-exact name matches ("Harald
+    Pawelzik" → "Harald Pawelzik", "Autohaus Mezger GmbH" → "Autohaus Mezger GmbH",
+    "AllCars GmbH" → "AllCars GmbH", etc.) - spot-checked several by eye and all looked
+    genuinely correct. Two borderline cases flagged before applying (generic
+    municipal-entity names - "Freiwillige Feuerwehr" → "Freiwillige Feuerwehr
+    Wilhelmsburg", "Feuerwehr Hamburg" → "...Einsatzabteilung (F02)" - where the
+    "decisive" name match is real but the underlying entity is large enough that a wrong
+    branch pick is plausible) - accepted as an acceptable minority risk given the overall
+    hit quality, not silently ignored. Ran for real after the dry-run review (Anis: "do
+    the zero api cost script"): **244 real rows updated, verified via direct query
+    (ambiguous count 1,291 → 1,047, spot-checked "Harald Pawelzik" resolved correctly in
+    the DB)**.
+
+    Whole-book ambiguous queue: 1,291 → 1,047 (a 19% cut at zero additional API cost).
+    **Remaining 1,047 genuinely don't have a decisive automatic answer** - either no
+    candidate's name resembles the real company closely enough, or several score
+    similarly (multiple real candidates, no clear winner) - these still need a human, but
+    the queue is now smaller and (per the scoring logic) skews toward genuinely hard
+    calls rather than being padded with cases a simple name check could have already
+    settled. Not yet addressed: whether the *initial* Places text search itself could be
+    tightened (e.g. location-biased search near the VIS address) to return fewer
+    unrelated candidates in the first place, which would reduce how often this situation
+    recurs for newly-enriched companies - flagged as a follow-up, not built this pass.
+    Typecheck/lint clean, full suite green (41/41) - this pass only touched
+    `company_enrichment` data via existing legitimate script paths, no schema/RLS changes.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
