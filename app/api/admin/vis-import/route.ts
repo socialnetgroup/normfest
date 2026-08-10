@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { parseVisWorkbook, writeCompanies } from "@/lib/vis-import/core.mjs";
+import { parseVisWorkbook, writeCompanies, softDeleteMissingCompanies } from "@/lib/vis-import/core.mjs";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -56,11 +56,20 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
   try {
     const written = await writeCompanies(admin, records);
+    // Soft-delete companies missing from this fresh export (2026-08-10) -
+    // VIS is the source of truth, and a company simply being absent from a
+    // fresh file (e.g. an agent asked Normfest to remove it - "not
+    // interested"/"closed") is the only real removal signal VIS gives us.
+    // Never a hard delete - see softDeleteMissingCompanies' own comment.
+    const presentKundennummern = new Set(records.map((r) => r.kundennummer));
+    const softDeleted = await softDeleteMissingCompanies(admin, presentKundennummern);
     return NextResponse.json({
       parsed: records.length,
       written,
       skippedCount: skipped.length,
       skippedSample: skipped.slice(0, 20),
+      softDeletedCount: softDeleted.length,
+      softDeleted,
     });
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });

@@ -4027,6 +4027,65 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     left as dead code. `/dialer` now shows only the real Live-Status and
     Verlauf cards. Typecheck/lint clean, full suite green (41/41).
 
+58. **VIS re-import (2026-08-10) — a real, password-protected file, and a
+    real architecture gap found + closed: companies dropped from VIS were
+    never removed from our side.** Anis sent a fresh export
+    ("VIS TeleSales Sarajevo 10.8.26.xlsx"). First attempt failed - real
+    blocker: `xlsx` 0.20.3's free/community build can't decrypt modern
+    Office (OOXML) password protection (confirmed: no LibreOffice/working
+    Python in this environment either to strip it another way, and passing
+    a `password` option to `XLSX.read()` didn't work against this file's
+    encryption). Anis removed the password in Excel and re-sent; import
+    then ran clean: 14,311 valid rows (2 skipped, both trailing blank
+    rows), upserted, real DB total 14,349 companies, spot-checked one real
+    row byte-for-byte against the source file.
+
+    **Real question Anis raised afterward: since VIS is the source of
+    truth, should companies that drop out of a fresh export get removed
+    from our side too?** Investigated before answering: `companies`'
+    `Löschdatum` (deletion-date) column is defined in the import's own
+    column map (`COL.soft_deleted_at`) but was never actually wired into
+    `mapRow()` - and checked directly against the real 14,313-row file
+    whether it's even usable: **zero non-empty values across the whole
+    file**. VIS's real removal signal is a company's row simply being
+    absent from the export, not a stamped date. Diffing the fresh file's
+    14,311 Kundennummern against the DB's real company set found **38
+    companies present in our app but missing from this export** - and their
+    distribution (14 of 38 in Alan Sačić's book alone, the one agent with
+    real sustained usage this session) lines up exactly with what Anis
+    described: agents asking Normfest directly to remove "not interested"/
+    "company closed" companies, which then simply stop appearing in later
+    exports.
+
+    Implemented as a permanent pipeline step, soft-delete only - never a
+    hard `DELETE`, consistent with this schema's existing soft-delete
+    convention for companies/contacts/notes/kb_documents (§4): a company
+    dropped from VIS keeps every real thing an agent did with it
+    (`sales_feedback`, notes, focus-list history) fully intact and
+    queryable, just excluded from active search/Dashboard/signals (both
+    already filter on `soft_deleted_at is null`, confirmed via
+    `fn_search_companies` and the RLS policy - no further UI work needed).
+    `mapRow()` (`lib/vis-import/core.mjs`) now explicitly writes
+    `soft_deleted_at: null` on every company present in a fresh file, so
+    one that reappears later (e.g. reopened under a new contact) is
+    automatically revived rather than stuck hidden. New
+    `softDeleteMissingCompanies(admin, presentKundennummern)` does the
+    other half - finds every not-yet-soft-deleted company absent from the
+    fresh set and stamps `soft_deleted_at`, paginated the same way every
+    other bulk query in this codebase now is after repeatedly hitting
+    PostgREST's 1000-row default cap. Wired into both
+    `scripts/import-vis.mjs` (CLI, prints the real removed list) and
+    `app/api/admin/vis-import/route.ts` (self-serve upload, returns
+    `softDeletedCount`/`softDeleted` in the response) so neither path can
+    drift from the other.
+
+    Verified live against real data: re-ran the import (idempotent
+    re-upsert of the same 14,311 rows, harmless), confirmed all 38 real
+    companies got `soft_deleted_at` stamped with the real timestamp, and
+    confirmed a real still-present company (BNS GmbH Dresden) was
+    untouched (`soft_deleted_at` stayed `null`). Full suite green (41/41)
+    after, typecheck/lint clean.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

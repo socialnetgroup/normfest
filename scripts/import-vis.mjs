@@ -6,7 +6,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 
-import { parseVisWorkbook, writeCompanies } from "../lib/vis-import/core.mjs";
+import { parseVisWorkbook, writeCompanies, softDeleteMissingCompanies } from "../lib/vis-import/core.mjs";
 
 if (existsSync(".env.local")) process.loadEnvFile(".env.local");
 
@@ -36,6 +36,12 @@ async function main() {
 
   const written = await writeCompanies(admin, records);
   console.log(`Upserted ${written}/${records.length}.`);
+
+  const presentKundennummern = new Set(records.map((r) => r.kundennummer));
+  const softDeleted = await softDeleteMissingCompanies(admin, presentKundennummern);
+  console.log(`Soft-deleted ${softDeleted.length} companies missing from this export:`);
+  for (const c of softDeleted) console.log(`  - ${c.kundennummer} ${c.name}`);
+
   console.log("Done.");
 }
 
