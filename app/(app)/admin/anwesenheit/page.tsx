@@ -22,7 +22,7 @@ function monthLabel(month: string) {
 // Anwesenheit (attendance) overview - CLAUDE.md §14: Anis, "TL prati dnevni
 // dolazak na posao... da zna kakvo je stanje da li neko treba nadoknaditi
 // itd." One row per agent: hours actually logged this month vs. the standard
-// schedule's expected hours so far (Mon-Thu 8h, Fri 7h), the resulting
+// schedule's expected hours so far (Mon-Thu 8h, Fri 6h), the resulting
 // Saldo, and separately the running "Nachzuholen" debt from specific
 // incidents (e.g. coming in late) - not the same number as the Saldo, since
 // an Urlaub day covers its own expected hours with no deficit.
@@ -72,7 +72,7 @@ export default async function AnwesenheitPage({
       <div>
         <h1 className="font-heading text-2xl font-semibold tracking-tight">Anwesenheit</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Dienstzeit-Übersicht - Soll: Mo-Do 8h, Fr 7h. Nur für Admin/TL sichtbar.
+          Dienstzeit-Übersicht - Soll: Mo-Do 8h, Fr 6h. Nur für Admin/TL sichtbar.
         </p>
       </div>
 

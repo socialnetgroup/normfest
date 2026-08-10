@@ -1,15 +1,15 @@
 // Anwesenheit (attendance) shared logic - CLAUDE.md §14: TL tracks daily
-// hours per agent against the standard schedule (Mon-Thu 8h, Fri 7h,
+// hours per agent against the standard schedule (Mon-Thu 8h, Fri 6h,
 // weekends not a workday) to see who's ahead/behind and needs to make up
 // time. Pure functions so the overview page and the per-agent detail page
 // compute the same numbers the same way.
 
 /** Expected hours for a given ISO date, purely from its weekday - Mon-Thu
- * are full 8h days, Friday is a shorter 7h day, weekends aren't workdays. */
+ * are full 8h days, Friday is a shorter 6h day, weekends aren't workdays. */
 export function expectedHoursForDate(dateStr: string): number {
   const day = new Date(`${dateStr}T00:00:00Z`).getUTCDay(); // 0=Sun..6=Sat
   if (day >= 1 && day <= 4) return 8;
-  if (day === 5) return 7;
+  if (day === 5) return 6;
   return 0;
 }
 

@@ -4101,6 +4101,20 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     currently coincide; the query itself is scoped correctly by
     construction. Typecheck/lint clean, full suite green (41/41).
 
+60. **Anwesenheit Friday Soll changed 7h→6h (2026-08-10).** Anis: "freitag
+    aendern 6 stunden anstatt 7." `expectedHoursForDate()` (`lib/
+    attendance.ts`) is the single shared source both the overview and
+    per-agent pages compute Soll/Saldo from - updated the Friday branch,
+    the "Fr 6h" overview subtitle copy, and the calendar's quick-fill button
+    (was "7h", now "6h"). Real, deliberate consequence worth noting: since
+    this is a pure function recomputed on every page load (not a value
+    stored per attendance row), every past Friday's Soll/Saldo across all
+    history recalculates under the new 6h rule too, not just future Fridays
+    - matches Anis's own framing of this as changing the schedule, not
+    backfilling a one-off correction. Verified the weekday logic directly
+    against real Friday/Thursday/Saturday dates. Typecheck/lint clean, full
+    suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

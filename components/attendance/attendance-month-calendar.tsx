@@ -151,8 +151,8 @@ export function AttendanceMonthCalendar({ agentId, month, days }: { agentId: str
                 <Button type="button" size="xs" variant="outline" onClick={() => setFormHours("8")}>
                   8h
                 </Button>
-                <Button type="button" size="xs" variant="outline" onClick={() => setFormHours("7")}>
-                  7h
+                <Button type="button" size="xs" variant="outline" onClick={() => setFormHours("6")}>
+                  6h
                 </Button>
                 <Button type="button" size="xs" variant="outline" onClick={() => setFormHours("0")}>
                   0h
