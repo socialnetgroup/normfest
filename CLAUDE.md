@@ -4086,6 +4086,21 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     untouched (`soft_deleted_at` stayed `null`). Full suite green (41/41)
     after, typecheck/lint clean.
 
+59. **Agent-facing "Feedback diese Woche" tile scoped to own count
+    (2026-08-10).** Anis: "nur seine eigenen feedbacks sehen, diesen count" -
+    both the admin and agent Dashboard tiles shared one team-wide
+    `sales_feedback` weekly count (the original flywheel-adoption widget,
+    §5). Admin's tile stays team-wide (that's still the real intent there);
+    the agent tile now runs its own query filtered to
+    `agent_id = auth.uid()` - same identifier `sales_feedback.agent_id`
+    already uses elsewhere (`fn_log_sales_feedback`, the `/feedback` page's
+    own agent-scoping, §14 item 33). Verified with real data: team-wide
+    count and Alan's own count both came back as 10 this week - not a
+    differentiation bug, just confirms Alan is still the only agent with
+    real sustained feedback activity this week, so the two numbers
+    currently coincide; the query itself is scoped correctly by
+    construction. Typecheck/lint clean, full suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

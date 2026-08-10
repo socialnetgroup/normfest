@@ -81,6 +81,7 @@ export default async function DashboardPage() {
   const [
     { data: monthRows },
     { count: feedbackCountThisWeek },
+    { count: myFeedbackCountThisWeek },
     { data: topSignals },
     { data: signalsTotal },
     { data: companyCountsRows },
@@ -97,6 +98,19 @@ export default async function DashboardPage() {
       .from("sales_feedback")
       .select("id", { count: "exact", head: true })
       .gte("created_at", weekStart.toISOString()),
+    // Agent-facing "Feedback diese Woche" tile shows only the caller's own
+    // count (Anis, 2026-08-10: "nur seine eigenen feedbacks sehen") - the
+    // admin tile above stays team-wide (the original flywheel-adoption
+    // widget). sales_feedback.agent_id references profiles.id (user.id),
+    // same identifier fn_log_sales_feedback and the /feedback page's own
+    // agent-scoping already use.
+    user
+      ? supabase
+          .from("sales_feedback")
+          .select("id", { count: "exact", head: true })
+          .eq("agent_id", user.id)
+          .gte("created_at", weekStart.toISOString())
+      : Promise.resolve({ count: 0 }),
     // RPC instead of two direct .from("signals") queries -- signals grew to
     // ~97k rows this session and its RLS policy now also needs to check
     // Gebiet visibility (Anis: agents should only see signals for their own
@@ -290,7 +304,7 @@ export default async function DashboardPage() {
             accent={uncontactedSevere ? "warning" : "secondary"}
           />
           <StatTile label="Anteil (3+ Mon.)" value={`${Math.round(uncontactedShare * 100)}%`} accent={uncontactedShare >= 0.4 ? "warning" : "secondary"} />
-          <StatTile label="Feedback diese Woche" value={String(feedbackCountThisWeek ?? 0)} accent="success" href="/feedback" />
+          <StatTile label="Feedback diese Woche" value={String(myFeedbackCountThisWeek ?? 0)} accent="success" href="/feedback" />
         </div>
       )}
 
