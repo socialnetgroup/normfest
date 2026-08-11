@@ -9,7 +9,12 @@ import { Label } from "@/components/ui/label";
 import { DialerStatusTable } from "@/components/dialer-status-table";
 import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { buildDialerAgentSummaries, fetchDialerAgentStatuses, type DialerAgentSummary } from "@/lib/dialer/status";
+import {
+  buildDialerAgentSummaries,
+  fetchDialerAgentStatuses,
+  refreshSalesInSummaries,
+  type DialerAgentSummary,
+} from "@/lib/dialer/status";
 
 function IconTitle({
   icon: Icon,
@@ -68,12 +73,22 @@ export default async function DialerPage({
 
     const selectedDate = datumParam && snapshotDates.includes(datumParam) ? datumParam : (snapshotDates[0] ?? null);
     if (selectedDate) {
-      const { data: snapshot } = await supabase
-        .from("dialer_daily_snapshots")
-        .select("agents, captured_at")
-        .eq("snapshot_date", selectedDate)
-        .single();
-      selectedSnapshotRows = (snapshot?.agents as DialerAgentSummary[] | undefined) ?? null;
+      const [{ data: snapshot }, { data: snapshotPerfRows }] = await Promise.all([
+        supabase.from("dialer_daily_snapshots").select("agents, captured_at").eq("snapshot_date", selectedDate).single(),
+        supabase.from("agent_daily_performance").select("agent_id, sales_count").eq("date", selectedDate),
+      ]);
+      const frozenRows = (snapshot?.agents as DialerAgentSummary[] | undefined) ?? null;
+      // Anis, 2026-08-11: "sales match... everywhere" - realSales/conversion/
+      // salesPerHour were frozen at whatever agent_daily_performance said at
+      // 18:00 capture, but the Team Dashboard Excel often gets uploaded/
+      // corrected at other times of day, so a stored snapshot's sales figures
+      // silently go stale relative to the current source of truth. Re-derive
+      // them against the CURRENT agent_daily_performance for that date on
+      // every view - dialer-sourced fields (calls, occupancy, time
+      // breakdowns) stay frozen, since those are a genuine point-in-time
+      // capture that can't be "corrected" after the fact.
+      const snapshotSalesByAgentId = new Map((snapshotPerfRows ?? []).map((r) => [r.agent_id, r.sales_count]));
+      selectedSnapshotRows = frozenRows ? refreshSalesInSummaries(frozenRows, snapshotSalesByAgentId) : null;
       selectedSnapshotCapturedAt = snapshot?.captured_at ?? null;
     }
   }
@@ -156,6 +171,11 @@ export default async function DialerPage({
                         {new Date(selectedSnapshotCapturedAt).toLocaleTimeString("de-DE", {
                           hour: "2-digit",
                           minute: "2-digit",
+                          // real bug, 2026-08-11: this runs server-side (RSC), and
+                          // Vercel's Node runtime is UTC - without an explicit
+                          // timeZone this rendered the raw UTC hour (e.g. "16:03"
+                          // for an 18:03 CEST capture) instead of real local time.
+                          timeZone: "Europe/Sarajevo",
                         })}{" "}
                         Uhr
                       </span>

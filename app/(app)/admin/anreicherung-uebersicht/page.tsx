@@ -29,12 +29,12 @@ export default async function AnreicherungUebersichtPage() {
     supabase.from("agents").select("id, full_name, gebiet").eq("active", true),
     supabase
       .from("company_gebiet_enrichment_coverage")
-      .select("gebiet, total, places_resolved, website_fetched, ai_analyzed"),
+      .select("gebiet, total, places_resolved, website_fetched, ai_analyzed, ambiguous"),
   ]);
 
   const byGebiet = new Map<
     string,
-    { total: number; placesResolved: number; websiteFetched: number; aiAnalyzed: number }
+    { total: number; placesResolved: number; websiteFetched: number; aiAnalyzed: number; ambiguous: number }
   >();
   for (const row of coverageStats ?? []) {
     if (!row.gebiet) continue;
@@ -43,10 +43,11 @@ export default async function AnreicherungUebersichtPage() {
       placesResolved: row.places_resolved ?? 0,
       websiteFetched: row.website_fetched ?? 0,
       aiAnalyzed: row.ai_analyzed ?? 0,
+      ambiguous: row.ambiguous ?? 0,
     });
   }
 
-  const empty = { total: 0, placesResolved: 0, websiteFetched: 0, aiAnalyzed: 0 };
+  const empty = { total: 0, placesResolved: 0, websiteFetched: 0, aiAnalyzed: 0, ambiguous: 0 };
   const assignedGebiete = new Set((agents ?? []).map((a) => a.gebiet));
   const rows = [
     ...(agents ?? []).map((a) => ({
@@ -64,6 +65,7 @@ export default async function AnreicherungUebersichtPage() {
         placesResolved: sum.placesResolved + v.placesResolved,
         websiteFetched: sum.websiteFetched + v.websiteFetched,
         aiAnalyzed: sum.aiAnalyzed + v.aiAnalyzed,
+        ambiguous: sum.ambiguous + v.ambiguous,
       }),
       empty,
     );
@@ -75,6 +77,7 @@ export default async function AnreicherungUebersichtPage() {
   const grandPlaces = rows.reduce((sum, r) => sum + r.placesResolved, 0);
   const grandWebsite = rows.reduce((sum, r) => sum + r.websiteFetched, 0);
   const grandAnalyzed = rows.reduce((sum, r) => sum + r.aiAnalyzed, 0);
+  const grandAmbiguous = rows.reduce((sum, r) => sum + r.ambiguous, 0);
   const pctOf = (n: number) => (grandTotal > 0 ? Math.round((n / grandTotal) * 100) : 0);
 
   return (
@@ -86,7 +89,7 @@ export default async function AnreicherungUebersichtPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile
           label={`1. Places aufgelöst (${pctOf(grandPlaces)}%)`}
           value={`${grandPlaces.toLocaleString("de-DE")} / ${grandTotal.toLocaleString("de-DE")}`}
@@ -102,6 +105,13 @@ export default async function AnreicherungUebersichtPage() {
           value={`${grandAnalyzed.toLocaleString("de-DE")} / ${grandTotal.toLocaleString("de-DE")}`}
           accent={pctOf(grandAnalyzed) >= 20 ? "success" : "warning"}
         />
+        <Link href="/admin/enrichment" className="block">
+          <StatTile
+            label="Davon unklar (Places-Match)"
+            value={grandAmbiguous.toLocaleString("de-DE")}
+            accent={grandAmbiguous > 0 ? "warning" : "success"}
+          />
+        </Link>
       </div>
 
       <Card>
@@ -112,7 +122,12 @@ export default async function AnreicherungUebersichtPage() {
           </CardTitle>
           <p className="text-sm text-muted-foreground">
             Sortiert nach Schritt 1 (Places aufgelöst). Website-Abruf ist naturgemäß niedriger, da nicht jede Firma
-            eine hinterlegte Website hat - das ist normal, keine Lücke.
+            eine hinterlegte Website hat - das ist normal, keine Lücke. &quot;Unklar&quot; zählt Firmen mit einem
+            noch nicht entschiedenen Places-Match (mehrere Kandidaten) - diese landen in der{" "}
+            <Link href="/admin/enrichment" className="underline">
+              Enrichment-Warteschlange
+            </Link>{" "}
+            zur manuellen Prüfung.
           </p>
         </CardHeader>
         <CardContent>
@@ -125,6 +140,7 @@ export default async function AnreicherungUebersichtPage() {
                   <th className="px-2 py-2 font-medium">1. Places aufgelöst</th>
                   <th className="px-2 py-2 font-medium">2. Website abgerufen</th>
                   <th className="px-2 py-2 font-medium">3. KI-analysiert</th>
+                  <th className="px-2 py-2 font-medium">Davon unklar</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -155,6 +171,13 @@ export default async function AnreicherungUebersichtPage() {
                       </td>
                       <td className="px-2 py-2 tabular-nums">{row.websiteFetched}</td>
                       <td className="px-2 py-2 tabular-nums">{row.aiAnalyzed}</td>
+                      <td className="px-2 py-2 tabular-nums">
+                        {row.ambiguous > 0 ? (
+                          <span className="font-medium text-warning-foreground">{row.ambiguous}</span>
+                        ) : (
+                          <span className="text-muted-foreground">0</span>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}

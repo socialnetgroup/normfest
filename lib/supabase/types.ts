@@ -1525,6 +1525,7 @@ export type Database = {
       company_gebiet_enrichment_coverage: {
         Row: {
           ai_analyzed: number | null
+          ambiguous: number | null
           gebiet: string | null
           places_resolved: number | null
           total: number | null

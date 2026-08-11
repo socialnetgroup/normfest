@@ -115,6 +115,37 @@ export function formatSecondsAsHms(totalSeconds: number): string {
   return [h, m, s].map((n) => String(n).padStart(2, "0")).join(":");
 }
 
+/** Re-derives the sales-sourced fields (realSales/conversion/salesPerHour) of
+ * already-built summaries against a FRESH sales map, leaving every
+ * dialer-sourced field (totalCalls, occupancy, time breakdowns) untouched.
+ *
+ * Used by the Verlauf (Tages-Snapshot) viewer: dialer_daily_snapshots stores
+ * realSales frozen at whatever agent_daily_performance said at 18:00 capture
+ * time, but Anis regularly imports/corrects the Team Dashboard Excel at
+ * other times of day - so a stored snapshot's sales figures silently went
+ * stale relative to the real, current source of truth (Anis, 2026-08-11:
+ * confirmed live on the 08-10 snapshot - frozen realSales was 0 for most
+ * agents, current agent_daily_performance.sales_count for that date was
+ * already 1-6 after a later re-import; "sales match... everywhere" was the
+ * explicit ask). totalCalls/time-breakdown fields stay frozen on purpose -
+ * they're a genuine point-in-time dialer capture that can't be "corrected"
+ * after the fact the way a spreadsheet-sourced sales count can. */
+export function refreshSalesInSummaries(
+  summaries: DialerAgentSummary[],
+  salesByAgentId: Map<string, number>,
+): DialerAgentSummary[] {
+  return summaries.map((s) => {
+    const realSales = salesByAgentId.get(s.agentId) ?? 0;
+    const totalHours = parseDialerTimeToSeconds(s.totalTime) / 3600;
+    return {
+      ...s,
+      realSales,
+      conversion: s.totalCalls > 0 ? realSales / s.totalCalls : 0,
+      salesPerHour: totalHours > 0 ? realSales / totalHours : 0,
+    };
+  });
+}
+
 function stripDiacritics(s: string): string {
   return s
     .normalize("NFD")

@@ -4115,6 +4115,135 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     against real Friday/Thursday/Saturday dates. Typecheck/lint clean, full
     suite green (41/41).
 
+61. **Anthropic Batches API for the ANALYZE backlog — shipped (2026-08-11),**
+    per Anis's cost-optimization ask (§13 M8's "$400-500 credit" discussion):
+    "Batches api, do it then ofc if its a win... does that mean that we have
+    to push all agents at once (fine by me as well) ignore promt caching."
+    Real 50% discount on both input and output tokens for this bulk,
+    non-realtime workload - same model, same prompt, same json_schema
+    structured output as the synchronous path, just submitted asynchronously.
+    Prompt caching explicitly NOT built, per Anis's own instruction (real
+    cost driver here is OUTPUT tokens, which caching can't discount anyway).
+
+    Verified the real SDK surface before writing anything (`@anthropic-ai/sdk`
+    v0.112.4 ships a non-beta `messages.batches` resource - `create`/
+    `retrieve`/`results`/`cancel`/`delete`/`list`) and fetched the real docs
+    to confirm the two things that mattered for the "push all at once?"
+    question: a single batch supports up to **100,000 requests or 256MB**,
+    whichever comes first, and `output_config`/`json_schema` IS supported
+    inside batch requests (only `stream`, `speed`, `store`/thread params,
+    `cache_hint`, `max_tokens:0`, and a research-preview flag are excluded).
+    **Answer: no need to split per agent** - the entire multi-agent backlog
+    (12,114 companies as of this run) fits in one batch with massive
+    headroom.
+
+    `lib/enrichment/analyze.mjs` refactored: extracted `writeAnalysisResult()`
+    (the parse-JSON/matchCatalogProducts/DB-update write-back) out of
+    `analyzeCompanyEnrichment()` so both the synchronous path and the new
+    batch-results path share one write-back and can never drift on what
+    "done" means (same discipline as `pickResolution`/`bestNameMatch` being
+    shared between the live enrichment resolver and backlog rescan scripts,
+    item 51 above). New `buildBatchRequest(companyId, {company, enrichment})`
+    packages one company into a batch request item (`custom_id` = company
+    UUID - fits Anthropic's real `^[a-zA-Z0-9_-]{1,64}$` constraint as-is).
+    New `fetchAnalyzeBacklog(admin, {gebiets})` replaces the candidate-
+    selection query that used to live inline in `scripts/analyze-backlog.mjs`
+    - **paginated via `.range()`, fixing the same PostgREST-1000-row-cap bug
+    already found and fixed multiple times this project** (items 32/50/58):
+    the old unbounded `.select()` would have silently truncated the real
+    12,114-row backlog to 1,000 without erroring.
+
+    Two new scripts: `scripts/submit-analyze-batch.mjs [limit] [gebiet1,...]`
+    (fetches the backlog, builds requests, submits, prints the batch id +
+    a rough cost estimate) and `scripts/process-analyze-batch.mjs <batch_id>`
+    (polls status, and once `processing_status` is `"ended"`, streams the
+    real `.jsonl` results via the SDK's async-iterable `JSONLDecoder` and
+    writes each succeeded result back through `writeAnalysisResult()` -
+    reports real per-company cost from the batch's own returned token
+    usage, not an estimate).
+
+    **Dry-run tested with real API credits, per Anis's explicit ask, before
+    reporting this done:** submitted a real 3-company batch
+    (`msgbatch_018wSvR7bPjyuCfLviRP3Cm4`), polled it to `"ended"` (took
+    ~3.5 minutes for 3 requests - real batches can take up to 24h, most
+    finish within an hour), processed the results, and verified the DB
+    write-back directly: all 3 companies got real, correctly-shaped
+    `strengths`/`weaknesses`/`external_opportunities` with genuine quotes
+    and matched catalog products, identical output shape to the synchronous
+    path. Real cost: $0.0428 for 3 companies via the batch discount. Full
+    ~12,114-company backlog submission is NOT run yet - waiting on Anis's
+    explicit go-ahead per his own stated plan ("I will now do the funds,
+    then I tell you when to analye").
+
+62. **Two real, unrelated bugs found and fixed while investigating dialer
+    questions (2026-08-11):**
+    - **"Gespeichert um X Uhr" on `/dialer`'s Verlauf card was showing raw
+      UTC, not local time.** Anis: "i see its at 16:03 but we arranged at
+      18:00" about the 2026-08-10 Tages-Snapshot. Investigated before
+      assuming the cron was broken: `dialer_daily_snapshots.captured_at`
+      for that date really is `16:03:56 UTC`, and the cron (`vercel.json`,
+      `0 16 * * *` = 16:00 UTC) fires exactly on schedule - Bosnia/Germany
+      are on CEST (UTC+2) right now, so 16:00 UTC genuinely is 18:00 local.
+      The bug was purely in display: `new Date(captured_at)
+      .toLocaleTimeString("de-DE", {...})` runs server-side (RSC) on
+      Vercel's UTC Node runtime with no explicit `timeZone`, so it silently
+      formatted the raw UTC hour instead of real local time. Fixed by
+      adding `timeZone: "Europe/Sarajevo"` - verified computationally
+      against both real stored timestamps (08-10 → 18:03 ✓, 08-06 → 16:18,
+      correctly NOT 18:00 since that earlier row was from manual route
+      testing, not a real scheduled 18:00 capture, per item 24's own notes).
+    - **Verlauf's historical Sales figures were frozen at whatever
+      `agent_daily_performance.sales_count` said at 18:00 capture time,**
+      never refreshed even after Anis later imports/corrects the Team
+      Dashboard Excel for that date. Anis: "But the 'Sales' part is not
+      correct... sales match from the team dashboard everywhere in logs
+      and live." Confirmed the real gap directly: the 2026-08-10 snapshot
+      had `realSales: 0` frozen for 9 of 10 agents, while the CURRENT
+      `agent_daily_performance` for that date (after a later re-import)
+      already showed 1-6 real sales each. New `refreshSalesInSummaries()`
+      (`lib/dialer/status.ts`) re-derives `realSales`/`conversion`/
+      `salesPerHour` against a freshly-fetched sales map at render time,
+      leaving every dialer-sourced field (`totalCalls`, occupancy, time
+      breakdowns) frozen as a genuine point-in-time capture that can't be
+      "corrected" after the fact the way a spreadsheet-sourced count can.
+      `/dialer`'s Verlauf section now fetches `agent_daily_performance` for
+      the *selected snapshot's date* (not just today) alongside the stored
+      snapshot and overlays it - this self-corrects retroactively for
+      already-stored snapshots too, with no data migration needed. Verified
+      directly: the 08-10 snapshot now shows the real current sales_count
+      per agent (matching agent_daily_performance exactly), not the stale
+      frozen zeros.
+    - Also deleted the 2026-08-06 `dialer_daily_snapshots` row per Anis's
+      explicit ask ("remove the Donnerstag 06.08.2026 from the list since
+      not complete day and not correct, so we start from the 10th") - that
+      row was always known to be from manual route testing (item 24), not
+      a real scheduled capture, so Verlauf's history now correctly starts
+      at the first genuine 18:00 snapshot (08-10).
+    Typecheck/lint clean, full suite green (41/41) after both fixes.
+
+63. **Ambiguous Places-match count added to `/admin/anreicherung-uebersicht`
+    (2026-08-11).** Anis: "kannst du mir in die Anreicherung-Übersicht auch
+    schon the Enrichment part there, to see where those 930 companies that
+    are ambigous are sorted?" - the ranking table already broke down Places/
+    website/analyze completion per agent (§13 M8, original 2026-07-27 build)
+    but had no visibility into the 931 real companies still sitting
+    in the ambiguous-match queue (`company_enrichment.places_ambiguous`,
+    §9/§14 items 5/50/51/52's ongoing cleanup). Migration
+    `20260811010000_company_gebiet_enrichment_coverage_ambiguous.sql` adds
+    an `ambiguous` column to the existing `company_gebiet_enrichment_coverage`
+    view (`count(*) filter (where ce.places_ambiguous)`, same drop-and-
+    recreate pattern as the view's two prior versions since `CREATE OR
+    REPLACE VIEW` can't add columns to some Postgres versions' cached plans
+    reliably - kept consistent with precedent). Applied live via
+    `supabase db push --linked`, types regenerated. Page now shows a 4th
+    stat tile ("Davon unklar (Places-Match)", links to `/admin/enrichment`)
+    and a 6th ranking-table column, so an admin can immediately see which
+    agents' books have the most unresolved matches still needing a manual
+    pick. Verified the view sums correctly against the real per-row count
+    (931, matching a direct `count()` query) and spot-checked the top-5
+    Gebiete by ambiguous count (153/123/122/108/102) render correctly.
+    Typecheck/lint clean.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
