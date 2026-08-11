@@ -146,6 +146,9 @@ export default async function AnreicherungUebersichtPage() {
               <tbody className="divide-y">
                 {rows.map((row) => {
                   const pct = row.total > 0 ? row.placesResolved / row.total : 0;
+                  const websitePct = row.total > 0 ? row.websiteFetched / row.total : 0;
+                  const analyzedPct = row.total > 0 ? row.aiAnalyzed / row.total : 0;
+                  const ambiguousPct = row.total > 0 ? row.ambiguous / row.total : 0;
                   return (
                     <tr key={row.label} className={row.label === "Nicht zugeordnet" ? "opacity-60" : undefined}>
                       <td className="px-2 py-2 font-medium">
@@ -169,14 +172,21 @@ export default async function AnreicherungUebersichtPage() {
                         </span>{" "}
                         <span className="text-xs text-muted-foreground">({Math.round(pct * 100)}%)</span>
                       </td>
-                      <td className="px-2 py-2 tabular-nums">{row.websiteFetched}</td>
-                      <td className="px-2 py-2 tabular-nums">{row.aiAnalyzed}</td>
+                      <td className="px-2 py-2 tabular-nums">
+                        {row.websiteFetched}{" "}
+                        <span className="text-xs text-muted-foreground">({Math.round(websitePct * 100)}%)</span>
+                      </td>
+                      <td className="px-2 py-2 tabular-nums">
+                        {row.aiAnalyzed}{" "}
+                        <span className="text-xs text-muted-foreground">({Math.round(analyzedPct * 100)}%)</span>
+                      </td>
                       <td className="px-2 py-2 tabular-nums">
                         {row.ambiguous > 0 ? (
                           <span className="font-medium text-warning-foreground">{row.ambiguous}</span>
                         ) : (
                           <span className="text-muted-foreground">0</span>
-                        )}
+                        )}{" "}
+                        <span className="text-xs text-muted-foreground">({Math.round(ambiguousPct * 100)}%)</span>
                       </td>
                     </tr>
                   );
