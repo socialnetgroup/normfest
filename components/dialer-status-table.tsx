@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
-import { formatSecondsAsHms, type DialerAgentSummary } from "@/lib/dialer/status";
+import { computeDialerTotals, formatSecondsAsHms, type DialerAgentSummary } from "@/lib/dialer/status";
 import { cn } from "@/lib/utils";
 
 // Extracted from app/(app)/dialer/page.tsx (2026-08-08) so the live table and
@@ -50,6 +50,8 @@ export function DialerStatusTable({ rows, sortByStatus = false }: { rows: Dialer
   if (sortedRows.length === 0) {
     return <p className="text-sm text-muted-foreground">Keine Agenten-Daten vorhanden.</p>;
   }
+
+  const totals = computeDialerTotals(sortedRows);
 
   return (
     <div className="overflow-x-auto">
@@ -131,6 +133,42 @@ export function DialerStatusTable({ rows, sortByStatus = false }: { rows: Dialer
             </tr>
           ))}
         </tbody>
+        <tfoot>
+          <tr className="border-t-2 font-semibold">
+            <td className="px-2 py-2">Gesamt</td>
+            <td className="px-2 py-2 text-muted-foreground">
+              <span className="text-xs font-normal">{sortedRows.length} Agenten</span>
+            </td>
+            <td className="px-2 py-2" />
+            <td className="border-l px-2 py-2 tabular-nums">{totals.totalCalls}</td>
+            <td className="px-2 py-2 tabular-nums">{rate.format(totals.callsPerHour)}</td>
+            <td className="border-l px-2 py-2 tabular-nums">{totals.realSales}</td>
+            <td className="px-2 py-2 tabular-nums">{pct.format(totals.conversion)}</td>
+            <td className="px-2 py-2 tabular-nums">{rate.format(totals.salesPerHour)}</td>
+            <td className="border-l px-2 py-2 tabular-nums">{formatSecondsAsHms(totals.ahtSeconds)}</td>
+            <td className="px-2 py-2 tabular-nums">{pct.format(totals.occupancy)}</td>
+            <td className="border-l px-2 py-2 tabular-nums">{formatSecondsAsHms(totals.talkSeconds)}</td>
+            <td className="px-2 py-2 tabular-nums">{formatSecondsAsHms(totals.waitSeconds)}</td>
+            <td className="px-2 py-2 tabular-nums">{formatSecondsAsHms(totals.dispoSeconds)}</td>
+            <td className="px-2 py-2 tabular-nums">
+              {formatSecondsAsHms(totals.pauseSeconds)}{" "}
+              <span className="font-normal text-muted-foreground">({pct.format(totals.pauseShare)})</span>
+            </td>
+            <td className="px-2 py-2 tabular-nums">
+              {formatSecondsAsHms(totals.deadSeconds)}{" "}
+              <span className="font-normal text-muted-foreground">({pct.format(totals.deadShare)})</span>
+            </td>
+            <td className="border-l px-2 py-2 tabular-nums">{formatSecondsAsHms(totals.totalSeconds)}</td>
+            <td className="px-2 py-2 tabular-nums text-success-foreground">
+              {formatSecondsAsHms(totals.activeSeconds)}{" "}
+              <span className="font-normal text-muted-foreground">({pct.format(totals.activeShare)})</span>
+            </td>
+            <td className="px-2 py-2 tabular-nums text-muted-foreground">
+              {formatSecondsAsHms(totals.inactiveSeconds)}{" "}
+              <span className="font-normal">({pct.format(1 - totals.activeShare)})</span>
+            </td>
+          </tr>
+        </tfoot>
       </table>
     </div>
   );

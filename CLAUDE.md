@@ -4244,6 +4244,28 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     Gebiete by ambiguous count (153/123/122/108/102) render correctly.
     Typecheck/lint clean.
 
+64. **"Gesamt" (totals) row added to `DialerStatusTable` — shipped
+    (2026-08-11).** Anis: "add in dialer live and snapshots a Gesamt part
+    at the end, so I can see the summary as well" - one shared component
+    already powers both Live-Status and Verlauf (item 41 above), so a
+    single change covers both. New `computeDialerTotals()`
+    (`lib/dialer/status.ts`) sums the raw count/time fields across every
+    row shown, then **recomputes** the derived rates (Konversion,
+    Auslastung, AHT, Anrufe/Verkäufe pro Std.) from those sums rather than
+    averaging each agent's own already-derived percentage - a straight
+    average would let one low-volume agent's outlier rate skew the total as
+    much as the busiest agent's. Rendered as a `<tfoot>` row (bold, top
+    border) at the end of the table, showing agent count instead of a
+    per-agent status/time-in-status (those don't aggregate meaningfully).
+    Verified the sums directly against a real stored snapshot (2026-08-10):
+    manual `reduce()` sums for totalCalls (952) and realSales matched the
+    computed totals exactly, and every derived rate/time field printed
+    correctly. Typecheck/lint clean, full suite green (re-ran the one
+    already-documented flaky idempotency test in isolation after a
+    transient DB-contention failure, per §12's established pattern -
+    passed cleanly, confirmed unrelated to this change since it doesn't
+    touch `signals`/`fn_refresh_signals` at all).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

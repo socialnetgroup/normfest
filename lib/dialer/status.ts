@@ -146,6 +146,85 @@ export function refreshSalesInSummaries(
   });
 }
 
+export type DialerAgentTotals = {
+  totalCalls: number;
+  callsPerHour: number;
+  realSales: number;
+  conversion: number;
+  salesPerHour: number;
+  ahtSeconds: number;
+  occupancy: number;
+  talkSeconds: number;
+  waitSeconds: number;
+  dispoSeconds: number;
+  pauseSeconds: number;
+  pauseShare: number;
+  deadSeconds: number;
+  deadShare: number;
+  totalSeconds: number;
+  activeSeconds: number;
+  inactiveSeconds: number;
+  activeShare: number;
+};
+
+/** "Gesamt" row for DialerStatusTable - sums the count/time fields across
+ * every agent shown, then recomputes the derived rates (Konversion,
+ * Auslastung, AHT, ...) from those sums rather than averaging each row's
+ * own already-derived rate (a straight average would let a low-volume
+ * agent's outlier percentage skew the total as much as a high-volume one).
+ * Anis, 2026-08-11: "add in dialer live and snapshots a Gesamt part... so I
+ * can see the summary as well." */
+export function computeDialerTotals(summaries: DialerAgentSummary[]): DialerAgentTotals {
+  let totalCalls = 0;
+  let realSales = 0;
+  let talkSec = 0;
+  let waitSec = 0;
+  let dispoSec = 0;
+  let pauseSec = 0;
+  let deadSec = 0;
+  let totalSec = 0;
+  let activeSec = 0;
+  let inactiveSec = 0;
+
+  for (const s of summaries) {
+    totalCalls += s.totalCalls;
+    realSales += s.realSales;
+    talkSec += parseDialerTimeToSeconds(s.talkTime);
+    waitSec += parseDialerTimeToSeconds(s.waitTime);
+    dispoSec += parseDialerTimeToSeconds(s.dispoTime);
+    pauseSec += parseDialerTimeToSeconds(s.pauseTime);
+    deadSec += parseDialerTimeToSeconds(s.deadTime);
+    totalSec += parseDialerTimeToSeconds(s.totalTime);
+    activeSec += parseDialerTimeToSeconds(s.activeTime);
+    inactiveSec += parseDialerTimeToSeconds(s.inactiveTime);
+  }
+
+  const totalHours = totalSec / 3600;
+  const availableSec = talkSec + dispoSec + waitSec + deadSec;
+  const activeInactiveSec = activeSec + inactiveSec;
+
+  return {
+    totalCalls,
+    callsPerHour: totalHours > 0 ? totalCalls / totalHours : 0,
+    realSales,
+    conversion: totalCalls > 0 ? realSales / totalCalls : 0,
+    salesPerHour: totalHours > 0 ? realSales / totalHours : 0,
+    ahtSeconds: totalCalls > 0 ? (talkSec + dispoSec) / totalCalls : 0,
+    occupancy: availableSec > 0 ? (talkSec + dispoSec) / availableSec : 0,
+    talkSeconds: talkSec,
+    waitSeconds: waitSec,
+    dispoSeconds: dispoSec,
+    pauseSeconds: pauseSec,
+    pauseShare: totalSec > 0 ? pauseSec / totalSec : 0,
+    deadSeconds: deadSec,
+    deadShare: totalSec > 0 ? deadSec / totalSec : 0,
+    totalSeconds: totalSec,
+    activeSeconds: activeSec,
+    inactiveSeconds: inactiveSec,
+    activeShare: activeInactiveSec > 0 ? activeSec / activeInactiveSec : 0,
+  };
+}
+
 function stripDiacritics(s: string): string {
   return s
     .normalize("NFD")
