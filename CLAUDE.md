@@ -4450,10 +4450,37 @@ explicitly labeled "laut Agent-Feedback", or says no data).
        ($101.21 first wave + $123.40 rest-of-book). Project-wide coverage
        now **13,175 of 14,349 active companies analyzed (91.8%)**, up from
        47% before today's two batches.
-    2. Revisit the still-parked Places gaps for Alan Sačić (73%) and Lejla
-       Piric (69%) - parked since 2026-08-09 (§13 M8 status), Anis: "ignore
-       the places that are left for now on ignore (after i add payment, we
-       do that as well.)"
+    2. ✅ **Alan Sačić (73%) and Lejla Piric (69%) Places gaps — closed
+       (2026-08-11), Anis: "Do it all... dont forget websites."** Dry-run
+       tested first on 4 real companies (2 per agent) - all resolved
+       correctly, confirming GCP billing/credit still works. Real gap
+       re-checked directly before scaling (a first attempt undercounted due
+       to the exact `.in()`-with-1000-items bug already documented
+       elsewhere in this project - caught by cross-checking against the
+       app's own `company_gebiet_enrichment_coverage` view before trusting
+       it): 778 companies (375 Alan + 407 Lejla, 4 fewer than the initial
+       782 estimate from minor concurrent drift). `enrich-pilot.mjs`
+       couldn't be reused - it skips any company with an existing
+       `company_enrichment` row, which these all had (unresolved, not
+       absent) - so a new one-off script (`scripts/resolve-places-gap.mjs`,
+       deleted after use) called `resolvePlaceForCompany`/
+       `fetchWebsiteForCompany` directly against the exact unresolved IDs.
+       **Result: 778/778 processed, 0 errors** - 654 resolved + 21
+       same-address-merged + 90 newly ambiguous (join the existing
+       manual-review queue) + 13 no-match; 415 website fetches. **Both
+       agents now at 100% Places resolved** (1285/1285, 1353/1353).
+       Project-wide Places coverage: 99.85% (14,328/14,349).
+
+       **Followed straight through to ANALYZE too**, since it only needs
+       Anthropic credit (not GCP) and the $90.34 remaining easily covered
+       it: 697 of the newly-resolved companies were immediately
+       ANALYZE-eligible. Submitted as `msgbatch_01Lr3x9iUacaHWQuHFBs84mg` -
+       **697/697 succeeded, 0 write failures. Real cost: $13.58**
+       ($214.00 → $90.34 → **$76.76** remaining - Anis independently
+       confirmed the $76.76 figure from his own billing check, matching
+       exactly). **Project-wide ANALYZE coverage now 96.7% (13,872/14,349)**,
+       up from 91.8% before this batch. Combined real ANALYZE spend across
+       all three waves today: $224.61 + $13.58 = **$238.19**.
     3. Then revisit ANALYZE for companies that were "unklar" at step 1 but
        have since been resolved by hand in `/admin/enrichment` (already
        eligible for `fetchAnalyzeBacklog()` automatically, since it filters
@@ -4461,6 +4488,64 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     4. Then check for any other real gaps in "missing info" project-wide
        (Anis: "revisit the analyze where missing info") before considering
        the whole-book rollout complete.
+
+68. **`fn_refresh_signals()` real performance fix — not another timeout bump
+    (2026-08-11), Anis: "Dig into a real fix now."** After completing item
+    67 above, `fn_refresh_signals()` started failing again - but this time
+    with two genuinely new failure classes past the 150s statement_timeout
+    already in place: "upstream request timeout" (an HTTP-gateway-level
+    timeout, confirmed distinct from the Postgres statement_timeout - a
+    direct RPC call succeeded at 125.1s right after this was first seen)
+    and, worse, a real "duplicate key value violates unique constraint
+    idx_signals_dedup" - caused by my own first attempted fix (a retry-once
+    wrapper on the RPC call, same shape as the existing `countSignals()`
+    helper): an upstream timeout only means the HTTP layer gave up waiting,
+    NOT that the server-side call stopped, so retrying immediately started
+    a second `fn_refresh_signals()` while the first was still running,
+    racing on the same insert. **Reverted the retry - it was actively
+    unsafe, not just wasteful.**
+
+    Profiled the real query directly (`supabase db query` + `EXPLAIN
+    ANALYZE`, not guessed) rather than bump the timeout a fourth time.
+    Every individual piece was fast on its own (`_category_affinity` build
+    ~1s, `_crosssell_triggers` build ~3s, the full `cross_sell` SELECT
+    ~4s) - the real cost was pure volume: `cross_sell` had grown to
+    **959,100 rows** (from ~85,500 the day before, an 11x jump from item
+    67's ANALYZE rollout), and deleting + re-inserting ~1M rows while
+    maintaining the unique dedup index is inherently expensive no matter
+    how well-indexed the SELECT is.
+
+    **Real fix**: `app/(app)/firmen/[id]/page.tsx`'s own
+    `MAX_SIGNALS_SHOWN = 8` already caps what's ever displayed to a top-8-
+    by-score slice per company across all signal types combined - storing
+    ~69 cross_sell rows per company on average when at most 8 are ever
+    shown was pure waste. Migration
+    `20260811040000_fn_refresh_signals_cap_cross_sell.sql` caps `cross_sell`
+    generation to the top 15 rows per company (via `row_number() over
+    (partition by company_id order by score desc, ...)`, filtered to
+    `rn <= 15`) - comfortably above the UI's own top-8-total cap, so this
+    changes **zero visible behavior** (the UI never looks past its own top
+    8 anyway) while cutting real volume dramatically.
+
+    **Verified with real numbers**: `cross_sell` 959,100 → **200,394 rows**
+    (4.8x reduction, matching the expected ceiling of 13,872 analyzed
+    companies × 15). Real call timing: 125s/257s (single/double-call) →
+    **52s/122s** after the fix - comfortable margin under the existing
+    150s/300s budgets, no further timeout bump needed. Confirmed still
+    idempotent (identical row count across two consecutive real calls).
+
+    **Second real bug found while re-verifying the full suite**: a
+    `company_enrichment / enrichment_jobs RLS` test's `beforeAll` picked a
+    company with "no existing enrichment row" via an unpaginated
+    `company_enrichment` select (silently capped at PostgREST's 1000-row
+    default - same class of bug fixed multiple times elsewhere in this
+    project) combined with only a 50-company sample. With real coverage
+    now ~99.85% Places-resolved, only ~21 companies project-wide still
+    lack any enrichment row at all - a 50-company sample had a real chance
+    of missing all of them. Fixed by properly paginating the enriched-id
+    set and scanning companies in bounded pages until a genuinely free one
+    turns up. Full suite green after both fixes (41/41), typecheck/lint
+    clean.
 
 ---
 

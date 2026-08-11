@@ -537,14 +537,37 @@ describe("signals RLS + fn_refresh_signals", () => {
     expect(error).not.toBeNull();
   });
 
+  // 2026-08-11: a real, different failure class showed up alongside the
+  // 57014 statement-timeout regressions above - "upstream request timeout",
+  // an HTTP-gateway-level timeout, not the Postgres statement_timeout (a
+  // direct RPC call succeeded at 125.1s right after this was first seen,
+  // confirming the query itself completes fine within the 150s DB budget -
+  // bumping that further wouldn't fix this).
+  //
+  // A retry-once wrapper (same shape as countSignals() below) was tried and
+  // reverted: it caused a REAL bug, not a fix. An "upstream request
+  // timeout" only means the HTTP layer gave up waiting - it does NOT mean
+  // the server-side call actually stopped. Retrying immediately can start a
+  // second fn_refresh_signals() while the first is still running server-
+  // side, and the two overlapping runs raced on the same insert, producing
+  // a genuine "duplicate key value violates unique constraint
+  // idx_signals_dedup" (caught live, not hypothetical). Retrying here is
+  // actively unsafe, not just wasteful - left as a single call; if this
+  // ever fails, re-run the suite manually once real DB load has settled
+  // (§12's established pattern for this function's well-documented
+  // variance), don't reach for an automatic retry.
+  async function refreshSignals(client: typeof admin, label: string) {
+    const { error } = await client.rpc("fn_refresh_signals");
+    if (error) throw new Error(`fn_refresh_signals (${label}) failed: ${error.message}`);
+  }
+
   it(
     "an admin can call fn_refresh_signals and any authenticated user can read signals",
     async () => {
       const adminClient = anonClient();
       await adminClient.auth.signInWithPassword({ email: adminEmail, password });
 
-      const { error: rpcErr } = await adminClient.rpc("fn_refresh_signals");
-      expect(rpcErr).toBeNull();
+      await refreshSignals(adminClient, "admin call test");
 
       // Force 'shared' for this read: the test agent has no linked `agents`
       // row (no Gebiet), so under production's real 'gebiet' mode (Anis's
@@ -609,12 +632,10 @@ describe("signals RLS + fn_refresh_signals", () => {
   it(
     "fn_refresh_signals is idempotent (dedup index holds across re-runs)",
     async () => {
-      const { error: first } = await admin.rpc("fn_refresh_signals");
-      expect(first).toBeNull();
+      await refreshSignals(admin, "idempotency test, 1st call");
       const countAfterFirst = await countSignals("after first refresh");
 
-      const { error: second } = await admin.rpc("fn_refresh_signals");
-      expect(second).toBeNull();
+      await refreshSignals(admin, "idempotency test, 2nd call");
       const countAfterSecond = await countSignals("after second refresh");
 
       expect(countAfterSecond).toBe(countAfterFirst);
@@ -698,11 +719,31 @@ describe("company_enrichment / enrichment_jobs RLS (M5)", () => {
     // Pick a company with no existing company_enrichment row — company_id
     // is unique on that table, and real companies get enriched by the
     // actual pipeline (scripts/enrich-*.mjs) outside of tests.
-    const { data: enriched } = await admin.from("company_enrichment").select("company_id");
-    const enrichedIds = new Set((enriched ?? []).map((e) => e.company_id));
-    const { data: candidates } = await admin.from("companies").select("id").limit(50);
-    const free = candidates!.find((c) => !enrichedIds.has(c.id));
-    companyId = free!.id;
+    //
+    // 2026-08-11: real coverage is now ~99.85% Places-resolved (CLAUDE.md
+    // §14 item 67) - only ~21 companies project-wide still have zero
+    // company_enrichment row at all. The old unpaginated `enrichedIds`
+    // select silently capped at PostgREST's 1000-row default (same class
+    // of bug fixed elsewhere in this project multiple times), and a
+    // 50-company sample had a real chance of missing all ~21 free ones
+    // entirely - both now fixed: paginate the full enriched-id set, then
+    // scan companies in pages (bounded) until a genuinely free one turns up.
+    const enrichedIds = new Set<string>();
+    for (let from = 0; ; from += 1000) {
+      const { data } = await admin.from("company_enrichment").select("company_id").range(from, from + 999);
+      if (!data || data.length === 0) break;
+      for (const row of data) enrichedIds.add(row.company_id);
+      if (data.length < 1000) break;
+    }
+
+    let free: { id: string } | undefined;
+    for (let from = 0; !free && from < 15000; from += 500) {
+      const { data: candidates } = await admin.from("companies").select("id").order("id").range(from, from + 499);
+      if (!candidates || candidates.length === 0) break;
+      free = candidates.find((c) => !enrichedIds.has(c.id));
+    }
+    if (!free) throw new Error("no company without company_enrichment found - real coverage may now be 100%");
+    companyId = free.id;
   });
 
   afterAll(async () => {
