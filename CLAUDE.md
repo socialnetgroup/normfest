@@ -4365,13 +4365,13 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     the existing address-based merge. Typecheck/lint clean, full suite
     green (41/41).
 
-67. **First real ANALYZE batch submitted for the 4-agent first wave —
-    started (2026-08-11), full rollout plan agreed with Anis.** Anis, under
-    time pressure: "Start analzye for them (also topped up credit, we have
-    115$ atm). dont analyze those 'unklar' firmen and do it after the by
-    hand list is finished and enriched... and after all are enriched and
-    rolled out We can revisit the alan, lejla places one, then revisit the
-    analyze where missing info."
+67. **First real ANALYZE batch for the 4-agent first wave — completed
+    (2026-08-11), full rollout plan agreed with Anis.** Anis, under time
+    pressure: "Start analzye for them (also topped up credit, we have 115$
+    atm). dont analyze those 'unklar' firmen and do it after the by hand
+    list is finished and enriched... and after all are enriched and rolled
+    out We can revisit the alan, lejla places one, then revisit the analyze
+    where missing info."
 
     **Real gap found and fixed first**: `fetchAnalyzeBacklog()` (item 61)
     filtered on `places_resolved_at is not null` but NOT on
@@ -4386,29 +4386,76 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     from the earlier, now-stale 5,480 estimate): **5,292 companies**
     eligible across Maja (1,195) / Arnela (1,471) / Elida (1,357) / Rijalda
     (1,269), already excluding each agent's real "unklar" count (54/46/36/50
-    per Anis's own numbers). Estimated cost ~$114.57 (conservative, based on
-    the measured sync-call rate halved for the batch discount) - right at
-    the $115 budget, though the one real batch data point so far (the
-    3-company dry-run test, item 61) came in notably cheaper per-company
-    ($0.0143 vs the $0.0217 estimate), so the real final cost will likely
-    land lower. Flagged this to Anis before submitting rather than silently
-    assuming it fits. Submitted as one batch:
-    `msgbatch_01G9VYGqAPXxrbJ99FxxaZyh`. Real cost will be known once
-    `scripts/process-analyze-batch.mjs msgbatch_01G9VYGqAPXxrbJ99FxxaZyh`
-    runs after it finishes (`processing_status` reaches `"ended"` - most
-    batches complete within an hour, up to 24h max).
+    per Anis's own numbers). Submitted as one batch:
+    `msgbatch_01G9VYGqAPXxrbJ99FxxaZyh` - finished in well under an hour,
+    5,276 of 5,292 succeeded cleanly (0 API errors). **Real cost: $99.93**
+    (matches Anis's own real billing-console check, "roughly 100$") - close
+    to the conservative $114.57 estimate but, as predicted from the earlier
+    3-company test's cheaper-than-estimated rate, landed lower.
+
+    **16 companies (0.3%) truncated at the old 8,000-token ceiling** -
+    `writeAnalysisResult()` correctly refused to save the broken partial
+    JSON rather than silently storing garbage, so these stayed
+    `analyzed_at = null` rather than looking done. Bumped `MAX_TOKENS`
+    8000 → 16000 (new shared constant in `lib/enrichment/analyze.mjs`, used
+    by both the sync and batch paths so they can't drift apart again) and
+    retried all 16 synchronously (cheap at this volume, no need for a
+    second batch round-trip) - **all 16 succeeded**, real cost $1.28.
+    Verified directly against the DB afterward: zero remaining unanalyzed,
+    non-ambiguous, Places-resolved companies across all 4 agents' books.
+
+    **Total real spend for the full first-wave rollout: $101.21**
+    ($99.93 batch + $1.28 retry).
 
     **Agreed rollout order, written down per Anis's explicit "wirte das
     somewhere down" ask - do NOT jump ahead on any of these without his
     go-ahead:**
-    1. This first-wave batch (Maja/Arnela/Elida/Rijalda, excl. unklar) -
-       in progress.
-    2. Once it's processed and rolled out, revisit the still-parked Places
-       gaps for Alan Sačić (73%) and Lejla Piric (69%) - parked since
-       2026-08-09 (§13 M8 status), Anis: "ignore the places that are left
-       for now on ignore (after i add payment, we do that as well.)"
+    1. ✅ First-wave batch (Maja/Arnela/Elida/Rijalda, excl. unklar) -
+       **done**.
+    1b. ✅ **Rest of the book — completed (2026-08-11), Anis: "I redid the
+       credit anthropic now $214.00 avaiable. Do the rest now as well."**
+       Real backlog checked directly before submitting (not guessed):
+       6,449 companies across the other 5 agents - Merima Zulfic (2,046),
+       Muhamed Lepic (1,463), Nejra Adzemovic (1,293), Emina Berilo (837),
+       Lejla Piric (810). Alan Sačić: 0 remaining - already fully covered
+       from an earlier session's enrichment wave despite his Places gap
+       (see step 2) - `fetchAnalyzeBacklog()` only needs what's already
+       *resolved*, and everything resolved for him was already analyzed.
+       Submitted as `msgbatch_011TdZ9Xrrbzu4Li9T1yfJUS` - 6,447 of 6,449
+       succeeded and wrote back cleanly. **Real cost: $123.40** (close to
+       the $139.62 estimate). This does NOT touch Alan/Lejla's Places gap
+       (step 2) - that needs separate GCP credit, not Anthropic, and
+       wasn't part of this top-up.
+
+       **2 write-back failures, 1 resolved, 1 left as a known real gap:**
+       one hit the (already-bumped) 16,000-token ceiling - retried
+       synchronously, succeeded. The other ("Gericke Transport GmbH")
+       failed identically on 3 separate real attempts (sync retries, real
+       cost each time): `JSON.parse` error, "Unterminated string in JSON",
+       at a different position each time - not a truncation
+       (`stop_reason` wasn't `max_tokens`). Investigated the real input
+       rather than guessing: one of its 5 real Google reviews contains an
+       embedded apostrophe used as an informal quote mark ("...zuhaus'.")
+       - since the prompt requires quoting review text verbatim as
+       evidence (§9's anti-hallucination rule), the model has to
+       reproduce that literal character inside its own JSON string output,
+       and appears to be inconsistently mis-escaping it. Real, narrow,
+       reproducible edge case - not worth further real spend chasing one
+       company. Left `analyzed_at` null; revisit only if this pattern
+       recurs on other companies (would then be worth a prompt-level fix -
+       e.g. explicitly telling the model how to escape embedded quotes -
+       rather than a one-off retry).
+
+       **Total real ANALYZE spend across both waves this session: $224.61**
+       ($101.21 first wave + $123.40 rest-of-book). Project-wide coverage
+       now **13,175 of 14,349 active companies analyzed (91.8%)**, up from
+       47% before today's two batches.
+    2. Revisit the still-parked Places gaps for Alan Sačić (73%) and Lejla
+       Piric (69%) - parked since 2026-08-09 (§13 M8 status), Anis: "ignore
+       the places that are left for now on ignore (after i add payment, we
+       do that as well.)"
     3. Then revisit ANALYZE for companies that were "unklar" at step 1 but
-       have since been resolved by hand in `/admin/enrichment` (now
+       have since been resolved by hand in `/admin/enrichment` (already
        eligible for `fetchAnalyzeBacklog()` automatically, since it filters
        live on `places_ambiguous`, not a frozen snapshot).
     4. Then check for any other real gaps in "missing info" project-wide

@@ -1,0 +1,13 @@
+-- Real 57014 statement-timeout again (2026-08-11), same symptom as
+-- 20260731080000: measured directly right after the failure, a single real
+-- call took 75.2s - just over the 75s function-level override set that day.
+-- Real cause this time: today's two ANALYZE batches (CLAUDE.md §14 item 67)
+-- took project-wide company_enrichment.external_opportunities coverage from
+-- ~10% to 91.8% (13,175/14,349 companies) in one session - directly feeding
+-- the cross_sell/seasonal_push/new_product_match joins this function
+-- computes over. Given this project's own documented wide run-to-run
+-- variance for this function even at a fixed data scale (26-77s observed
+-- previously), and that today's real data volume is meaningfully larger
+-- again, bumping with real margin rather than matching the one measurement
+-- exactly.
+alter function fn_refresh_signals() set statement_timeout = '150s';

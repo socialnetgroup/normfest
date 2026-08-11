@@ -574,7 +574,14 @@ describe("signals RLS + fn_refresh_signals", () => {
     // run-to-run variance). DB-side timeout raised to 75s
     // (20260731080000_bump_fn_refresh_signals_timeout.sql); this JS-side
     // timeout raised to match with margin.
-    90000,
+    // Bumped again 2026-08-11: same 57014 symptom recurred, a single real
+    // call measured 75.2s -- right past the 75s DB-side timeout, no margin
+    // left. Real driver: today's two ANALYZE batches (CLAUDE.md §14 item
+    // 67) took company_enrichment.external_opportunities coverage from
+    // ~10% to 91.8% project-wide in one session. DB-side timeout raised to
+    // 150s (20260811030000_bump_fn_refresh_signals_timeout_again.sql);
+    // this JS-side timeout raised to match with margin.
+    180000,
   );
 
   // The count query below has twice come back with count:null and no
@@ -614,7 +621,9 @@ describe("signals RLS + fn_refresh_signals", () => {
     },
     // Two full sequential refreshes -- same driver as above, doubled and
     // bumped again same day for the same reason (75s DB timeout x2 + margin).
-    220000,
+    // Bumped again 2026-08-11 alongside the single-call test above (150s DB
+    // timeout x2 + margin).
+    340000,
   );
 });
 
