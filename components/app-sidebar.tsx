@@ -30,6 +30,7 @@ import {
   PanelLeftOpen,
   CalendarCheck,
   Mail,
+  KeyRound,
   X,
 } from "lucide-react";
 
@@ -345,6 +346,19 @@ export function AppSidebar({
 
         <div className="flex flex-col gap-2 border-t px-4 py-4">
           <span className="truncate text-center text-xs text-muted-foreground">{userLabel}</span>
+          <Link
+            href="/konto"
+            onClick={closeMobile}
+            className={cn(
+              "flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+              isActive(pathname, "/konto")
+                ? "bg-primary/10 text-primary"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            )}
+          >
+            <KeyRound className="size-3.5" />
+            Mein Konto
+          </Link>
           <form action={logoutAction}>
             <Button type="submit" variant="outline" size="sm" className="w-full">
               Abmelden

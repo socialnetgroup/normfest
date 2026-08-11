@@ -1232,6 +1232,7 @@ export type Database = {
           id: string
           last_seen_at: string | null
           last_seen_path: string | null
+          must_change_password: boolean
           role: string
           updated_at: string
         }
@@ -1244,6 +1245,7 @@ export type Database = {
           id: string
           last_seen_at?: string | null
           last_seen_path?: string | null
+          must_change_password?: boolean
           role?: string
           updated_at?: string
         }
@@ -1256,6 +1258,7 @@ export type Database = {
           id?: string
           last_seen_at?: string | null
           last_seen_path?: string | null
+          must_change_password?: boolean
           role?: string
           updated_at?: string
         }
@@ -1691,6 +1694,7 @@ export type Database = {
           sku: string
         }[]
       }
+      fn_clear_must_change_password: { Args: never; Returns: undefined }
       fn_company_gebiet_coverage: {
         Args: never
         Returns: {

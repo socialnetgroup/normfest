@@ -10,6 +10,12 @@ import type { Database } from "@/lib/supabase/types";
 // check instead (see app/api/cron/dialer-snapshot/route.ts).
 const PUBLIC_PATHS = ["/login", "/api/cron"];
 
+// New accounts (agents created via scripts/*, flagged must_change_password)
+// must set their own real password before touching anything else - exempt
+// /konto itself (the page that does it) and every /api route (an API
+// request should hit its own handler, never get HTML-redirected).
+const MUST_CHANGE_PASSWORD_EXEMPT_PATHS = ["/login", "/konto", "/api"];
+
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
 
@@ -52,6 +58,24 @@ export async function updateSession(request: NextRequest) {
     const homeUrl = request.nextUrl.clone();
     homeUrl.pathname = "/";
     return NextResponse.redirect(homeUrl);
+  }
+
+  if (user) {
+    const isExempt = MUST_CHANGE_PASSWORD_EXEMPT_PATHS.some((path) =>
+      request.nextUrl.pathname.startsWith(path),
+    );
+    if (!isExempt) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("must_change_password")
+        .eq("id", user.id)
+        .single();
+      if (profile?.must_change_password) {
+        const kontoUrl = request.nextUrl.clone();
+        kontoUrl.pathname = "/konto";
+        return NextResponse.redirect(kontoUrl);
+      }
+    }
   }
 
   return response;

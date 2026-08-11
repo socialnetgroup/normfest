@@ -4266,6 +4266,59 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     passed cleanly, confirmed unrelated to this change since it doesn't
     touch `signals`/`fn_refresh_signals` at all).
 
+65. **Accounts created for the 5 remaining agents + self-service "set your own
+    password" feature — shipped (2026-08-11).** Anis, after a clarifying
+    round-trip on an earlier ambiguous "counts missing" message: "I meant,
+    make all ACCOUNTS for all missing agents. Also do the option to set
+    your own Password after 1st logging." Checked `agents.profile_id`
+    directly before creating anything - 5 of the 10 real active agents had
+    no linked login account at all: Lejla Piric, Nejra Adzemovic, Emina
+    Berilo, Merima Zulfic, Muhamed Lepic (Alan/Elida/Maja/Arnela/Rijalda
+    already had one from an earlier session, §13 M8's 4-agent enrichment
+    wave). Created all 5 via `admin.auth.admin.createUser()` (§12: the
+    only real account-creation path in this app, service-role only, no
+    self-signup) with the same convention already in use -
+    `firstname.lastname@social-net.ba` (diacritics stripped, matching the
+    existing `alan.sacic@...` pattern) / `Firstname123` - and linked each
+    new `profiles.id` back to its `agents.profile_id`.
+
+    **New forced first-login password change**, since a shared/predictable
+    temp password shouldn't stay valid indefinitely. New
+    `profiles.must_change_password boolean default false` (existing
+    accounts stay `false` - only the 5 new ones were explicitly flagged
+    `true`, so nobody already onboarded gets unexpectedly interrupted) +
+    `fn_clear_must_change_password()` RPC (narrow, security definer, same
+    shape as `fn_dismiss_signal`/`fn_set_wiedervorlage_done` - only ever
+    touches the caller's own row). `lib/supabase/proxy.ts` (the existing
+    auth-redirect middleware, §12) now also checks this flag on every
+    authenticated request outside `/login`/`/konto`/`/api` and redirects
+    to `/konto` until it's cleared. New `/konto` page +
+    `components/password-change-form.tsx`: the actual password change goes
+    through Supabase Auth's own `auth.updateUser({password})` under the
+    user's existing session (no old-password re-entry needed - standard
+    Supabase behavior for a user changing their own already-authenticated
+    account), the RPC only clears the app-level flag once that succeeds.
+    New "Mein Konto" link in the sidebar footer (always available, not
+    just during the forced flow) so any agent/admin can change their
+    password later too. Min length 8, client-side validated before the
+    real Supabase call.
+
+    **Verified end-to-end via direct Supabase client calls** (the same
+    `signInWithPassword`-based pattern the project's own
+    `supabase/tests/rls.test.ts` suite already uses throughout, not
+    browser-automated login - deliberately avoided typing any password
+    into the rendered `/login` form per this assistant's own operating
+    rules): created a throwaway test account, confirmed
+    `must_change_password` started `true`, signed in with the temp
+    password, called `auth.updateUser` + the RPC, confirmed the flag
+    flipped to `false`, confirmed a fresh sign-in with the NEW password
+    succeeded and the OLD temp password was correctly rejected, then
+    deleted the test account. Typecheck/lint clean; full suite green
+    (re-ran the already-documented `fn_refresh_signals` idempotency test
+    in isolation twice after real-load-related transient failures, per
+    §12's established pattern - passed cleanly both times, confirmed
+    unrelated since that test never touches `profiles`/`auth`/`agents`).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
