@@ -4319,6 +4319,52 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     §12's established pattern - passed cleanly both times, confirmed
     unrelated since that test never touches `profiles`/`auth`/`agents`).
 
+66. **New "perfect name match" auto-merge tier for the ambiguous Places
+    queue — shipped (2026-08-11).** Anis: "You can confidently where the
+    name match ist 100% merge both, tripple results and zusammenführen."
+    Real gap found in `bestNameMatch()`'s existing decisive/soft tiers
+    (§14 item 51): both only ever compare the TOP candidate against a
+    single runner-up's score/margin - when 2 (or 3+) candidates all score
+    a perfect 1.0 word-overlap match against the real company name (a tie
+    at the top, not "one clearly ahead"), neither tier's margin check
+    fires, so the company fell through to the manual queue even though a
+    perfect match is at least as strong a "same real business, multiple
+    listings" signal as the existing exact-address merge. New
+    `perfectNameMatchGroup(places, companyName)`
+    (`lib/enrichment/places.mjs`) finds every candidate scoring exactly
+    1.0 and, if 2+, returns them as a group for `mergeCandidates()` -
+    wired into `pickResolution()` (checked right after the address-match
+    tier, before the single-pick decisive/soft tiers) so future live
+    resolutions get this automatically, and into
+    `scripts/rescan-ambiguous-by-name.mjs` (now reports two separate
+    resolved counts: single-pick name-match vs. 100%-match-merged) to
+    sweep the existing backlog.
+
+    **Real false-positive bug caught by spot-checking the dry-run output
+    before trusting it at scale, per this project's own "verify before
+    scaling" discipline** - a "perfect" 1.0 score on just ONE surviving
+    distinguishing word is meaningless, not confidence: "Automobile A&N"
+    vs. "A&D Automobile" both collapse to the single token `{automobile}`
+    once `normalizeCompanyName()`'s existing `length > 1` filter strips
+    the single-letter "A&N"/"A&D" parts, scoring a perfect-but-coincidental
+    match between what are very likely two different companies. Fixed by
+    requiring the company's own normalized name to have **at least 2** real
+    distinguishing words before trusting a perfect-score group at all - a
+    first dry-run found 32 candidate merges, the guard correctly dropped 6
+    single-word false positives (leaving 26), re-verified by re-running the
+    dry-run and confirming only the guard-caused drop, nothing else moved.
+
+    **Applied for real to the live ambiguous queue**: 26 real merges,
+    including two real "tripple" (3-listing) and one 4-listing and one
+    genuine 9-listing case (a real multi-branch company, "GP Betonwerke
+    West GmbH", each branch its own Google listing). Verified directly
+    against the DB (not just the script's own log): ambiguous count
+    dropped, and a spot-checked merged row ("Taxi Ali") shows real, still
+    individually-dated review quotes from both source listings correctly
+    tagged via `source_listing`, exactly the same non-fabrication shape as
+    the existing address-based merge. Typecheck/lint clean, full suite
+    green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

@@ -14,7 +14,10 @@
 // This re-scores already-stored places_candidates (no new Places API calls -
 // same "free, safe to run any time" shape as the address-merge script),
 // reusing the exact same scoring (bestNameMatch: decisive tier, then a
-// softer tier) that lib/enrichment/places.mjs's pickResolution() now
+// softer tier; perfectNameMatchGroup: 2+ candidates all scoring a perfect
+// 1.0 word match, merged rather than single-picked - added 2026-08-11 per
+// Anis's "where the name match ist 100% merge both, tripple results and
+// zusammenführen") that lib/enrichment/places.mjs's pickResolution() now
 // applies live during new resolutions - one implementation, never two that
 // can drift apart (§3.2.6). This script exists to sweep the *existing*
 // ambiguous backlog; pickResolution() prevents new ones from needing it.
@@ -22,7 +25,7 @@
 // Usage: node scripts/rescan-ambiguous-by-name.mjs [--dry-run]
 import { createClient } from "@supabase/supabase-js";
 
-import { bestNameMatch } from "../lib/enrichment/places.mjs";
+import { bestNameMatch, mergeCandidates, perfectNameMatchGroup } from "../lib/enrichment/places.mjs";
 
 process.loadEnvFile(".env.local");
 
@@ -72,7 +75,8 @@ async function main() {
   const rows = await fetchAllAmbiguous();
   console.log(`${rows.length} ambiguous Einträge werden nach Namensähnlichkeit geprüft...\n`);
 
-  let resolved = 0;
+  let resolvedSingle = 0;
+  let resolvedMerged = 0;
   let staysAmbiguous = 0;
 
   for (const row of rows) {
@@ -83,13 +87,34 @@ async function main() {
       continue;
     }
 
+    // Anis, 2026-08-11: "where the name match ist 100% merge both, tripple
+    // results and zusammenführen" - checked BEFORE the single-pick
+    // bestNameMatch tier below, since 2+ candidates all scoring a perfect
+    // 1.0 word-for-word match is a tie at the top (bestNameMatch's margin
+    // check never fires for it) but is real, strong "same business,
+    // multiple listings" evidence - merge them all rather than picking one
+    // arbitrarily.
+    const perfectGroup = perfectNameMatchGroup(candidates, companyName);
+    if (perfectGroup) {
+      resolvedMerged++;
+      console.log(
+        `  [100%-Match, zusammengeführt] "${companyName}" -> ${perfectGroup.length}x "${perfectGroup[0].displayName?.text}"` +
+          ` (${perfectGroup.map((p) => p.formattedAddress).join(" | ")})`,
+      );
+      if (!DRY_RUN) {
+        const { error } = await admin.from("company_enrichment").update(mergeCandidates(perfectGroup)).eq("id", row.id);
+        if (error) console.log(`    Fehler: ${error.message}`);
+      }
+      continue;
+    }
+
     const match = bestNameMatch(candidates, companyName);
     if (!match) {
       staysAmbiguous++;
       continue;
     }
 
-    resolved++;
+    resolvedSingle++;
     console.log(`  [Name-Match] "${companyName}" -> "${match.displayName?.text}" (${match.formattedAddress})`);
 
     if (!DRY_RUN) {
@@ -98,7 +123,8 @@ async function main() {
     }
   }
 
-  console.log(`\nAufgelöst (Namens-Match): ${resolved}`);
+  console.log(`\nAufgelöst (Namens-Match, einzeln): ${resolvedSingle}`);
+  console.log(`Aufgelöst (100%-Match, zusammengeführt): ${resolvedMerged}`);
   console.log(`Bleibt echt mehrdeutig: ${staysAmbiguous}`);
   if (DRY_RUN) console.log("\n--dry-run: keine Schreibvorgänge.");
 }
