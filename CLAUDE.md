@@ -4365,6 +4365,56 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     the existing address-based merge. Typecheck/lint clean, full suite
     green (41/41).
 
+67. **First real ANALYZE batch submitted for the 4-agent first wave —
+    started (2026-08-11), full rollout plan agreed with Anis.** Anis, under
+    time pressure: "Start analzye for them (also topped up credit, we have
+    115$ atm). dont analyze those 'unklar' firmen and do it after the by
+    hand list is finished and enriched... and after all are enriched and
+    rolled out We can revisit the alan, lejla places one, then revisit the
+    analyze where missing info."
+
+    **Real gap found and fixed first**: `fetchAnalyzeBacklog()` (item 61)
+    filtered on `places_resolved_at is not null` but NOT on
+    `places_ambiguous` - since `resolvePlaceForCompany()` always sets
+    `places_resolved_at` even when the outcome is "ambiguous", the ANALYZE
+    backlog was silently including companies whose attached reviews/name/
+    address might belong to the wrong real business (a human hasn't picked
+    the right candidate yet). Added `.eq("places_ambiguous", false)` to the
+    query - this is the code home for "dont analyze those unklar firmen".
+
+    Real current numbers checked directly before submitting (not reused
+    from the earlier, now-stale 5,480 estimate): **5,292 companies**
+    eligible across Maja (1,195) / Arnela (1,471) / Elida (1,357) / Rijalda
+    (1,269), already excluding each agent's real "unklar" count (54/46/36/50
+    per Anis's own numbers). Estimated cost ~$114.57 (conservative, based on
+    the measured sync-call rate halved for the batch discount) - right at
+    the $115 budget, though the one real batch data point so far (the
+    3-company dry-run test, item 61) came in notably cheaper per-company
+    ($0.0143 vs the $0.0217 estimate), so the real final cost will likely
+    land lower. Flagged this to Anis before submitting rather than silently
+    assuming it fits. Submitted as one batch:
+    `msgbatch_01G9VYGqAPXxrbJ99FxxaZyh`. Real cost will be known once
+    `scripts/process-analyze-batch.mjs msgbatch_01G9VYGqAPXxrbJ99FxxaZyh`
+    runs after it finishes (`processing_status` reaches `"ended"` - most
+    batches complete within an hour, up to 24h max).
+
+    **Agreed rollout order, written down per Anis's explicit "wirte das
+    somewhere down" ask - do NOT jump ahead on any of these without his
+    go-ahead:**
+    1. This first-wave batch (Maja/Arnela/Elida/Rijalda, excl. unklar) -
+       in progress.
+    2. Once it's processed and rolled out, revisit the still-parked Places
+       gaps for Alan Sačić (73%) and Lejla Piric (69%) - parked since
+       2026-08-09 (§13 M8 status), Anis: "ignore the places that are left
+       for now on ignore (after i add payment, we do that as well.)"
+    3. Then revisit ANALYZE for companies that were "unklar" at step 1 but
+       have since been resolved by hand in `/admin/enrichment` (now
+       eligible for `fetchAnalyzeBacklog()` automatically, since it filters
+       live on `places_ambiguous`, not a frozen snapshot).
+    4. Then check for any other real gaps in "missing info" project-wide
+       (Anis: "revisit the analyze where missing info") before considering
+       the whole-book rollout complete.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
