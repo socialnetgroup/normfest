@@ -4547,6 +4547,54 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     turns up. Full suite green after both fixes (41/41), typecheck/lint
     clean.
 
+69. **Feedback erfassen: multiple sold products in one entry — shipped
+    (2026-08-12).** Anis: "Make it possible to add more Verkauf produkte at
+    one firm, like if they do 3 diferent positions sales products for 1
+    firme" - an agent who sells 3 different products to one Werkstatt in a
+    single call previously had to fill and submit the whole feedback form 3
+    separate times to record all 3.
+
+    No schema change - `sales_feedback` already has one nullable
+    `product_id` per row, and `fn_log_sales_feedback` already syncs
+    `agent_daily_performance` per row independently, so 3 real products sold
+    in one call becoming 3 real `sales_feedback` rows (submitted
+    sequentially) is functionally identical to logging them 3 separate
+    times, just without re-entering the outcome/comment/Wiedervorlage each
+    time.
+
+    `components/feedback-form.tsx` (`FeedbackForm`) replaced its single
+    `selectedProduct`/`qty`/`value` state with a `positions` array
+    (`Position[]`, each with its own product search/qty/value). A
+    "+ Weitere Position" button (shown only when `outcome === "sold"`, since
+    qty/value/multiple-products only make sense there) adds another line;
+    each position beyond the first gets its own "Entfernen" button. Every
+    other outcome still renders a single, unlabeled product field
+    (`positions[0]` only, no add/remove UI) - unchanged from before.
+
+    On submit for `outcome === "sold"`: positions with any real data
+    (product selected, qty, or value) are each submitted as their own
+    `fn_log_sales_feedback` call (same shared outcome/comment/objection/
+    Wiedervorlage-date on every row, sequential awaits so a real RPC error
+    on position 2 doesn't silently swallow position 1's already-inserted
+    row); if every position is empty, falls back to submitting one empty row
+    (matching the old "sold with no product declared" behavior, still
+    legal). Non-"sold" outcomes are unchanged - always exactly one row from
+    `positions[0]`.
+
+    Verified live end-to-end (throwaway admin test account, deleted after)
+    on a real company (KEMNA BAU Ost GmbH & Co. KG): clicked "Verkauft",
+    added a second position, searched and selected two real different
+    products ("Bremsenreiniger Bremtec" qty 2 / 19,90 €, "Autoschwamm Hydro"
+    qty 1 / 7,50 €) in the two position rows, submitted once - confirmed
+    directly in the DB that exactly 2 real `sales_feedback` rows were
+    created (correct product/qty/value on each, same `outcome='sold'`,
+    same-second timestamps from the sequential submit) rather than one row
+    or a merged/overwritten row. Also confirmed `fn_log_sales_feedback`'s
+    existing per-row `agent_daily_performance` sync behaved exactly as
+    documented (no-op for this test account, since it has no linked `agents`
+    row - the real 10-agent roster's rows were all confirmed untouched).
+    Test rows and test account deleted afterward. Typecheck and lint clean.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

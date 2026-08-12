@@ -54,25 +54,49 @@ const OUTCOME_DESCRIPTIONS: Partial<Record<Outcome, string>> = {
 
 type ProductOption = { id: string; name: string; sku: string };
 
+type Position = {
+  key: string;
+  productQuery: string;
+  productOptions: ProductOption[];
+  selectedProduct: ProductOption | null;
+  qty: string;
+  value: string;
+};
+
+function emptyPosition(): Position {
+  return {
+    key: crypto.randomUUID(),
+    productQuery: "",
+    productOptions: [],
+    selectedProduct: null,
+    qty: "",
+    value: "",
+  };
+}
+
 export function FeedbackForm({ companyId }: { companyId: string }) {
   const router = useRouter();
   const [outcome, setOutcome] = useState<Outcome | null>(null);
-  const [productQuery, setProductQuery] = useState("");
-  const [productOptions, setProductOptions] = useState<ProductOption[]>([]);
-  const [selectedProduct, setSelectedProduct] = useState<ProductOption | null>(null);
-  const [qty, setQty] = useState("");
-  const [value, setValue] = useState("");
+  // Multiple positions only make sense for "sold" (mehrere verkaufte
+  // Produkte in einem Anruf, CLAUDE.md 2026-08-12 - Anis: "if they do 3
+  // diferent positions sales products for 1 firme"). Every other outcome
+  // only ever uses positions[0]'s product field (optional, as before) - the
+  // add/remove UI and qty/value inputs stay hidden for those.
+  const [positions, setPositions] = useState<Position[]>([emptyPosition()]);
   const [objection, setObjection] = useState("");
   const [comment, setComment] = useState("");
   const [wiedervorlageDate, setWiedervorlageDate] = useState("");
   const [status, setStatus] = useState<"idle" | "saving" | "done" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  async function searchProducts(q: string) {
-    setProductQuery(q);
-    setSelectedProduct(null);
+  function updatePosition(key: string, patch: Partial<Position>) {
+    setPositions((prev) => prev.map((p) => (p.key === key ? { ...p, ...patch } : p)));
+  }
+
+  async function searchProducts(key: string, q: string) {
+    updatePosition(key, { productQuery: q, selectedProduct: null });
     if (q.trim().length < 2) {
-      setProductOptions([]);
+      updatePosition(key, { productOptions: [] });
       return;
     }
     const supabase = createClient();
@@ -81,16 +105,20 @@ export function FeedbackForm({ companyId }: { companyId: string }) {
       .select("id, name, sku")
       .or(`name.ilike.%${q}%,sku.ilike.%${q}%`)
       .limit(8);
-    setProductOptions(data ?? []);
+    updatePosition(key, { productOptions: data ?? [] });
+  }
+
+  function addPosition() {
+    setPositions((prev) => [...prev, emptyPosition()]);
+  }
+
+  function removePosition(key: string) {
+    setPositions((prev) => (prev.length > 1 ? prev.filter((p) => p.key !== key) : prev));
   }
 
   function reset() {
     setOutcome(null);
-    setProductQuery("");
-    setProductOptions([]);
-    setSelectedProduct(null);
-    setQty("");
-    setValue("");
+    setPositions([emptyPosition()]);
     setObjection("");
     setComment("");
     setWiedervorlageDate("");
@@ -105,24 +133,42 @@ export function FeedbackForm({ companyId }: { companyId: string }) {
       return;
     }
 
+    // "sold": submit one row per position that actually has data (product,
+    // qty, or value), so 3 real products sold in one call become 3 real
+    // sales_feedback rows - each contributes independently to
+    // agent_daily_performance via fn_log_sales_feedback's existing per-row
+    // sync logic, matching what logging them 3 separate times would do.
+    // Non-"sold" outcomes only ever use the first position's product field
+    // (unchanged single-row behavior).
+    const rowsToSubmit =
+      outcome === "sold"
+        ? (() => {
+            const withData = positions.filter((p) => p.selectedProduct || p.qty || p.value);
+            return withData.length > 0 ? withData : [positions[0]];
+          })()
+        : [positions[0]];
+
     setStatus("saving");
     setErrorMessage(null);
     const supabase = createClient();
-    const { error } = await supabase.rpc("fn_log_sales_feedback", {
-      p_company_id: companyId,
-      p_outcome: outcome,
-      p_product_id: selectedProduct?.id ?? undefined,
-      p_qty: qty ? Number(qty) : undefined,
-      p_value_net: value ? Number(value) : undefined,
-      p_objection: objection || undefined,
-      p_comment: comment || undefined,
-      p_wiedervorlage_date: wiedervorlageDate || undefined,
-    });
 
-    if (error) {
-      setStatus("error");
-      setErrorMessage(error.message);
-      return;
+    for (const pos of rowsToSubmit) {
+      const { error } = await supabase.rpc("fn_log_sales_feedback", {
+        p_company_id: companyId,
+        p_outcome: outcome,
+        p_product_id: pos.selectedProduct?.id ?? undefined,
+        p_qty: pos.qty ? Number(pos.qty) : undefined,
+        p_value_net: pos.value ? Number(pos.value) : undefined,
+        p_objection: objection || undefined,
+        p_comment: comment || undefined,
+        p_wiedervorlage_date: wiedervorlageDate || undefined,
+      });
+
+      if (error) {
+        setStatus("error");
+        setErrorMessage(error.message);
+        return;
+      }
     }
 
     setStatus("done");
@@ -152,63 +198,88 @@ export function FeedbackForm({ companyId }: { companyId: string }) {
             <p className="text-sm text-muted-foreground">{OUTCOME_DESCRIPTIONS[outcome]}</p>
           ) : null}
 
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="product-search">Produkt (optional)</Label>
-            <Input
-              id="product-search"
-              type="text"
-              value={selectedProduct ? `${selectedProduct.name} (${selectedProduct.sku})` : productQuery}
-              onChange={(e) => searchProducts(e.target.value)}
-              placeholder="Produktname oder Art.-Nr. suchen..."
-            />
-            {productOptions.length > 0 && !selectedProduct ? (
-              <ul className="mt-1 flex flex-col divide-y rounded-lg border">
-                {productOptions.map((p) => (
-                  <li key={p.id}>
+          <div className="flex flex-col gap-3">
+            {(outcome === "sold" ? positions : positions.slice(0, 1)).map((pos, i) => (
+              <div
+                key={pos.key}
+                className={outcome === "sold" && positions.length > 1 ? "flex flex-col gap-2 rounded-lg border p-3" : "flex flex-col gap-2"}
+              >
+                {outcome === "sold" && positions.length > 1 ? (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-muted-foreground">Position {i + 1}</span>
                     <button
                       type="button"
-                      className="w-full px-3 py-2 text-left text-sm hover:bg-accent"
-                      onClick={() => {
-                        setSelectedProduct(p);
-                        setProductOptions([]);
-                      }}
+                      onClick={() => removePosition(pos.key)}
+                      className="text-xs text-muted-foreground hover:text-destructive"
                     >
-                      {p.name}{" "}
-                      <span className="text-muted-foreground">({p.sku})</span>
+                      Entfernen
                     </button>
-                  </li>
-                ))}
-              </ul>
+                  </div>
+                ) : null}
+
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor={`product-search-${pos.key}`}>Produkt (optional)</Label>
+                  <Input
+                    id={`product-search-${pos.key}`}
+                    type="text"
+                    value={pos.selectedProduct ? `${pos.selectedProduct.name} (${pos.selectedProduct.sku})` : pos.productQuery}
+                    onChange={(e) => searchProducts(pos.key, e.target.value)}
+                    placeholder="Produktname oder Art.-Nr. suchen..."
+                  />
+                  {pos.productOptions.length > 0 && !pos.selectedProduct ? (
+                    <ul className="mt-1 flex flex-col divide-y rounded-lg border">
+                      {pos.productOptions.map((p) => (
+                        <li key={p.id}>
+                          <button
+                            type="button"
+                            className="w-full px-3 py-2 text-left text-sm hover:bg-accent"
+                            onClick={() => updatePosition(pos.key, { selectedProduct: p, productOptions: [] })}
+                          >
+                            {p.name}{" "}
+                            <span className="text-muted-foreground">({p.sku})</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+
+                {outcome === "sold" ? (
+                  <div className="flex gap-3">
+                    <div className="flex flex-col gap-1">
+                      <Label htmlFor={`qty-${pos.key}`}>Menge</Label>
+                      <Input
+                        id={`qty-${pos.key}`}
+                        type="number"
+                        min="1"
+                        value={pos.qty}
+                        onChange={(e) => updatePosition(pos.key, { qty: e.target.value })}
+                        className="w-24"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <Label htmlFor={`value-${pos.key}`}>Wert (€)</Label>
+                      <Input
+                        id={`value-${pos.key}`}
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={pos.value}
+                        onChange={(e) => updatePosition(pos.key, { value: e.target.value })}
+                        className="w-32"
+                      />
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ))}
+
+            {outcome === "sold" ? (
+              <Button type="button" variant="outline" size="sm" onClick={addPosition} className="self-start">
+                + Weitere Position
+              </Button>
             ) : null}
           </div>
-
-          {outcome === "sold" ? (
-            <div className="flex gap-3">
-              <div className="flex flex-col gap-1">
-                <Label htmlFor="qty">Menge</Label>
-                <Input
-                  id="qty"
-                  type="number"
-                  min="1"
-                  value={qty}
-                  onChange={(e) => setQty(e.target.value)}
-                  className="w-24"
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <Label htmlFor="value">Wert (€)</Label>
-                <Input
-                  id="value"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={value}
-                  onChange={(e) => setValue(e.target.value)}
-                  className="w-32"
-                />
-              </div>
-            </div>
-          ) : null}
 
           {outcome && OUTCOME_REASONS[outcome] ? (
             <div className="flex flex-col gap-1.5">
