@@ -4595,6 +4595,51 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     row - the real 10-agent roster's rows were all confirmed untouched).
     Test rows and test account deleted afterward. Typecheck and lint clean.
 
+70. **Live Anthropic API key rotation + Stammdaten `E-Mail 2` + Email-Liste
+    Outlook chunking + a real 1000-row cap bug fixed — shipped
+    (2026-08-12/13).** Anis reported the live `/assistent` chat returning
+    `401 authentication_error: API key is invalid`. Confirmed both chat and
+    every ANALYZE script share exactly one client (`getAnthropicClient()` in
+    `lib/ai/provider.mjs`, `new Anthropic()` reading `ANTHROPIC_API_KEY`) -
+    the key sitting in `.env.local` worked fine when tested directly, so the
+    problem was a stale/rotated key in Vercel's project environment
+    variables specifically, not a code issue. Declined to paste the actual
+    key value into chat (real credential, §12 key-hygiene) - walked Anis
+    through copying it from `.env.local` into Vercel's env var UI and
+    redeploying himself. Verified live afterward with a throwaway test
+    account logged into the real production site
+    (normfest.social-net.ba/assistent, not local dev) - a real question got
+    a real grounded answer, no 401.
+
+    Two more real asks in the same follow-up:
+    - **`companies.email_2`** (migration `20260812010000_companies_email_2.sql`)
+      added alongside the existing `telefon_2`/`telefon_3` pattern - same
+      agent-editable-extra shape, wired through a re-signatured
+      `fn_update_company_contact` (explicit `drop function` first, since a
+      changed parameter list needs one - same overload trap as the
+      Wiedervorlage/taxonomy migrations) and shown/hidden-if-empty on
+      `StammdatenCard` exactly like the phone fields.
+    - **Email-Liste split into Outlook-safe chunks.** Anis: "outlook can
+      send only 400 mails, can you make 2/3 lists for easier copy" -
+      `EmailListClient` now chunks the address list into 400-address
+      batches (`CHUNK_SIZE`), each with its own labeled copy box
+      ("Liste 1 von 3 (400 Adressen)" etc.) instead of one giant
+      semicolon-joined block.
+
+    **Real bug found while verifying the chunking, not assumed correct:**
+    the chunked total for Alan Sačić's Gebiet came back as a suspiciously
+    round 1000 - cross-checked against a direct `count`-exact query and
+    found the real number is 1,068. Root cause: `app/(app)/email-liste/
+    page.tsx` called `fn_email_list` via a single un-paginated `.rpc()`,
+    which is subject to PostgREST's default row cap on the result set just
+    like a plain `.select()` - the same class of silent-truncation bug
+    already found and fixed multiple times elsewhere in this project
+    (items 32/50/58/61 above). 68 real companies' emails were silently
+    missing from the copy list with no indication anything was cut off.
+    Fixed with `fetchAllEmailRows()` (`.range()` pagination loop, same safe
+    pattern used everywhere else). Verified live: the real Gebiet now shows
+    1,068 total, correctly split 400/400/268 across three lists.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
