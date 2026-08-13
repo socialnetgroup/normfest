@@ -4788,6 +4788,57 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     fällig" (Tier 2) badge with the correct German reason text. Full test
     suite green (41/41) after.
 
+73. **Heartbeat (§4.11/2026-07-30 build) found genuinely broken and fixed
+    (2026-08-14), Anis: "nekako ne vidim drugi status osim onaj status
+    Angemeldet, gerade nicht aktiv... provjeri da li moze biti osjetljivije
+    da li preporznaje sve urlove toola i slicno."** Checked real data first:
+    8 of 10 agents had **never** recorded a single heartbeat since their
+    account existed, and Alan/Elida were stuck at a value from 2026-07-30 -
+    despite obviously using the app daily (hundreds of real feedback/order
+    rows in between). Not a display-staleness illusion - confirmed directly
+    against `profiles.last_seen_at` itself, not through the Dashboard query.
+
+    Root-caused live rather than guessed: called `fn_heartbeat` directly as
+    a real authenticated user first - worked perfectly, ruling out the RPC/
+    backend entirely. Then verified the frontend component in the browser
+    with temporary debug logging: `HeartbeatPing` mounts and calls `ping()`
+    correctly, but the scheduled ping was gated on
+    `document.visibilityState === "visible"` - proven with a real forced
+    dispatch that the exact same call succeeds (`status 204`) the instant
+    visibility is genuinely "visible". `visibilityState` only reflects
+    whether this tab is the frontmost tab in a non-minimized browser window
+    - real agents constantly alt-tab to the ViciDial dialer, Speedy CRM,
+    email, etc., so the tab spends real time backgrounded, and every
+    scheduled 30s tick landing during that window was silently skipped
+    rather than deferred - explaining both "stuck at first login" (the one
+    moment visibility happened to be true) and "never even once" (agents
+    whose first mount-time ping unluckily landed while backgrounded).
+
+    Fixed in `components/heartbeat-ping.tsx`: the scheduled/mount ping no
+    longer checks visibility at all (it's one cheap RPC call, not expensive
+    polling - no real cost to sending it from a backgrounded tab, and "tool
+    still open" is a reasonable enough signal). Kept + added redundant
+    immediate-ping triggers on both `visibilitychange` and `window focus`
+    so returning to the tab refreshes status without waiting up to 30s.
+    Replaced the previous bare `void supabase.rpc(...)` (silently swallowed
+    every error, which is exactly why this class of bug stayed invisible)
+    with real error logging.
+
+    Separately, per the same message's second ask ("prepoznaje sve
+    urlove"): `pathLabel()` (`app/(app)/page.tsx`, shows "Online - {page}"
+    on the Dashboard) had genuinely fallen out of sync with real nav routes
+    added since it was written - `/feedback`, `/email-liste`, `/meine-
+    ergebnisse`, `/konto`, and `/dialer` all had no case and would have
+    silently rendered the raw path instead of a real German label. Added
+    all five.
+
+    Verified live end-to-end (throwaway admin test account, deleted after):
+    with `document.visibilityState` still genuinely reporting `"hidden"` in
+    this sandboxed browser (an environment quirk, not spoofed), the fixed
+    component updated `profiles.last_seen_at` on its own within 16 seconds
+    of page load, with zero manual intervention - the exact scenario that
+    was silently failing before. Full test suite green (41/41) after.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

@@ -22,6 +22,10 @@ import { cn } from "@/lib/utils";
 
 const ONLINE_THRESHOLD_MS = 90_000;
 
+// Real gap found 2026-08-14 (Anis: "provjeri da li prepoznaje sve urlove
+// toola") - this hadn't been kept in sync with real nav routes added since
+// it was written; /feedback, /email-liste, /meine-ergebnisse, /konto, and
+// /dialer all fell through to the raw path instead of a real German label.
 function pathLabel(path: string | null): string {
   if (!path) return "";
   if (path === "/") return "Dashboard";
@@ -30,9 +34,14 @@ function pathLabel(path: string | null): string {
   if (path.startsWith("/katalog/")) return "Produktseite";
   if (path === "/katalog") return "Katalog";
   if (path.startsWith("/fokus")) return "Fokus";
+  if (path.startsWith("/feedback")) return "Feedback";
+  if (path.startsWith("/email-liste")) return "Email-Liste";
   if (path.startsWith("/wissen")) return "Wissen";
   if (path.startsWith("/skript")) return "Skript";
   if (path.startsWith("/assistent")) return "Assistent";
+  if (path.startsWith("/meine-ergebnisse")) return "Meine Ergebnisse";
+  if (path.startsWith("/konto")) return "Mein Konto";
+  if (path.startsWith("/dialer")) return "Dialer";
   if (path.startsWith("/admin")) return "Admin";
   return path;
 }
