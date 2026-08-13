@@ -4733,6 +4733,61 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     exercise (46 invoices, incl. the 2 broken test attempts before the
     vision fix): well under $1.
 
+72. **Real orders/order_items wired into `fn_refresh_signals()` (2026-08-14),
+    Anis: "Wire orders into Tier-2 signals anyway" - explicitly choosing to
+    do this now despite volume still being just 46 invoices from one
+    mailbox dump, not waiting for "more data" as item 71 had flagged as the
+    natural default.** Checked the real order data directly first (26
+    companies have orders, most with exactly 1) before writing any
+    thresholds, rather than guessing:
+    - **`dormant_winback`** (was active, now >365 days silent): 1 real
+      candidate (Konrad Fahrzeug Zentrum, 465 days).
+    - **`replenishment_due`** (≥3 clean orders, same avg-gap × 1.25 overdue
+      math already proven for `feedback_replenishment` §6.2b): 4 companies
+      have a real computable cycle, 2 are genuinely overdue (Platinium Auto
+      Service GmbH, Florian Ludwig Transporte).
+    - **`declining_volume`** (rolling 90d revenue vs. the prior 90d): written
+      correctly, found 1 real candidate on the actual run (RS-Technik
+      Holzer, 61% down) - not predicted in advance, a genuine result of the
+      query, not tuned to produce a number.
+    - **Real `company_rfm` population** (§4.5, schema existed since M4,
+      never written to) - recency/frequency/monetary/segment computed from
+      real orders, 26 rows. No UI reads it yet; populated now since it's
+      free at this point and other future features can read real data
+      instead of an empty table.
+    - **Deliberately NOT built, and documented why in the migration itself:**
+      `first_order_followup` (a one-time scattered historical backfill can't
+      honestly say what a company's real "first order" was - the earliest
+      invoice we happened to receive isn't necessarily their first Normfest
+      order ever) and `basket_expansion` (with ~1 order per company on
+      average, any branche/cluster peer group is too small, often n=1, for
+      a median comparison to mean anything - would be fake precision, not a
+      real signal). Both stay real, later follow-ups once order import is
+      an ongoing feed rather than a backfill.
+
+    `needs_review` orders (the 3 flagged in item 71) are excluded from every
+    new block - a flagged invoice's numbers can't be trusted to compute a
+    real cycle or revenue window off of.
+
+    **Real bug caught by running it, not just reading the SQL:** the first
+    version's `delete from company_rfm;` (no WHERE clause) hit Supabase's
+    safe-update guard ("DELETE requires a WHERE clause") even inside a
+    `security definer` function - the exact same guard already hit once
+    before for `fn_flag_representative_images` (20260725020000). Fixed with
+    `delete from company_rfm where true;` in a follow-up migration
+    (`20260814030000`).
+
+    Verified for real after the fix: `fn_refresh_signals()` ran in 55.6s
+    (comfortably inside the 150s budget), produced exactly the 4 signal rows
+    above with reason text matching hand-calculated numbers exactly (e.g.
+    `company_rfm`'s `monetary` for Platinium summed to €1,169.96, matching
+    the sum of its 7 real invoice totals to the cent), and stayed idempotent
+    on a second run (identical output, no dedup-index errors). Confirmed
+    live in the browser (throwaway admin account, deleted after): Platinium
+    Auto Service GmbH's Signale list now shows a real "Nachbestellung
+    fällig" (Tier 2) badge with the correct German reason text. Full test
+    suite green (41/41) after.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
