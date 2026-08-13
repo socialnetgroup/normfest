@@ -9,6 +9,33 @@ import { createClient } from "@/lib/supabase/server";
 const selectClassName =
   "h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
 
+type EmailListRow = { company_id: string; company_name: string; email: string };
+
+// fn_email_list is a `returns table` RPC, subject to PostgREST's default
+// row cap on the result set just like a plain `.select()` - the same class
+// of silent-truncation bug already found and fixed multiple times in this
+// project (unpaginated queries capping at 1000 rows). Real bug found live
+// 2026-08-13: Alan Sačić's Gebiet has 1,068 real matching companies, but
+// the un-paginated single call was silently returning only 1,000 - agents
+// would have been missing 68 real addresses from the copy list with no
+// indication anything was cut off. Paginate the same safe way every other
+// bulk fetch in this codebase now does (`.range()` in a loop).
+async function fetchAllEmailRows(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  gebiet: string | undefined,
+): Promise<EmailListRow[]> {
+  const all: EmailListRow[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data } = await supabase
+      .rpc("fn_email_list", { p_gebiet: gebiet })
+      .range(from, from + 999);
+    if (!data || data.length === 0) break;
+    all.push(...data);
+    if (data.length < 1000) break;
+  }
+  return all;
+}
+
 // Email-Liste (2026-08-08), Anis: "lista svih emailova sa agentovog gebieta +
 // opcija brisanja maila sa te liste... they would use all those emails to
 // kinda copy paste into mail client. Lets for now just build a copiable list
@@ -24,7 +51,7 @@ export default async function EmailListePage({
   const isAdmin = profile?.role === "admin";
   const supabase = await createClient();
 
-  const [{ data: gebietOptions }, { data: rows }] = await Promise.all([
+  const [{ data: gebietOptions }, rows] = await Promise.all([
     isAdmin
       ? supabase
           .from("agents")
@@ -33,7 +60,7 @@ export default async function EmailListePage({
           .not("gebiet", "is", null)
           .order("full_name")
       : Promise.resolve({ data: null }),
-    supabase.rpc("fn_email_list", { p_gebiet: isAdmin ? (gebietParam ?? undefined) : undefined }),
+    fetchAllEmailRows(supabase, isAdmin ? (gebietParam ?? undefined) : undefined),
   ]);
 
   const noGebietSelected = isAdmin && !gebietParam;
@@ -80,7 +107,7 @@ export default async function EmailListePage({
           {noGebietSelected ? (
             <p className="text-sm text-muted-foreground">Bitte oben ein Gebiet auswählen.</p>
           ) : (
-            <EmailListClient rows={rows ?? []}>
+            <EmailListClient rows={rows}>
               <EmailTemplateBlock />
             </EmailListClient>
           )}

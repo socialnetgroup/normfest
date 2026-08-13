@@ -390,6 +390,7 @@ export type Database = {
           do_not_contact: boolean
           dunning_level: number | null
           email: string | null
+          email_2: string | null
           gebiet: string
           gebiet_agent_name: string | null
           gruppe: string | null
@@ -437,6 +438,7 @@ export type Database = {
           do_not_contact?: boolean
           dunning_level?: number | null
           email?: string | null
+          email_2?: string | null
           gebiet: string
           gebiet_agent_name?: string | null
           gruppe?: string | null
@@ -484,6 +486,7 @@ export type Database = {
           do_not_contact?: boolean
           dunning_level?: number | null
           email?: string | null
+          email_2?: string | null
           gebiet?: string
           gebiet_agent_name?: string | null
           gruppe?: string | null
@@ -1874,6 +1877,7 @@ export type Database = {
         Args: {
           p_company_id: string
           p_email?: string
+          p_email_2?: string
           p_telefon?: string
           p_telefon_2?: string
           p_telefon_3?: string
@@ -1891,6 +1895,7 @@ export type Database = {
           do_not_contact: boolean
           dunning_level: number | null
           email: string | null
+          email_2: string | null
           gebiet: string
           gebiet_agent_name: string | null
           gruppe: string | null

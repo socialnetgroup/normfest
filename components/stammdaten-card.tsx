@@ -31,6 +31,7 @@ type Props = {
   telefon2: string | null;
   telefon3: string | null;
   email: string | null;
+  email2: string | null;
   website: string | null;
   gebiet: string | null;
   gebietAgentName: string | null;
@@ -52,6 +53,7 @@ export function StammdatenCard(props: Props) {
   const [telefon2, setTelefon2] = useState(props.telefon2 ?? "");
   const [telefon3, setTelefon3] = useState(props.telefon3 ?? "");
   const [email, setEmail] = useState(props.email ?? "");
+  const [email2, setEmail2] = useState(props.email2 ?? "");
   const [website, setWebsite] = useState(props.website ?? "");
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -61,6 +63,7 @@ export function StammdatenCard(props: Props) {
     setTelefon2(props.telefon2 ?? "");
     setTelefon3(props.telefon3 ?? "");
     setEmail(props.email ?? "");
+    setEmail2(props.email2 ?? "");
     setWebsite(props.website ?? "");
     setErrorMessage(null);
     setEditing(true);
@@ -76,6 +79,7 @@ export function StammdatenCard(props: Props) {
       p_telefon_2: telefon2,
       p_telefon_3: telefon3,
       p_email: email,
+      p_email_2: email2,
       p_website: website,
     });
     setSaving(false);
@@ -121,10 +125,14 @@ export function StammdatenCard(props: Props) {
                 <Input id="telefon3" value={telefon3} onChange={(e) => setTelefon3(e.target.value)} />
               </div>
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="flex flex-col gap-1">
                 <Label htmlFor="email">E-Mail</Label>
                 <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="email2">E-Mail 2</Label>
+                <Input id="email2" type="email" value={email2} onChange={(e) => setEmail2(e.target.value)} />
               </div>
               <div className="flex flex-col gap-1">
                 <Label htmlFor="website">Website</Label>
@@ -154,6 +162,7 @@ export function StammdatenCard(props: Props) {
             {props.telefon2 ? <Field label="Telefon 2" value={props.telefon2} /> : null}
             {props.telefon3 ? <Field label="Telefon 3" value={props.telefon3} /> : null}
             <Field label="E-Mail" value={props.email} />
+            {props.email2 ? <Field label="E-Mail 2" value={props.email2} /> : null}
             {props.website ? (
               <Field
                 label="Website"

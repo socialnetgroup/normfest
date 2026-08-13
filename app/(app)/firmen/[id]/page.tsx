@@ -68,7 +68,7 @@ export default async function CompanyProfilePage({
         .from("companies")
         .select(
           `id, name, call_priority, do_not_contact, kundennummer, branche_name, plz, ort, brand_focus, name_2,
-          strasse, land, telefon, telefon_2, telefon_3, email, website, gebiet, gebiet_agent_name, legacy_gebiet,
+          strasse, land, telefon, telefon_2, telefon_3, email, email_2, website, gebiet, gebiet_agent_name, legacy_gebiet,
           branche_code, cluster, verband, gruppe, size_class, potential_value, potential_utilization_pct,
           dunning_level, revenue_prior_prior_year, revenue_prior_year, revenue_current_year,
           revenue_current_year_ds_cod, revenue_forecast, revenue_delta, order_count, article_count,
@@ -151,6 +151,7 @@ export default async function CompanyProfilePage({
         telefon2={company.telefon_2}
         telefon3={company.telefon_3}
         email={company.email}
+        email2={company.email_2}
         website={company.website}
         gebiet={company.gebiet}
         gebietAgentName={company.gebiet_agent_name}
