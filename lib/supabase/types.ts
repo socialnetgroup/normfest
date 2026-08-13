@@ -1047,6 +1047,125 @@ export type Database = {
           },
         ]
       }
+      order_items: {
+        Row: {
+          created_at: string
+          description_raw: string | null
+          id: string
+          net_amount: number | null
+          order_id: string
+          product_id: string | null
+          qty: number | null
+          sku_raw: string | null
+          unit_price: number | null
+          vat_rate: number | null
+        }
+        Insert: {
+          created_at?: string
+          description_raw?: string | null
+          id?: string
+          net_amount?: number | null
+          order_id: string
+          product_id?: string | null
+          qty?: number | null
+          sku_raw?: string | null
+          unit_price?: number | null
+          vat_rate?: number | null
+        }
+        Update: {
+          created_at?: string
+          description_raw?: string | null
+          id?: string
+          net_amount?: number | null
+          order_id?: string
+          product_id?: string | null
+          qty?: number | null
+          sku_raw?: string | null
+          unit_price?: number | null
+          vat_rate?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orders: {
+        Row: {
+          ansprechpartner_raw: string | null
+          company_id: string | null
+          created_at: string
+          gross_total: number | null
+          id: string
+          imported_at: string
+          invoice_date: string
+          invoice_number: string
+          kundennummer_raw: string
+          needs_review: boolean
+          net_total: number | null
+          review_note: string | null
+          shipping: number | null
+          source: string
+          source_mailbox_uid: string | null
+          vat_total: number | null
+        }
+        Insert: {
+          ansprechpartner_raw?: string | null
+          company_id?: string | null
+          created_at?: string
+          gross_total?: number | null
+          id?: string
+          imported_at?: string
+          invoice_date: string
+          invoice_number: string
+          kundennummer_raw: string
+          needs_review?: boolean
+          net_total?: number | null
+          review_note?: string | null
+          shipping?: number | null
+          source?: string
+          source_mailbox_uid?: string | null
+          vat_total?: number | null
+        }
+        Update: {
+          ansprechpartner_raw?: string | null
+          company_id?: string | null
+          created_at?: string
+          gross_total?: number | null
+          id?: string
+          imported_at?: string
+          invoice_date?: string
+          invoice_number?: string
+          kundennummer_raw?: string
+          needs_review?: boolean
+          net_total?: number | null
+          review_note?: string | null
+          shipping?: number | null
+          source?: string
+          source_mailbox_uid?: string | null
+          vat_total?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_duplicate_candidates: {
         Row: {
           created_at: string

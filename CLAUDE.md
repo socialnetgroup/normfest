@@ -4640,6 +4640,99 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     pattern used everywhere else). Verified live: the real Gebiet now shows
     1,068 total, correctly split 400/400/268 across three lists.
 
+71. **Real Tier-2 `orders`/`order_items` shipped (2026-08-13/14) — the
+    "PDF-invoice parsing = post-MVP milestone" deferral (§4.4/§14.2) is
+    resolved, not just an idea anymore.** Anis set up `wissen@social-net.ba`
+    and told agents to forward real Rechnungen there; connected via IMAP
+    (`imapflow`/`mailparser`, credentials in `.env.local` only, never
+    committed, per §12 key hygiene) and found 49 real messages, 46 of them
+    real invoice PDFs from 6 different agents (Anis: "just download and look
+    at the pdfs invoices, ignore other types of mails" - the 3 non-invoice
+    mails skipped by subject).
+
+    **Scope decision, discussed with Anis before writing any schema**
+    (Anis: "what would you build that order items for? I thought you would
+    just add it as feedback text... let's talk about it before building"):
+    rejected logging invoices into `sales_feedback` - that table means "an
+    agent made a real call," and backdating 46 historical invoices into it
+    would silently blend agent self-report with real invoice fact in one
+    table with no way to tell them apart later, the exact provenance-mixing
+    §3.2.6 exists to prevent everywhere else in this app. Anis confirmed
+    real `orders`/`order_items` (§4.4's original, never-built spec) instead
+    - migration `20260814010000_orders_schema.sql`, shared-read/admin-write
+    RLS same shape as `sales_feedback`/`signals`. Deliberately NOT wired into
+    `fn_refresh_signals()` this pass (the dormant Tier-2 signal types in §6 -
+    `replenishment_due`, `dormant_winback`, `declining_volume`,
+    `first_order_followup`, `basket_expansion`, real RFM - stay a real,
+    separate follow-up once there's more historical volume than one mailbox
+    dump).
+
+    **Real parser failure found and fixed before trusting any real data.**
+    First attempt fed `pdftotext -layout` text to the LLM (bulk/Haiku tier).
+    Single-item invoices parsed perfectly, but multi-item invoices (26% of
+    the real 46) silently corrupted: the model matched real SKUs to the
+    wrong description (order-reference/boilerplate lines like "05663108_1
+    vom 02.06.2026" or "Auftrag erteilt durch: ..." instead of the real
+    product name) and fabricated placeholder prices (€0.01) for products it
+    couldn't find a real row for - and the totals-reconciliation check
+    didn't catch it, since the wrong numbers still summed close to the real
+    total. Root cause: `pdftotext -layout` genuinely loses row alignment on
+    this invoice format past one line item (Artikelnummer, Menge/Preis/
+    Netto, and description text each reconstruct as separate, no-longer-
+    aligned column blocks) - confirmed by inspecting the raw scrambled text
+    directly, not assumed. Deleted the bad test rows immediately, reported
+    the exact wrong values to Anis rather than silently retrying, and fixed
+    it the same way this project already fixed an identical problem once
+    (the catalog PDF pipeline, §13 M4): render the actual page(s) as images
+    (`lib/invoices/render-invoice.mjs`, same pdfjs-dist + `@napi-rs/canvas`
+    approach as `scripts/render-catalog-page.mjs`, generalized to any file
+    path and every page) and use vision (`analyze`/Sonnet tier, not bulk -
+    the earlier cost-tier undershoot was very likely part of why it guessed
+    instead of admitting uncertainty) with a locked `json_schema` and a new
+    `uncertain` boolean field the model must set instead of inventing a
+    placeholder. A second real bug caught the same way (tested 2-3 before
+    scaling): the vision model initially confused "Zwischensumme" with
+    "Gesamt Netto" (two similarly-labeled totals on every real invoice,
+    Zwischensumme + Versandpauschale = Gesamt Netto) - fixed by making the
+    schema field descriptions state the literal printed label and the
+    relationship, not just a translated name.
+
+    **Full batch run (`scripts/import-invoices.mjs`, 46 real invoices):
+    0 errors, 46/46 imported, 3 flagged `needs_review`, real cost $0.66**
+    (Sonnet vision, analyze tier). Verified the 3 flagged ones by hand
+    rather than trusting the flag alone: their line items and Zwischensumme
+    genuinely reconcile (hand-checked the arithmetic) - the real mismatch is
+    between net+shipping+VAT and the final Rechnungsbetrag on all 3 (same
+    customer, Turan Reifendienst), most likely a misread VAT/shipping figure
+    or an unhandled Skonto-style adjustment, not fabricated line data.
+    Correctly quarantined for a human to check rather than silently trusted
+    or silently dropped.
+
+    **Real, systematic SKU-match gap found and fixed, not left as noise:**
+    only 80 of 126 order_items initially resolved to a real `products.id`.
+    Checked the unmatched ones directly instead of assuming they were
+    genuine catalog gaps - nearly all carried a real trailing pack-size
+    suffix ("9833-397-60/100" = sold in packs of 100) that `products.sku`
+    doesn't include. Confirmed 45 of 46 resolve once the suffix is stripped
+    (`sku.replace(/\/\d+$/, "")`) - backfilled the already-imported rows and
+    fixed `import-invoices.mjs` itself so future imports get this right
+    automatically (`sku_raw` always keeps the verbatim invoice value for
+    traceability; only the match lookup uses the stripped form). Final real
+    match rate: 125/126 (99.2%) - the one genuine non-match is a real
+    promotional giveaway line ("WM Ball 2026", €0.01), correctly left
+    unmatched since it isn't a real catalog product.
+
+    **Made visible, not just sitting in the DB:** new "Bestellungen" card on
+    `/firmen/[id]` (`app/(app)/firmen/[id]/page.tsx`) - real invoice date/
+    number/item-count/Brutto per order, admin-only `needs_review` reason
+    shown inline, only rendered when a company actually has real orders.
+    Verified live end-to-end (throwaway admin test account, deleted after):
+    a real company with 7 real invoices (Platinium Auto Service GmbH)
+    renders the exact correct list, newest first, matching the DB exactly.
+    Full suite green (41/41) after. Real one-time cost for the whole
+    exercise (46 invoices, incl. the 2 broken test attempts before the
+    vision fix): well under $1.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

@@ -1,4 +1,4 @@
-import { Activity, Layers, Sparkles, TrendingDown, TrendingUp } from "lucide-react";
+import { Activity, Layers, Receipt, Sparkles, TrendingDown, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -62,8 +62,14 @@ export default async function CompanyProfilePage({
   const { id } = await params;
   const supabase = await createClient();
 
-  const [{ data: company, error }, { user: currentUser, profile: currentProfile }, { data: feedbackHistory }, { data: signals }, { data: enrichment }] =
-    await Promise.all([
+  const [
+    { data: company, error },
+    { user: currentUser, profile: currentProfile },
+    { data: feedbackHistory },
+    { data: signals },
+    { data: enrichment },
+    { data: orders },
+  ] = await Promise.all([
       supabase
         .from("companies")
         .select(
@@ -98,6 +104,11 @@ export default async function CompanyProfilePage({
         )
         .eq("company_id", id)
         .maybeSingle(),
+      supabase
+        .from("orders")
+        .select("id, invoice_number, invoice_date, gross_total, needs_review, review_note, order_items(id)")
+        .eq("company_id", id)
+        .order("invoice_date", { ascending: false }),
     ]);
 
   if (error || !company) {
@@ -416,6 +427,40 @@ export default async function CompanyProfilePage({
           </CardContent>
         </Card>
       </div>
+
+      {orders && orders.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <IconTitle icon={Receipt}>Bestellungen</IconTitle>
+            <p className="text-sm text-muted-foreground">
+              Echte Rechnungsdaten (Tier 2) - importiert aus weitergeleiteten Rechnungen.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <ul className="flex flex-col divide-y">
+              {orders.map((o) => {
+                const itemCount = (o.order_items as { id: string }[] | null)?.length ?? 0;
+                return (
+                  <li key={o.id} className="flex items-center justify-between gap-3 py-2.5 text-base">
+                    <div>
+                      <span className="font-medium">{date(o.invoice_date)}</span>{" "}
+                      <span className="text-muted-foreground">
+                        · Rechnung {o.invoice_number} · {itemCount} Position{itemCount === 1 ? "" : "en"}
+                      </span>
+                      {isAdmin && o.needs_review ? (
+                        <p className="mt-0.5 text-sm text-warning-foreground" title={o.review_note ?? undefined}>
+                          Zu prüfen: {o.review_note}
+                        </p>
+                      ) : null}
+                    </div>
+                    <span className="shrink-0 font-medium">{money(o.gross_total)}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>
