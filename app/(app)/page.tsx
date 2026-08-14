@@ -162,11 +162,20 @@ export default async function DashboardPage() {
     isAdmin ? supabase.rpc("fn_get_agent_login_status") : Promise.resolve({ data: null }),
   ]);
 
-  // Wiedervorlagen fällig heute oder überfällig - team-weit sichtbar (Anis,
-  // 2026-08-06: "sve da vidi od svih"), gleiche shared-Sichtbarkeit wie
-  // sales_feedback selbst. Separate Abfrage statt im Promise.all oben, da
-  // sie von keiner der anderen Variablen abhängt.
-  const { data: dueWiedervorlagen } = await supabase
+  // Wiedervorlagen fällig heute oder überfällig. Originally team-weit
+  // sichtbar (Anis, 2026-08-06: "sve da vidi od svih") - but that predates
+  // visibility_mode='gebiet' going live (§14 item 16, 2026-07-31). Once
+  // gebiet-scoping was on, `companies(name)` in this join is RLS-gated to
+  // the caller's own gebiet, so a non-admin's team-wide sales_feedback rows
+  // for OTHER agents' companies still came back (sales_feedback itself is
+  // shared-visible), just with a null company name - real bug found
+  // 2026-08-14: an agent saw "10 Wiedervorlagen" but only their own ~2
+  // rendered with real company/comment, the rest as blank placeholders.
+  // Fixed by scoping non-admins to their own agent_id (matching how every
+  // other gebiet-scoped feature in this app already works - Firmen list,
+  // signals, Email-Liste); admins keep the team-wide view since their RLS
+  // isn't gebiet-restricted, so the join never comes back null for them.
+  let dueWiedervorlagenBuilder = supabase
     .from("sales_feedback")
     .select("id, company_id, comment, wiedervorlage_date, companies(name), profiles(full_name)")
     .not("wiedervorlage_date", "is", null)
@@ -174,6 +183,8 @@ export default async function DashboardPage() {
     .lte("wiedervorlage_date", todayStr)
     .order("wiedervorlage_date", { ascending: true })
     .limit(20);
+  if (!isAdmin && user) dueWiedervorlagenBuilder = dueWiedervorlagenBuilder.eq("agent_id", user.id);
+  const { data: dueWiedervorlagen } = await dueWiedervorlagenBuilder;
 
   const byAgent = new Map<string, { name: string; revenue: number }>();
   for (const row of monthRows ?? []) {

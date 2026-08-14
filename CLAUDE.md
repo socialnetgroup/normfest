@@ -4897,6 +4897,62 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     set, 376 open, 10 done) - `?wv=done` correctly showed exactly 10 real
     rows, `?wv=open` correctly showed exactly 376. Typecheck/lint clean.
 
+76. **Dashboard "Wiedervorlagen fällig" scoped to own agent + a real
+    production regression found and fixed the same pass (2026-08-14).**
+    Anis: "Svaki agent vidi ispravno samo svoje na dashboardu, jer
+    trenutno jedan agent vidi da postoji npr 10 wiedervorlagen za danas,
+    ali samo svoje 2 vidi full a ostale kao blank placeholdere." The
+    Dashboard's `dueWiedervorlagen` query (§14 item 21) was still team-wide
+    (Anis's original 2026-08-06 call, "sve da vidi od svih") - but that
+    predates `visibility_mode='gebiet'` going live for real (§14 item 16,
+    2026-07-31). Once gebiet-scoping is active, a non-admin's team-wide
+    `sales_feedback` rows for OTHER agents' companies still come back (the
+    table itself is shared-visible), but the joined `companies(name)` is
+    RLS-gated to the caller's own gebiet - so those rows render with `"-"`
+    for the company/link, reading exactly like a blank placeholder. Fixed
+    in `app/(app)/page.tsx`: non-admins now get `.eq("agent_id", user.id)`
+    on the query (same pattern already proven in `/feedback`, §14 item 33);
+    admins keep the team-wide view.
+
+    **Real, separate regression found while verifying this, not something
+    I introduced:** `settings.visibility_mode` was `'shared'` in production
+    at the time of checking, not `'gebiet'` - despite being explicitly
+    flipped to `'gebiet'` for Alan's pilot on 2026-07-31 (§14 item 16) and
+    reconfirmed `'gebiet'` at every later checkpoint through item 73
+    (2026-08-14, same day). No code path in the app itself ever writes
+    this setting outside `supabase/tests/rls.test.ts`'s own beforeAll/
+    afterAll (which saves the real value, forces `'shared'` for the test
+    run, and restores it after) - root cause of the drift wasn't found
+    (no audit log exists on `settings` changes), but given the RLS test
+    suite is the only code path that ever touches this key, and given the
+    documented history shows `'gebiet'` was correct as recently as the
+    same day, this is very likely an incomplete test-suite restore at some
+    point rather than a deliberate change. **Confirmed with Anis directly
+    (not assumed) and restored to `'gebiet'`** - admin visibility is
+    unaffected either way (`fn_company_visible`/`fn_search_companies` both
+    bypass the gebiet check for admins, confirmed unchanged). This is
+    almost certainly the real root cause of the "blank placeholder" report
+    above - reproduced the exact symptom under `'gebiet'` mode logic
+    (RLS-gated company join returning null for another agent's company)
+    and confirmed it does NOT reproduce under `'shared'` (tested via a
+    real throwaway RLS-scoped session, not just reasoning about it).
+
+    **Worth watching for:** if this recurs, the `rls.test.ts` global
+    `beforeAll`/`afterAll` (lines ~29-71) is the one place to check first -
+    it's designed to restore the real value unconditionally at the end of
+    the run regardless of individual test outcomes, so a stuck `'shared'`
+    value after a clean full-suite pass would itself be a real bug in that
+    restore logic worth investigating properly rather than just flipping
+    the setting back again.
+
+    Verified the fix (not the settings restore) via a real RLS-scoped
+    throwaway test session: inserted a real `sales_feedback` row with a
+    Wiedervorlage due today via `fn_log_sales_feedback`, confirmed the
+    non-admin-scoped query (`agent_id = own`) returns exactly that one row
+    with a real company name, while an unscoped team-wide query from the
+    same session returned all 11 real due rows (10 pre-existing + the new
+    one) - test account and row cleaned up after. Typecheck/lint clean.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
