@@ -4839,6 +4839,64 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     of page load, with zero manual intervention - the exact scenario that
     was silently failing before. Full test suite green (41/41) after.
 
+74. **Email-Liste: unmatched-collected-email copy boxes + search field —
+    shipped (2026-08-14).** Anis, reviewing the real wissen@ mailbox content:
+    Rijalda Halilovic has been collecting real customer emails by hand where
+    VIS/our Email-Liste can't securely match them to a company (2 real Excel
+    exports she sent, "Aktiv kunden" / "NULL kunden" - bare email addresses,
+    no company name or Kundennummer, so auto-matching them would be a real
+    guess - same "don't fabricate a match" principle as everywhere else).
+    New `email_list_extras` table (migration
+    `20260814040000_email_list_extras.sql`, shared-read/admin-write RLS,
+    `gebiet` + `label` + `emails` + `email_count`) holds these as extra,
+    clearly-labeled copy boxes separate from the real VIS-matched list -
+    seeded with her 2 real files (370 + 324 real emails, gebiet 130017).
+    `/email-liste` now fetches and renders any extras for the shown Gebiet
+    (`EmailListClient`'s existing `CopyBox` component reused, not
+    duplicated) between the main copy boxes and the template block.
+
+    Also added a client-side search field ("Firma oder E-Mail suchen") to
+    the per-company delete list below the copy boxes, per Anis: real
+    Gebiete run past 1,000 companies, finding one specific row to check/
+    remove relied on Ctrl+F. Filters only the delete list, not the copy
+    boxes above - those stay complete for a real mail-merge send regardless
+    of what's being searched.
+
+    Real bug caught before shipping: an early draft of the page referenced
+    `user?.id` for the extras lookup, but this page only ever destructured
+    `{ profile }` from `getCurrentUser()`, not `user` - would have been a
+    real typecheck failure. Fixed by destructuring both (same pattern
+    already used elsewhere, e.g. `firmen/[id]`). Separately, `useMemo` for
+    the search filter tripped the React Compiler's "existing memoization
+    could not be preserved" lint error for reasons specific to this
+    component - not worth chasing, replaced with a plain inline filter
+    (the row counts here don't need memoization to stay fast).
+
+    Verified live end-to-end (throwaway admin test account, deleted after):
+    Rijalda's Gebiet (130017) correctly showed both extra copy boxes with
+    the real labels and counts (370/324 Adressen) alongside the normal
+    867-address, 3-list company copy box; a Gebiet with no extras (Alan
+    Sačić, 130023) correctly rendered without the extras section at all;
+    the search field correctly narrowed the delete list to a single exact
+    match ("Kfz-Werkstatt Kurt GmbH"). Typecheck/lint clean, full suite
+    green (41/41).
+
+75. **`/feedback`: Wiedervorlage filter added — shipped (2026-08-14).** Anis:
+    "dodati wiedervorlage u filtere u feedbacku. iako nije pravi status, da
+    li se i po tome moze filterisati" - Wiedervorlage isn't a
+    `sales_feedback.outcome` value (it's its own `wiedervorlage_date`/
+    `_done` pair, §14 item 21), so it needed its own filter control, not
+    another `Ergebnis` option. New `?wv=` query param on `/feedback`
+    (`any` = has a Wiedervorlage date set regardless of done-state,
+    `open` = set and not yet done, `done` = marked erledigt), same
+    `<form method="get">` pattern as the existing Agent/Ergebnis/Von/Bis
+    filters, composable with all of them.
+
+    Verified live against real data (throwaway admin test account, deleted
+    after): real DB counts checked directly first (386 total with a date
+    set, 376 open, 10 done) - `?wv=done` correctly showed exactly 10 real
+    rows, `?wv=open` correctly showed exactly 376. Typecheck/lint clean.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

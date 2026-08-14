@@ -47,7 +47,7 @@ export default async function EmailListePage({
   searchParams: Promise<{ gebiet?: string }>;
 }) {
   const { gebiet: gebietParam } = await searchParams;
-  const { profile } = await getCurrentUser();
+  const { user, profile } = await getCurrentUser();
   const isAdmin = profile?.role === "admin";
   const supabase = await createClient();
 
@@ -64,6 +64,28 @@ export default async function EmailListePage({
   ]);
 
   const noGebietSelected = isAdmin && !gebietParam;
+
+  // Real gebiet actually being shown - own gebiet for non-admins, the
+  // selected one for admins. Needed to look up email_list_extras (Anis,
+  // 2026-08-14: "make 2 new fields to copy the emails... so she can copy
+  // if we cant securely match it" - real, agent-collected addresses that
+  // couldn't be matched to a company, shown as extra copy boxes per gebiet).
+  let effectiveGebiet: string | null = null;
+  if (!isAdmin) {
+    const { data: myAgent } = await supabase.from("agents").select("gebiet").eq("profile_id", user?.id ?? "").maybeSingle();
+    effectiveGebiet = myAgent?.gebiet ?? null;
+  } else {
+    effectiveGebiet = gebietParam ?? null;
+  }
+
+  const { data: extraRows } = effectiveGebiet
+    ? await supabase
+        .from("email_list_extras")
+        .select("id, label, emails, email_count")
+        .eq("gebiet", effectiveGebiet)
+        .order("created_at")
+    : { data: null };
+  const extras = (extraRows ?? []).map((e) => ({ id: e.id, label: e.label, emails: e.emails, emailCount: e.email_count }));
 
   return (
     <div className="flex flex-col gap-6">
@@ -107,7 +129,7 @@ export default async function EmailListePage({
           {noGebietSelected ? (
             <p className="text-sm text-muted-foreground">Bitte oben ein Gebiet auswählen.</p>
           ) : (
-            <EmailListClient rows={rows}>
+            <EmailListClient rows={rows} extras={extras}>
               <EmailTemplateBlock />
             </EmailListClient>
           )}

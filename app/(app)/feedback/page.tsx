@@ -25,12 +25,29 @@ const OUTCOME_OPTIONS = [
   { value: "nicht_besucht", label: "Nicht besucht" },
 ] as const;
 
+// Anis (2026-08-14): "dodati wiedervorlage u filtere u feedbacku. iako nije
+// pravi status, da li se i po tome moze filterisati" - Wiedervorlage isn't a
+// sales_feedback.outcome value (§14 item 21, its own wiedervorlage_date/
+// _done pair), so it's a separate filter, not another OUTCOME_OPTIONS entry.
+const WIEDERVORLAGE_OPTIONS = [
+  { value: "any", label: "Mit Wiedervorlage" },
+  { value: "open", label: "Offen (fällig)" },
+  { value: "done", label: "Erledigt" },
+] as const;
+
 export default async function FeedbackListPage({
   searchParams,
 }: {
-  searchParams: Promise<{ agent?: string; von?: string; bis?: string; outcome?: string; page?: string }>;
+  searchParams: Promise<{ agent?: string; von?: string; bis?: string; outcome?: string; wv?: string; page?: string }>;
 }) {
-  const { agent: agentFilter, von: vonFilter, bis: bisFilter, outcome: outcomeFilter, page: pageParam } = await searchParams;
+  const {
+    agent: agentFilter,
+    von: vonFilter,
+    bis: bisFilter,
+    outcome: outcomeFilter,
+    wv: wvFilter,
+    page: pageParam,
+  } = await searchParams;
   const page = Math.max(1, Number(pageParam) || 1);
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
@@ -57,6 +74,9 @@ export default async function FeedbackListPage({
     .range(from, to);
   if (effectiveAgentFilter) feedbackBuilder = feedbackBuilder.eq("agent_id", effectiveAgentFilter);
   if (outcomeFilter) feedbackBuilder = feedbackBuilder.eq("outcome", outcomeFilter);
+  if (wvFilter === "any") feedbackBuilder = feedbackBuilder.not("wiedervorlage_date", "is", null);
+  else if (wvFilter === "open") feedbackBuilder = feedbackBuilder.not("wiedervorlage_date", "is", null).eq("wiedervorlage_done", false);
+  else if (wvFilter === "done") feedbackBuilder = feedbackBuilder.eq("wiedervorlage_done", true);
   // Alan's pilot feedback (2026-08-08): "Feedback (tag) cijeli mjesec od-do
   // da se moze odabrati" - was single-day only, now a Von/Bis range (either
   // side optional, so "seit X" / "bis X" work too, not just a closed range).
@@ -72,7 +92,7 @@ export default async function FeedbackListPage({
 
   const total = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const hasFilter = Boolean(agentFilter || vonFilter || bisFilter || outcomeFilter);
+  const hasFilter = Boolean(agentFilter || vonFilter || bisFilter || outcomeFilter || wvFilter);
 
   function pageHref(p: number) {
     const params = new URLSearchParams();
@@ -80,6 +100,7 @@ export default async function FeedbackListPage({
     if (vonFilter) params.set("von", vonFilter);
     if (bisFilter) params.set("bis", bisFilter);
     if (outcomeFilter) params.set("outcome", outcomeFilter);
+    if (wvFilter) params.set("wv", wvFilter);
     if (p > 1) params.set("page", String(p));
     const qs = params.toString();
     return qs ? `/feedback?${qs}` : "/feedback";
@@ -117,6 +138,17 @@ export default async function FeedbackListPage({
               <select id="outcome" name="outcome" defaultValue={outcomeFilter ?? ""} className={selectClassName}>
                 <option value="">Alle</option>
                 {OUTCOME_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="wv">Wiedervorlage</Label>
+              <select id="wv" name="wv" defaultValue={wvFilter ?? ""} className={selectClassName}>
+                <option value="">Alle</option>
+                {WIEDERVORLAGE_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
                     {o.label}
                   </option>

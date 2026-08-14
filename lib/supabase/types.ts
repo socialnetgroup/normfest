@@ -774,6 +774,36 @@ export type Database = {
           },
         ]
       }
+      email_list_extras: {
+        Row: {
+          created_at: string
+          email_count: number
+          emails: string
+          gebiet: string
+          id: string
+          label: string
+          source: string | null
+        }
+        Insert: {
+          created_at?: string
+          email_count: number
+          emails: string
+          gebiet: string
+          id?: string
+          label: string
+          source?: string | null
+        }
+        Update: {
+          created_at?: string
+          email_count?: number
+          emails?: string
+          gebiet?: string
+          id?: string
+          label?: string
+          source?: string | null
+        }
+        Relationships: []
+      }
       enrichment_jobs: {
         Row: {
           company_id: string

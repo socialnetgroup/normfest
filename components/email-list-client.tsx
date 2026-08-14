@@ -1,13 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { X, Copy, Check } from "lucide-react";
+import { Search, X, Copy, Check } from "lucide-react";
 
 import { ConfirmButton } from "@/components/confirm-button";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 
 type Row = { company_id: string; company_name: string; email: string };
+type Extra = { id: string; label: string; emails: string; emailCount: number };
 
 // Anis (2026-08-12): "outlook can send only 400 mails, can you make 2/3
 // lists for easier copy" - real Gebiete run well past 400 companies (Alan's
@@ -59,10 +62,29 @@ function CopyBox({ label, emails }: { label: string; emails: string[] }) {
 // inside this one component (not split into page-level siblings) so they
 // keep sharing the same `rows` state - a deleted row disappears from the
 // copy-box textarea immediately, not just the list below.
-export function EmailListClient({ rows: initialRows, children }: { rows: Row[]; children?: React.ReactNode }) {
+export function EmailListClient({
+  rows: initialRows,
+  extras = [],
+  children,
+}: {
+  rows: Row[];
+  extras?: Extra[];
+  children?: React.ReactNode;
+}) {
   const [rows, setRows] = useState(initialRows);
+  const [search, setSearch] = useState("");
 
   const chunks = chunk(rows, CHUNK_SIZE);
+
+  // Anis (2026-08-14): "add search field in email list, so people dont have
+  // to rely on ctrl+f" - real Gebiete run past 1,000 companies, so finding
+  // one specific row to check/remove was a real usability gap. Only filters
+  // the per-company list below, not the copy boxes above - those stay
+  // complete for a real mail-merge send regardless of what's being searched.
+  const searchQuery = search.trim().toLowerCase();
+  const filteredRows = searchQuery
+    ? rows.filter((r) => r.company_name.toLowerCase().includes(searchQuery) || r.email.toLowerCase().includes(searchQuery))
+    : rows;
 
   async function exclude(companyId: string) {
     setRows((prev) => prev.filter((r) => r.company_id !== companyId));
@@ -100,11 +122,45 @@ export function EmailListClient({ rows: initialRows, children }: { rows: Row[]; 
         </div>
       )}
 
+      {extras.length > 0 ? (
+        <div className="flex flex-col gap-4 rounded-lg border border-dashed p-4">
+          <p className="text-sm text-muted-foreground">
+            Zusätzliche E-Mails, die Agenten selbst gesammelt haben, aber nicht sicher einer Firma zugeordnet werden
+            konnten - nicht in der Firmenliste unten, separat zum Kopieren.
+          </p>
+          {extras.map((e) => (
+            <CopyBox key={e.id} label={`${e.label} (${e.emailCount} Adressen)`} emails={e.emails.split("; ")} />
+          ))}
+        </div>
+      ) : null}
+
       {children}
 
       {rows.length > 0 ? (
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="email-search" className="sr-only">
+            Firma oder E-Mail suchen
+          </Label>
+          <div className="relative">
+            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              id="email-search"
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Firma oder E-Mail suchen..."
+              className="pl-9"
+            />
+          </div>
+        </div>
+      ) : null}
+
+      {rows.length > 0 ? (
         <ul className="flex flex-col divide-y rounded-lg border">
-          {rows.map((r) => (
+          {filteredRows.length === 0 ? (
+            <li className="px-3 py-4 text-center text-sm text-muted-foreground">Keine Treffer für &quot;{search}&quot;.</li>
+          ) : null}
+          {filteredRows.map((r) => (
             <li key={r.company_id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
               <div className="min-w-0">
                 <p className="truncate font-medium">{r.company_name}</p>

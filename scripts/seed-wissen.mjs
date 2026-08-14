@@ -78,6 +78,29 @@ const DOCUMENTS = [
       },
     ],
   },
+  // Added 2026-08-14: a real internal Normfest sales flyer ("Haben wir an
+  // Alles gedacht?") forwarded by Thomas Saak (Leitung TeleSales) via
+  // Armina to wissen@social-net.ba, alongside a second flyer ("Normfest
+  // stellt sich vor") that was skipped as largely redundant with the
+  // existing "Normfest — Unternehmensüberblick" doc above. Content here is
+  // paraphrased/restructured from the real flyer, not copied verbatim -
+  // same "summarized, not copied" approach as the other seed docs.
+  {
+    title: "Nicht vergessen — kleine Artikel mit großer Wirkung",
+    source_path: "wissen@social-net.ba (Rechnung-Postfach, weitergeleitet von Thomas Saak, TeleSales-Leitung)",
+    chunks: [
+      {
+        heading: "Der Columbo-Effekt",
+        content:
+          "Ein Kunde bestellt fast nie das komplette Sortiment, das er eigentlich regelmäßig braucht — kleine Verbrauchsartikel gehen im Alltag oft unter, bis sie plötzlich fehlen. Die Technik dahinter (benannt nach der TV-Figur Columbo, die ihre wichtigste Frage immer erst zum Schluss stellt): Am Ende eines Gesprächs, wenn der eigentliche Abschluss schon steht, noch kurz einen typischerweise vergessenen Artikel ansprechen — nicht als Verkaufsdruck, sondern als ehrliche Nachfrage: „Übrigens, wie sieht es bei Ihnen mit [Artikel] aus? Das wird oft vergessen zu bestellen.\" Wirkt am glaubwürdigsten, wenn der Artikel wirklich zum Profil des Kunden passt (z.B. Klima-Zubehör bei einer Werkstatt mit Klimaservice).",
+      },
+      {
+        heading: "Artikel, die oft vergessen werden",
+        content:
+          "Eine Auswahl kleiner, aber laufend gebrauchter Artikel, die sich für den Columbo-Effekt eignen — organisiert nach Bereich: Rund ums Fahrzeug: Batterien, Sicherungen, Rostlöser, Bohrer. Werkstatt-Kleinteile: Schrauben & Muttern, Klebegewicht-Entferner, Ventil-Einziehhebel, Mini-Schlagschrauber. Reinigung & Pflege: Elektro-Kontaktreiniger, Geruchsvernichter, Handwaschpaste, Folien-Radierer, Fensterschaber. Schleifen & Verpacken: Schleifvlies, Carbon-Schleifklötze, Packband. Persönliche Schutzausrüstung: Handschuhe, Pinsel. Klimaanlage: diverses Klima-Zubehör. Steckverbindungen: Deutsch-Stecker. Reifen: diverses Zubehör rund um die Reifenmontage. Diese Liste ist bewusst kurz und konkret gehalten - im Zweifel im Katalog nach dem passenden Artikel für den jeweiligen Kunden suchen.",
+      },
+    ],
+  },
   // Added 2026-07-26 (Anis, Wissen redesign pass): a genuine screen-by-screen
   // walkthrough of this app itself, distinct from "Werkzeuge im Arbeitsalltag"
   // above (which only briefly places this tool next to Speedy/Dialer). Every
