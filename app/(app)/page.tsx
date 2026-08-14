@@ -20,32 +20,6 @@ import { signalTypeLabel, signalTypeVariant } from "@/lib/signals";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 
-const ONLINE_THRESHOLD_MS = 90_000;
-
-// Real gap found 2026-08-14 (Anis: "provjeri da li prepoznaje sve urlove
-// toola") - this hadn't been kept in sync with real nav routes added since
-// it was written; /feedback, /email-liste, /meine-ergebnisse, /konto, and
-// /dialer all fell through to the raw path instead of a real German label.
-function pathLabel(path: string | null): string {
-  if (!path) return "";
-  if (path === "/") return "Dashboard";
-  if (path.startsWith("/firmen/")) return "Firmenprofil";
-  if (path === "/firmen") return "Firmen";
-  if (path.startsWith("/katalog/")) return "Produktseite";
-  if (path === "/katalog") return "Katalog";
-  if (path.startsWith("/fokus")) return "Fokus";
-  if (path.startsWith("/feedback")) return "Feedback";
-  if (path.startsWith("/email-liste")) return "Email-Liste";
-  if (path.startsWith("/wissen")) return "Wissen";
-  if (path.startsWith("/skript")) return "Skript";
-  if (path.startsWith("/assistent")) return "Assistent";
-  if (path.startsWith("/meine-ergebnisse")) return "Meine Ergebnisse";
-  if (path.startsWith("/konto")) return "Mein Konto";
-  if (path.startsWith("/dialer")) return "Dialer";
-  if (path.startsWith("/admin")) return "Admin";
-  return path;
-}
-
 const eur = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
 const shortDateFmt = new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
 
@@ -101,7 +75,6 @@ export default async function DashboardPage() {
     { data: myToday },
     { data: coverageAgents },
     { data: coverageStats },
-    { data: loginStatusRows },
   ] = await Promise.all([
     supabase
       .from("agent_daily_performance")
@@ -179,7 +152,6 @@ export default async function DashboardPage() {
     // explicitly and does the aggregation without per-row RLS overhead
     // (measured ~28ms). See 20260731040000_fn_company_gebiet_coverage.sql.
     isAdmin ? supabase.rpc("fn_company_gebiet_coverage") : Promise.resolve({ data: null }),
-    isAdmin ? supabase.rpc("fn_get_agent_login_status") : Promise.resolve({ data: null }),
   ]);
 
   // Wiedervorlagen fällig heute oder überfällig. Originally team-weit
@@ -215,29 +187,14 @@ export default async function DashboardPage() {
     byAgent.set(row.agent_id, entry);
   }
 
-  // "Online/offline" combines two signals: has this agent ever logged in
-  // (auth.users.last_sign_in_at), and a real heartbeat (profiles.last_seen_at/
-  // last_seen_path, pinged every 30s by HeartbeatPing while a tab is open) -
-  // "online" means a heartbeat within the last 90s, not just "logged in once".
-  // Both come through fn_get_agent_login_status() (security definer, admin-
-  // gated - auth.users isn't selectable directly by the authenticated role).
-  type LoginStatus = "none" | "created" | "idle" | "online";
-  const loginStatusByAgent = new Map<string, { status: LoginStatus; path: string | null }>();
-  for (const row of loginStatusRows ?? []) {
-    const isOnline = row.last_seen_at ? now.getTime() - new Date(row.last_seen_at).getTime() < ONLINE_THRESHOLD_MS : false;
-    const status: LoginStatus = !row.has_account
-      ? "none"
-      : isOnline
-        ? "online"
-        : row.last_sign_in_at
-          ? "idle"
-          : "created";
-    loginStatusByAgent.set(row.agent_id, { status, path: isOnline ? row.last_seen_path : null });
-  }
-  const emptyLoginStatus = { status: "none" as LoginStatus, path: null };
-
+  // The per-agent "Online/Angemeldet" app-status pill used to live here too
+  // (fn_get_agent_login_status) - Anis, 2026-08-14: "merge dialer status
+  // under status in dialer and delete on dashboard, show one under the
+  // other so everything has a place" - moved to /dialer, stacked with the
+  // real Dialer Live-Status/Verlauf cards, so all "who's doing what right
+  // now" info lives in one place instead of split across two pages.
   const leaderboard = [...byAgent.entries()]
-    .map(([agentId, v]) => ({ agentId, loginStatus: loginStatusByAgent.get(agentId) ?? emptyLoginStatus, ...v }))
+    .map(([agentId, v]) => ({ agentId, ...v }))
     .sort((a, b) => b.revenue - a.revenue);
 
   const teamRevenue = leaderboard.reduce((sum, a) => sum + a.revenue, 0);
@@ -444,34 +401,6 @@ export default async function DashboardPage() {
                     ) : (
                       <span className={i === 0 ? "font-semibold" : undefined}>{row.name}</span>
                     )}
-                    {isAdmin
-                      ? (() => {
-                          const statusLabel =
-                            row.loginStatus.status === "online"
-                              ? `Online${row.loginStatus.path ? ` - ${pathLabel(row.loginStatus.path)}` : ""}`
-                              : row.loginStatus.status === "idle"
-                                ? "Angemeldet, gerade nicht aktiv"
-                                : row.loginStatus.status === "created"
-                                  ? "Konto erstellt, noch nie angemeldet"
-                                  : "Noch kein Konto";
-                          return (
-                            <span
-                              className={cn(
-                                "rounded-full px-2 py-0.5 text-xs font-medium",
-                                row.loginStatus.status === "online"
-                                  ? "bg-success/20 text-success-foreground"
-                                  : row.loginStatus.status === "idle"
-                                    ? "bg-primary/15 text-primary"
-                                    : row.loginStatus.status === "created"
-                                      ? "bg-warning/20 text-warning-foreground"
-                                      : "bg-muted text-muted-foreground",
-                              )}
-                            >
-                              {statusLabel}
-                            </span>
-                          );
-                        })()
-                      : null}
                   </span>
                   <span className={cn("tabular-nums", i === 0 ? "font-bold text-primary" : "font-medium")}>
                     {eur.format(row.revenue)}

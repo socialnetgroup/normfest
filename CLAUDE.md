@@ -5083,6 +5083,58 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     the expanded group + 1 from an older ungrouped row). Test rows deleted
     after. Typecheck/lint clean, full suite green (41/41).
 
+81. **Retroactive Verkauf-batch consolidation, real historical data —
+    2026-08-14.** Same day as item 80's grouping feature, Anis asked for two
+    real cleanups on top:
+    - **Bodo Kirchner KFZ-Aufbereitung**: 6 real pre-existing `sales_feedback`
+      rows (all `outcome='sold'`, same agent, same literal comment "1x paar
+      schuhe gratis weil 6 Positionen", created within <1s of each other -
+      clearly one real multi-position sale from before the `batch_id`
+      feature existed) - stamped with a shared `batch_id` so they now
+      display as one grouped card, exactly like a fresh submission would.
+    - **"Look at all sales in the last days and consolidate where it makes
+      sense"**: scanned all `outcome='sold'`, `batch_id is null` rows from
+      the last 14 days, clustered by `(company_id, agent_id)` with
+      consecutive rows within a threshold. Real timestamp inspection first
+      (not guessed): genuine multi-position submits are ~50-300ms apart per
+      row (matches `fn_log_sales_feedback`'s sequential-await loop, up to
+      753ms for a real 14-position sale), so a 2-second threshold has wide
+      margin - none of the 23 real candidate groups found were anywhere
+      near that cutoff, so no risk of merging two genuinely separate calls
+      that happened to land close together. Applied to all 23 groups (89
+      rows, one new `batch_id` per group) - real examples: Ralf Zimmermann
+      (14 positions), Reifen Erl Albert (9), Auto top Automobile (7).
+      One-off scripts, not committed to the repo (pure data migration, same
+      as other one-time retroactive fixes in this project).
+
+82. **Dialer/App-status consolidated onto `/dialer`, removed from Dashboard
+    — shipped (2026-08-14).** Anis: "merge dialer status under status in
+    dialer and delete on dashboard, show one under the other so everything
+    has a place" - confirmed via `AskUserQuestion` this meant the
+    Dashboard Rangliste's per-agent "Online - {Seite} / Angemeldet, gerade
+    nicht aktiv / Konto erstellt..." pill (our own in-app heartbeat status,
+    `fn_get_agent_login_status`) - separate from the real ViciDial Live-
+    Status already on `/dialer` (§14 items 13/24). Moved the whole
+    computation (RPC call, `ONLINE_THRESHOLD_MS`, `pathLabel()`, the status-
+    to-badge-color mapping) out of `app/(app)/page.tsx` into
+    `app/(app)/dialer/page.tsx` as a new "Status im Tool" card, stacked
+    above the existing "Live-Status (Dialer)" and "Verlauf" cards - so
+    every "what is this agent doing right now" signal (in-app heartbeat,
+    real dialer status, and the daily snapshot history) now lives on one
+    page instead of split across Dashboard and `/dialer`. Dashboard's
+    Rangliste keeps its rank/name/revenue, just without the status pill.
+
+    Verified live end-to-end (throwaway admin test account, deleted
+    after): confirmed the Dashboard no longer renders any status text
+    ("Angemeldet, gerade nicht aktiv" / "Konto erstellt..." absent from
+    the page); confirmed `/dialer` renders all three cards stacked in
+    order with real data - "Status im Tool" showing real per-agent
+    statuses (8 agents "Online - Firmenprofil"/"Online - Firmen", 2
+    "Konto erstellt, noch nie angemeldet", matching the real throwaway
+    admin session's own heartbeat), followed by the real Live-Status
+    table and the real Verlauf snapshot picker, all functioning as
+    before. Typecheck/lint clean, full suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { Activity, History } from "lucide-react";
+import { Activity, History, Wifi } from "lucide-react";
 
 import { AutoRefresh } from "@/components/auto-refresh";
 import { Badge } from "@/components/ui/badge";
@@ -9,12 +9,42 @@ import { Label } from "@/components/ui/label";
 import { DialerStatusTable } from "@/components/dialer-status-table";
 import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { cn } from "@/lib/utils";
 import {
   buildDialerAgentSummaries,
   fetchDialerAgentStatuses,
   refreshSalesInSummaries,
   type DialerAgentSummary,
 } from "@/lib/dialer/status";
+
+const ONLINE_THRESHOLD_MS = 90_000;
+
+// Moved here from the Dashboard's Rangliste (2026-08-14) - Anis: "merge
+// dialer status under status in dialer and delete on dashboard, show one
+// under the other so everything has a place" - both "is this agent doing
+// something right now" signals (our own in-app heartbeat, and the real
+// ViciDial dialer) now live on one page instead of split across two.
+function pathLabel(path: string | null): string {
+  if (!path) return "";
+  if (path === "/") return "Dashboard";
+  if (path.startsWith("/firmen/")) return "Firmenprofil";
+  if (path === "/firmen") return "Firmen";
+  if (path.startsWith("/katalog/")) return "Produktseite";
+  if (path === "/katalog") return "Katalog";
+  if (path.startsWith("/fokus")) return "Fokus";
+  if (path.startsWith("/feedback")) return "Feedback";
+  if (path.startsWith("/email-liste")) return "Email-Liste";
+  if (path.startsWith("/wissen")) return "Wissen";
+  if (path.startsWith("/skript")) return "Skript";
+  if (path.startsWith("/assistent")) return "Assistent";
+  if (path.startsWith("/meine-ergebnisse")) return "Meine Ergebnisse";
+  if (path.startsWith("/konto")) return "Mein Konto";
+  if (path.startsWith("/dialer")) return "Dialer";
+  if (path.startsWith("/admin")) return "Admin";
+  return path;
+}
+
+type LoginStatus = "none" | "created" | "idle" | "online";
 
 function IconTitle({
   icon: Icon,
@@ -51,25 +81,52 @@ export default async function DialerPage({
   let snapshotDates: string[] = [];
   let selectedSnapshotRows: DialerAgentSummary[] | null = null;
   let selectedSnapshotCapturedAt: string | null = null;
+  let appStatusRows: { agentId: string; name: string; status: LoginStatus; path: string | null }[] = [];
 
   if (isAdmin) {
     const supabase = await createClient();
     const todayStr = new Date().toISOString().slice(0, 10);
-    const [{ data: dialerData, error: fetchError }, { data: agentRows }, { data: perfRows }, { data: snapshotRows }] =
-      await Promise.all([
-        fetchDialerAgentStatuses(),
-        supabase.from("agents").select("id, full_name").eq("active", true),
-        supabase.from("agent_daily_performance").select("agent_id, sales_count").eq("date", todayStr),
-        // Verlauf (2026-08-08): "posto nemamo logove" stopgap (§14 item 24) had
-        // no viewer built yet - just capture. Anis: "How to get that?" -> "sure,
-        // viewer page now", "do it in dialer menu" (same page, not a new nav item).
-        supabase.from("dialer_daily_snapshots").select("snapshot_date").order("snapshot_date", { ascending: false }),
-      ]);
+    const [
+      { data: dialerData, error: fetchError },
+      { data: agentRows },
+      { data: perfRows },
+      { data: snapshotRows },
+      { data: loginStatusRows },
+    ] = await Promise.all([
+      fetchDialerAgentStatuses(),
+      supabase.from("agents").select("id, full_name").eq("active", true),
+      supabase.from("agent_daily_performance").select("agent_id, sales_count").eq("date", todayStr),
+      // Verlauf (2026-08-08): "posto nemamo logove" stopgap (§14 item 24) had
+      // no viewer built yet - just capture. Anis: "How to get that?" -> "sure,
+      // viewer page now", "do it in dialer menu" (same page, not a new nav item).
+      supabase.from("dialer_daily_snapshots").select("snapshot_date").order("snapshot_date", { ascending: false }),
+      // "Status im Tool" - our own in-app heartbeat, same RPC/threshold the
+      // Dashboard's Rangliste used to compute this with before it moved here.
+      supabase.rpc("fn_get_agent_login_status"),
+    ]);
     dialerError = fetchError;
     const agents = agentRows ?? [];
     const salesByAgentId = new Map((perfRows ?? []).map((r) => [r.agent_id, r.sales_count]));
     liveRows = dialerData ? buildDialerAgentSummaries(dialerData, agents, salesByAgentId) : null;
     snapshotDates = (snapshotRows ?? []).map((r) => r.snapshot_date);
+
+    const now = new Date();
+    const nameByAgentId = new Map(agents.map((a) => [a.id, a.full_name]));
+    appStatusRows = (loginStatusRows ?? [])
+      .map((row) => {
+        const isOnline = row.last_seen_at ? now.getTime() - new Date(row.last_seen_at).getTime() < ONLINE_THRESHOLD_MS : false;
+        const status: LoginStatus = !row.has_account ? "none" : isOnline ? "online" : row.last_sign_in_at ? "idle" : "created";
+        return {
+          agentId: row.agent_id,
+          name: nameByAgentId.get(row.agent_id) ?? "-",
+          status,
+          path: isOnline ? row.last_seen_path : null,
+        };
+      })
+      .sort((a, b) => {
+        const order: Record<LoginStatus, number> = { online: 0, idle: 1, created: 2, none: 3 };
+        return order[a.status] - order[b.status] || a.name.localeCompare(b.name);
+      });
 
     const selectedDate = datumParam && snapshotDates.includes(datumParam) ? datumParam : (snapshotDates[0] ?? null);
     if (selectedDate) {
@@ -99,6 +156,55 @@ export default async function DialerPage({
       <div>
         <h1 className="font-heading text-2xl font-semibold tracking-tight">Dialer</h1>
       </div>
+
+      {isAdmin ? (
+        <Card>
+          <CardHeader>
+            <IconTitle icon={Wifi}>Status im Tool</IconTitle>
+            <p className="text-sm text-muted-foreground">
+              Eigener In-App-Status (Login + Heartbeat, alle 30s) - getrennt vom echten Dialer-Status
+              unten, zeigt nur ob und wo ein Agent gerade in diesem Tool aktiv ist.
+            </p>
+          </CardHeader>
+          <CardContent>
+            {appStatusRows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Keine Agenten-Konten vorhanden.</p>
+            ) : (
+              <ul className="flex flex-col divide-y">
+                {appStatusRows.map((row) => {
+                  const statusLabel =
+                    row.status === "online"
+                      ? `Online${row.path ? ` - ${pathLabel(row.path)}` : ""}`
+                      : row.status === "idle"
+                        ? "Angemeldet, gerade nicht aktiv"
+                        : row.status === "created"
+                          ? "Konto erstellt, noch nie angemeldet"
+                          : "Noch kein Konto";
+                  return (
+                    <li key={row.agentId} className="flex items-center justify-between gap-3 py-2 text-sm">
+                      <span className="font-medium">{row.name}</span>
+                      <span
+                        className={cn(
+                          "rounded-full px-2 py-0.5 text-xs font-medium",
+                          row.status === "online"
+                            ? "bg-success/20 text-success-foreground"
+                            : row.status === "idle"
+                              ? "bg-primary/15 text-primary"
+                              : row.status === "created"
+                                ? "bg-warning/20 text-warning-foreground"
+                                : "bg-muted text-muted-foreground",
+                        )}
+                      >
+                        {statusLabel}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
       {isAdmin ? (
         <div className="mx-[calc(50%-50vw)] w-screen px-4 md:px-8">
