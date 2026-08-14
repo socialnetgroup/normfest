@@ -86,11 +86,15 @@ export default async function DashboardPage() {
   weekStart.setHours(0, 0, 0, 0);
 
   const todayStr = now.toISOString().slice(0, 10);
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
 
   const [
     { data: monthRows },
     { count: feedbackCountThisWeek },
     { count: myFeedbackCountThisWeek },
+    { count: feedbackCountToday },
+    { count: myFeedbackCountToday },
     { data: topSignals },
     { data: signalsTotal },
     { data: companyCountsRows },
@@ -119,6 +123,22 @@ export default async function DashboardPage() {
           .select("id", { count: "exact", head: true })
           .eq("agent_id", user.id)
           .gte("created_at", weekStart.toISOString())
+      : Promise.resolve({ count: 0 }),
+    // Anis, 2026-08-14: "ispod bude i Feedback heute stavka, da se i to vidi
+    // na prvi pogled" - a same-day count shown as a sub-line under the
+    // existing weekly tile, so both are visible at a glance without a
+    // separate tile. Same team-wide (admin) / own-only (agent) split as the
+    // weekly counts above.
+    supabase
+      .from("sales_feedback")
+      .select("id", { count: "exact", head: true })
+      .gte("created_at", todayStart.toISOString()),
+    user
+      ? supabase
+          .from("sales_feedback")
+          .select("id", { count: "exact", head: true })
+          .eq("agent_id", user.id)
+          .gte("created_at", todayStart.toISOString())
       : Promise.resolve({ count: 0 }),
     // RPC instead of two direct .from("signals") queries -- signals grew to
     // ~97k rows this session and its RLS policy now also needs to check
@@ -177,7 +197,7 @@ export default async function DashboardPage() {
   // isn't gebiet-restricted, so the join never comes back null for them.
   let dueWiedervorlagenBuilder = supabase
     .from("sales_feedback")
-    .select("id, company_id, comment, wiedervorlage_date, companies(name), profiles(full_name)")
+    .select("id, company_id, comment, wiedervorlage_date, wiedervorlage_time, companies(name), profiles(full_name)")
     .not("wiedervorlage_date", "is", null)
     .eq("wiedervorlage_done", false)
     .lte("wiedervorlage_date", todayStr)
@@ -298,7 +318,13 @@ export default async function DashboardPage() {
         <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
           <StatTile label="Firmen gesamt" value={String(totalCompanies ?? 0)} accent="primary" />
           <StatTile label="Team-Umsatz" value={eur.format(teamRevenue)} accent="primary" />
-          <StatTile label="Feedback diese Woche" value={String(feedbackCountThisWeek ?? 0)} accent="success" href="/feedback" />
+          <StatTile
+            label="Feedback diese Woche"
+            value={String(feedbackCountThisWeek ?? 0)}
+            accent="success"
+            href="/feedback"
+            sub={`Heute: ${feedbackCountToday ?? 0}`}
+          />
           <StatTile
             label="Nicht kontaktiert (3+ Mon.)"
             value={String(uncontacted)}
@@ -324,7 +350,13 @@ export default async function DashboardPage() {
             accent={uncontactedSevere ? "warning" : "secondary"}
           />
           <StatTile label="Anteil (3+ Mon.)" value={`${Math.round(uncontactedShare * 100)}%`} accent={uncontactedShare >= 0.4 ? "warning" : "secondary"} />
-          <StatTile label="Feedback diese Woche" value={String(myFeedbackCountThisWeek ?? 0)} accent="success" href="/feedback" />
+          <StatTile
+            label="Feedback diese Woche"
+            value={String(myFeedbackCountThisWeek ?? 0)}
+            accent="success"
+            href="/feedback"
+            sub={`Heute: ${myFeedbackCountToday ?? 0}`}
+          />
         </div>
       )}
 
@@ -471,6 +503,7 @@ export default async function DashboardPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge variant={overdue ? "destructive" : "warning"}>
                           {shortDateFmt.format(new Date(w.wiedervorlage_date!))}
+                          {w.wiedervorlage_time ? `, ${w.wiedervorlage_time.slice(0, 5)} Uhr` : ""}
                         </Badge>
                         <Link href={`/firmen/${w.company_id}`} className="font-medium hover:underline">
                           {company?.name ?? "-"}

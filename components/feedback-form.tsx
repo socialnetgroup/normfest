@@ -86,6 +86,7 @@ export function FeedbackForm({ companyId }: { companyId: string }) {
   const [objection, setObjection] = useState("");
   const [comment, setComment] = useState("");
   const [wiedervorlageDate, setWiedervorlageDate] = useState("");
+  const [wiedervorlageTime, setWiedervorlageTime] = useState("");
   const [status, setStatus] = useState<"idle" | "saving" | "done" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -122,6 +123,7 @@ export function FeedbackForm({ companyId }: { companyId: string }) {
     setObjection("");
     setComment("");
     setWiedervorlageDate("");
+    setWiedervorlageTime("");
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -162,6 +164,7 @@ export function FeedbackForm({ companyId }: { companyId: string }) {
         p_objection: objection || undefined,
         p_comment: comment || undefined,
         p_wiedervorlage_date: wiedervorlageDate || undefined,
+        p_wiedervorlage_time: wiedervorlageDate && wiedervorlageTime ? wiedervorlageTime : undefined,
       });
 
       if (error) {
@@ -318,15 +321,29 @@ export function FeedbackForm({ companyId }: { companyId: string }) {
             />
           </div>
 
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="wiedervorlage">Wiedervorlage (optional)</Label>
-            <Input
-              id="wiedervorlage"
-              type="date"
-              value={wiedervorlageDate}
-              onChange={(e) => setWiedervorlageDate(e.target.value)}
-              className="w-40"
-            />
+          <div className="flex flex-wrap gap-3">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="wiedervorlage">Wiedervorlage (optional)</Label>
+              <Input
+                id="wiedervorlage"
+                type="date"
+                value={wiedervorlageDate}
+                onChange={(e) => setWiedervorlageDate(e.target.value)}
+                className="w-40"
+              />
+            </div>
+            {wiedervorlageDate ? (
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="wiedervorlage-time">Uhrzeit (optional)</Label>
+                <Input
+                  id="wiedervorlage-time"
+                  type="time"
+                  value={wiedervorlageTime}
+                  onChange={(e) => setWiedervorlageTime(e.target.value)}
+                  className="w-28"
+                />
+              </div>
+            ) : null}
           </div>
 
           <div className="flex items-center gap-3">

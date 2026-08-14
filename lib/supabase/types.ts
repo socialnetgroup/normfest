@@ -1430,6 +1430,7 @@ export type Database = {
           value_net: number | null
           wiedervorlage_date: string | null
           wiedervorlage_done: boolean
+          wiedervorlage_time: string | null
         }
         Insert: {
           agent_id: string
@@ -1444,6 +1445,7 @@ export type Database = {
           value_net?: number | null
           wiedervorlage_date?: string | null
           wiedervorlage_done?: boolean
+          wiedervorlage_time?: string | null
         }
         Update: {
           agent_id?: string
@@ -1458,6 +1460,7 @@ export type Database = {
           value_net?: number | null
           wiedervorlage_date?: string | null
           wiedervorlage_done?: boolean
+          wiedervorlage_time?: string | null
         }
         Relationships: [
           {
@@ -1974,6 +1977,7 @@ export type Database = {
           p_qty?: number
           p_value_net?: number
           p_wiedervorlage_date?: string
+          p_wiedervorlage_time?: string
         }
         Returns: string
       }
@@ -2098,6 +2102,7 @@ export type Database = {
           p_value_net?: number
           p_wiedervorlage_date?: string
           p_wiedervorlage_done?: boolean
+          p_wiedervorlage_time?: string
         }
         Returns: undefined
       }

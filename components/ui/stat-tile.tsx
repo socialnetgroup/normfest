@@ -21,11 +21,15 @@ export function StatTile({
   value,
   accent = "secondary",
   href,
+  sub,
 }: {
   label: string;
   value: string;
   accent?: "primary" | "success" | "warning" | "secondary";
   href?: string;
+  /** Optional smaller second line under the label, e.g. "Heute: 3" - for a
+   * related, finer-grained number shown at a glance alongside the main value. */
+  sub?: string;
 }) {
   const content = (
     <>
@@ -33,6 +37,7 @@ export function StatTile({
       <div className="pl-2">
         <div className={cn("font-heading text-2xl font-bold tabular-nums", ACCENT_TEXT[accent])}>{value}</div>
         <div className="mt-0.5 text-xs font-medium text-muted-foreground">{label}</div>
+        {sub ? <div className="mt-0.5 text-xs text-muted-foreground/70">{sub}</div> : null}
       </div>
     </>
   );

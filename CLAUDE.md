@@ -4953,6 +4953,56 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     same session returned all 11 real due rows (10 pre-existing + the new
     one) - test account and row cleaned up after. Typecheck/lint clean.
 
+77. **Wiedervorlage: Uhrzeit added — shipped (2026-08-14).** Anis:
+    "Widervorlagen treba i Uhrzeit da mozemo oznaciti u koliko firmu treba
+    nazvati" - v1 (§14 item 21) was deliberately date-only; real usage (386
+    real rows) showed agents want a specific callback time too, not just
+    the day. New `sales_feedback.wiedervorlage_time time` (migration
+    `20260814050000_wiedervorlage_time.sql`, nullable, independent of the
+    date). Same real overload trap already hit twice on this table (the
+    original Wiedervorlage migration and the feedback-outcome-taxonomy
+    migration) - `create or replace function` treats an added parameter as
+    a different signature and silently leaves the old one in place, so the
+    migration explicitly `drop function if exists`s the old 8/9-parameter
+    `fn_log_sales_feedback`/`fn_update_sales_feedback` before recreating
+    with `p_wiedervorlage_time time default null` added. `fn_chat_log_
+    sales_feedback` untouched (calls positionally with fewer args, unaffected).
+
+    UI: `FeedbackForm` and `FeedbackHistoryItem`'s edit mode both show a
+    `type="time"` input next to the date field, only once a date is set
+    (mirrors the existing "no time without a day" logic). Display view
+    (`FeedbackHistoryItem`, the Dashboard's "Wiedervorlagen fällig" card)
+    shows the time inline in the badge when set, e.g. "20.08.2026, 14:30
+    Uhr" - falls back to date-only when no time was given, so v1's
+    date-only rows keep rendering exactly as before.
+
+    Verified live end-to-end (throwaway admin test account, deleted after):
+    set outcome "Kein Bedarf" with a real Wiedervorlage date + time (14:30)
+    on a real company via the actual form, confirmed the row landed in the
+    DB with `wiedervorlage_time: '14:30:00'`, and confirmed the rendered
+    badge showed "Wiedervorlage: 20.08.2026, 14:30 Uhr" - test row deleted
+    after. Typecheck/lint clean, full suite green (41/41).
+
+78. **Dashboard: "Feedback heute" sub-line added to the existing weekly
+    tile — shipped (2026-08-14).** Anis: "na Dashboardu na Tileu/kacheklu
+    prikazu za Feedback ove sedmice, neka ispod bude i Feedback heute
+    stavka, da se i to vidi na prvi pogled" - rather than a separate tile,
+    `StatTile` gained an optional `sub` prop (a smaller second line under
+    the label, e.g. "Heute: 3"), used on both the admin's team-wide
+    "Feedback diese Woche" tile and the agent's own-scoped one (same
+    admin/own split as the main value, §14 item 59). Two new same-day
+    counts (`feedbackCountToday`/`myFeedbackCountToday`) added to the
+    Dashboard's existing `Promise.all`, using a `todayStart` boundary
+    (midnight local, same pattern as the existing `weekStart`).
+
+    Verified live end-to-end (throwaway admin + agent test accounts, both
+    deleted after): real DB counts checked directly first (week 1334,
+    today 319) and matched exactly what the admin tile rendered
+    ("1334...Heute: 319"); the agent (non-admin) tile also correctly
+    showed the sub-line ("0...Heute: 0" for the fresh throwaway account
+    with no linked feedback), confirming both views got the change, not
+    just the admin one. Typecheck/lint clean, full suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

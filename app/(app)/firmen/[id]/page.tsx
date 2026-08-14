@@ -86,7 +86,7 @@ export default async function CompanyProfilePage({
       supabase
         .from("sales_feedback")
         .select(
-          "id, agent_id, outcome, qty, value_net, objection, comment, created_at, product_id, wiedervorlage_date, wiedervorlage_done, products(name), profiles(full_name, agents(id))",
+          "id, agent_id, outcome, qty, value_net, objection, comment, created_at, product_id, wiedervorlage_date, wiedervorlage_time, wiedervorlage_done, products(name), profiles(full_name, agents(id))",
         )
         .eq("company_id", id)
         .order("created_at", { ascending: false })
@@ -497,6 +497,7 @@ export default async function CompanyProfilePage({
                     adminAgentLink={isAdmin && agentId ? `/admin/team/${agentId}` : null}
                     canEdit={f.agent_id === currentUser?.id || isAdmin}
                     wiedervorlageDate={f.wiedervorlage_date}
+                    wiedervorlageTime={f.wiedervorlage_time}
                     wiedervorlageDone={f.wiedervorlage_done}
                   />
                 );

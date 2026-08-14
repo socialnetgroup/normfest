@@ -84,6 +84,7 @@ export function FeedbackHistoryItem({
   companyId,
   companyName,
   wiedervorlageDate,
+  wiedervorlageTime,
   wiedervorlageDone,
 }: {
   id: string;
@@ -104,6 +105,7 @@ export function FeedbackHistoryItem({
   companyId?: string;
   companyName?: string;
   wiedervorlageDate?: string | null;
+  wiedervorlageTime?: string | null;
   wiedervorlageDone?: boolean;
 }) {
   const router = useRouter();
@@ -122,6 +124,7 @@ export function FeedbackHistoryItem({
   const [formObjection, setFormObjection] = useState(objection ?? "");
   const [formComment, setFormComment] = useState(comment ?? "");
   const [formWiedervorlage, setFormWiedervorlage] = useState(wiedervorlageDate ?? "");
+  const [formWiedervorlageTime, setFormWiedervorlageTime] = useState((wiedervorlageTime ?? "").slice(0, 5));
   const [wiedervorlagePending, setWiedervorlagePending] = useState(false);
 
   async function searchProducts(q: string) {
@@ -157,6 +160,7 @@ export function FeedbackHistoryItem({
       p_objection: formObjection || undefined,
       p_comment: formComment || undefined,
       p_wiedervorlage_date: formWiedervorlage || undefined,
+      p_wiedervorlage_time: formWiedervorlage && formWiedervorlageTime ? formWiedervorlageTime : undefined,
       p_wiedervorlage_done: wiedervorlageDone ?? false,
     });
     setPending(false);
@@ -303,15 +307,29 @@ export function FeedbackHistoryItem({
           />
         </div>
 
-        <div className="flex flex-col gap-1">
-          <Label htmlFor={`wiedervorlage-${id}`}>Wiedervorlage (optional)</Label>
-          <Input
-            id={`wiedervorlage-${id}`}
-            type="date"
-            value={formWiedervorlage}
-            onChange={(e) => setFormWiedervorlage(e.target.value)}
-            className="w-40"
-          />
+        <div className="flex flex-wrap gap-3">
+          <div className="flex flex-col gap-1">
+            <Label htmlFor={`wiedervorlage-${id}`}>Wiedervorlage (optional)</Label>
+            <Input
+              id={`wiedervorlage-${id}`}
+              type="date"
+              value={formWiedervorlage}
+              onChange={(e) => setFormWiedervorlage(e.target.value)}
+              className="w-40"
+            />
+          </div>
+          {formWiedervorlage ? (
+            <div className="flex flex-col gap-1">
+              <Label htmlFor={`wiedervorlage-time-${id}`}>Uhrzeit (optional)</Label>
+              <Input
+                id={`wiedervorlage-time-${id}`}
+                type="time"
+                value={formWiedervorlageTime}
+                onChange={(e) => setFormWiedervorlageTime(e.target.value)}
+                className="w-28"
+              />
+            </div>
+          ) : null}
         </div>
 
         <div className="flex items-center gap-3">
@@ -369,6 +387,7 @@ export function FeedbackHistoryItem({
           <div className="mt-1.5 flex items-center gap-2">
             <Badge variant={wiedervorlageDate <= new Date().toISOString().slice(0, 10) ? "warning" : "secondary"}>
               Wiedervorlage: {dateFmt.format(new Date(wiedervorlageDate))}
+              {wiedervorlageTime ? `, ${wiedervorlageTime.slice(0, 5)} Uhr` : ""}
             </Badge>
             {canEdit ? (
               <button
