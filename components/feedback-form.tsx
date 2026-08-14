@@ -63,6 +63,21 @@ type Position = {
   value: string;
 };
 
+// Anis (2026-08-14): "kad upisujemo menge i cijenu da ide einzelpreis i da
+// dashboard sam povuce sa odredjenom menge ukupnu cifru" - the "Wert"
+// field is now Einzelpreis (unit price); the real total (what actually
+// gets saved as value_net and feeds agent_daily_performance.revenue) is
+// computed from qty x unit price. If only a price is given with no qty,
+// treat it as an already-total value (unchanged old behavior) rather than
+// forcing a qty the agent didn't enter.
+function positionTotal(pos: { qty: string; value: string }): number | undefined {
+  const qty = Number(pos.qty);
+  const price = Number(pos.value);
+  if (!pos.value) return undefined;
+  if (pos.qty && qty > 0) return Math.round(qty * price * 100) / 100;
+  return price;
+}
+
 function emptyPosition(): Position {
   return {
     key: crypto.randomUUID(),
@@ -154,17 +169,27 @@ export function FeedbackForm({ companyId }: { companyId: string }) {
     setErrorMessage(null);
     const supabase = createClient();
 
+    // Anis (2026-08-14): "mi smo rekli da cemo u listu u bazu upisivati
+    // jedno po jedno, ali da li u frontendu mozemo pokazati kao 1 verkauf
+    // sa 3 pozicije a snimati pojedinacno" - still one real row per
+    // position (unchanged), but a shared batch_id lets Feedback-Verlauf
+    // display them as one grouped "Verkauft" entry. Only stamped when
+    // there's actually more than one row to group - a single position
+    // gets no batch_id, same as before this feature.
+    const batchId = rowsToSubmit.length > 1 ? crypto.randomUUID() : undefined;
+
     for (const pos of rowsToSubmit) {
       const { error } = await supabase.rpc("fn_log_sales_feedback", {
         p_company_id: companyId,
         p_outcome: outcome,
         p_product_id: pos.selectedProduct?.id ?? undefined,
         p_qty: pos.qty ? Number(pos.qty) : undefined,
-        p_value_net: pos.value ? Number(pos.value) : undefined,
+        p_value_net: positionTotal(pos),
         p_objection: objection || undefined,
         p_comment: comment || undefined,
         p_wiedervorlage_date: wiedervorlageDate || undefined,
         p_wiedervorlage_time: wiedervorlageDate && wiedervorlageTime ? wiedervorlageTime : undefined,
+        p_batch_id: batchId,
       });
 
       if (error) {
@@ -248,7 +273,7 @@ export function FeedbackForm({ companyId }: { companyId: string }) {
                 </div>
 
                 {outcome === "sold" ? (
-                  <div className="flex gap-3">
+                  <div className="flex flex-wrap items-end gap-3">
                     <div className="flex flex-col gap-1">
                       <Label htmlFor={`qty-${pos.key}`}>Menge</Label>
                       <Input
@@ -261,7 +286,7 @@ export function FeedbackForm({ companyId }: { companyId: string }) {
                       />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <Label htmlFor={`value-${pos.key}`}>Wert (€)</Label>
+                      <Label htmlFor={`value-${pos.key}`}>Einzelpreis (€)</Label>
                       <Input
                         id={`value-${pos.key}`}
                         type="number"
@@ -272,6 +297,11 @@ export function FeedbackForm({ companyId }: { companyId: string }) {
                         className="w-32"
                       />
                     </div>
+                    {pos.qty && pos.value ? (
+                      <span className="pb-1.5 text-sm text-muted-foreground">
+                        = {positionTotal(pos)?.toLocaleString("de-DE", { style: "currency", currency: "EUR" })}
+                      </span>
+                    ) : null}
                   </div>
                 ) : null}
               </div>

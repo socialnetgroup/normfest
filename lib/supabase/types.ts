@@ -1419,6 +1419,7 @@ export type Database = {
       sales_feedback: {
         Row: {
           agent_id: string
+          batch_id: string | null
           comment: string | null
           company_id: string
           created_at: string
@@ -1434,6 +1435,7 @@ export type Database = {
         }
         Insert: {
           agent_id: string
+          batch_id?: string | null
           comment?: string | null
           company_id: string
           created_at?: string
@@ -1449,6 +1451,7 @@ export type Database = {
         }
         Update: {
           agent_id?: string
+          batch_id?: string | null
           comment?: string | null
           company_id?: string
           created_at?: string
@@ -1969,6 +1972,7 @@ export type Database = {
       }
       fn_log_sales_feedback: {
         Args: {
+          p_batch_id?: string
           p_comment?: string
           p_company_id: string
           p_objection?: string

@@ -5003,6 +5003,86 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     with no linked feedback), confirming both views got the change, not
     just the admin one. Typecheck/lint clean, full suite green (41/41).
 
+79. **Firmenprofil: Bestellungen expandable + Signale Tier-sorted/color-
+    coded — shipped (2026-08-14).** Anis, looking at a real Tier-2 signal
+    live: "Imaju te stvari i signali, ali se nista ne moze kliknuti na to,
+    pa ne znas o cemu prica tool i na sta misli? Takodjer bi mozda Tier 1 i
+    Tier 2 signale nekako i bojom razdvojio, tier 2 uvijek visocije u
+    listi." Two real gaps, both fixed:
+
+    - **Bestellungen order rows only ever showed "N Position(en)"** - no
+      way to see what was actually on the invoice. New
+      `components/order-items-toggle.tsx` (click-to-expand, same pattern
+      as the Fokus flyer scent-family grouping's disclosure UI) reveals the
+      real `order_items` per invoice - product name (linked to Katalog when
+      matched) or the raw invoice description text when unmatched, qty,
+      net amount. Query extended to select the real item fields (was just
+      `order_items(id)` for counting).
+    - **Signale now sort Tier 2 above Tier 1 always** (`.order("tier",
+      {ascending:false}).order("score", ...)`, was score-only before) and
+      get a real visual distinction: a `border-l-2 border-l-primary` left
+      accent + `Badge variant="default"` (Tier 1 stays `border-l-transparent`
+      + `variant="muted"`) instead of both tiers rendering in near-identical
+      gray.
+
+    Verified live on the real Platinium Auto Service GmbH company (§14
+    item 72's own example): confirmed via DOM inspection the Tier 2
+    "Nachbestellung fällig" row carries `border-l-primary` while every
+    Tier 1 Cross-Sell row carries `border-l-transparent`, and sorts first
+    in the list regardless of score; expanded a real 4-position invoice
+    (Rechnung 6166285) and confirmed it shows the 4 real product names
+    (Lackspray matt Kroma, Felgensilber Silver-Star, etc.) with qty and
+    net amount, not a mystery count. Typecheck/lint clean.
+
+80. **Multi-position "Verkauf" display grouping + Einzelpreis auto-total —
+    shipped (2026-08-14).** Agent feedback after §14 item 69's "Weitere
+    Position" feature, relayed by Anis: *"Komprimirati verkauf kad
+    upisujemo Artikal po artikal pojavi se npr 3 verkaufa al je jedan u
+    sustini sa 3 pozicije. I kad upisujemo menge i cijenu da ide
+    einzelpreis i da dashboard sam povuce sa odredjenom menge ukupnu
+    cifru"* - explicitly confirmed the DB write pattern stays "jedno po
+    jedno" (one real row per position, unchanged), this is purely display
+    + a calc convenience.
+
+    **Batch grouping:** new `sales_feedback.batch_id uuid` (nullable,
+    migration `20260814060000_sales_feedback_batch_id.sql` - same overload-
+    trap `drop function if exists` discipline as every prior touch of
+    `fn_log_sales_feedback` today) stamped once per multi-position submit
+    (`crypto.randomUUID()`, only when >1 position actually gets submitted -
+    a single-position sale gets no batch_id, unchanged from before).
+    `lib/feedback-grouping.ts`'s `groupFeedbackRows()` clusters adjacent
+    same-batch_id rows (rows from one submit are always written back-to-
+    back and queried in the same order, so a simple adjacency scan
+    suffices). New `components/feedback-sold-group.tsx` renders a grouped
+    batch collapsed by default (Badge "Verkauft", "N Positionen", summed
+    total, comment, agent+time) with a "Positionen anzeigen" toggle that
+    expands into the exact same, unmodified `FeedbackHistoryItem` per row -
+    so every existing edit/delete/Wiedervorlage affordance keeps working
+    exactly as it does for an ungrouped entry, zero duplicated logic.
+    Wired into both `/feedback` and the Firmenprofil's Feedback-Verlauf.
+
+    **Einzelpreis auto-total:** the "Wert (€)" field in `FeedbackForm`
+    (create only, not the edit form - editing an existing row's `value_net`
+    is already a real total, re-interpreting it as a unit price on load
+    risked silently doubling it) is now labeled "Einzelpreis (€)" with a
+    live "= X €" hint; `positionTotal()` computes `qty × Einzelpreis`
+    (rounded to cents) as what actually gets saved to `value_net` -
+    falls back to treating the price as an already-total value when no
+    qty is given, so a plain single-value entry (no qty) still works
+    exactly as before.
+
+    Verified live end-to-end (throwaway admin test account, deleted
+    after) on the real Platinium Auto Service GmbH company: submitted a
+    real 2-position sale (3× à 10€, 2× à 5,50€), confirmed the live
+    "= 30,00 €" / "= 11,00 €" hints matched before submit, confirmed in
+    the DB both rows landed with the correct computed totals (30, 11) and
+    an identical `batch_id`, confirmed the Feedback-Verlauf rendered them
+    as one collapsed "Verkauft · 2 Positionen · 41,00 €" card, and
+    confirmed expanding it revealed both positions each with their own
+    real, working edit button (3 total edit buttons on the page - 2 from
+    the expanded group + 1 from an older ungrouped row). Test rows deleted
+    after. Typecheck/lint clean, full suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

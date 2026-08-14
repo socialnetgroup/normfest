@@ -14,9 +14,12 @@ import { BrandFocusVerifyButton } from "@/components/brand-focus-verify-button";
 import { EnrichNowButton } from "@/components/enrich-now-button";
 import { FeedbackForm } from "@/components/feedback-form";
 import { FeedbackHistoryItem } from "@/components/feedback-history-item";
+import { FeedbackSoldGroup } from "@/components/feedback-sold-group";
+import { OrderItemsToggle } from "@/components/order-items-toggle";
 import { SignalDismissButton } from "@/components/signal-dismiss-button";
 import { StammdatenCard } from "@/components/stammdaten-card";
 import { getCurrentUser } from "@/lib/auth";
+import { groupFeedbackRows } from "@/lib/feedback-grouping";
 import { signalTypeLabel, signalTypeVariant } from "@/lib/signals";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
@@ -86,7 +89,7 @@ export default async function CompanyProfilePage({
       supabase
         .from("sales_feedback")
         .select(
-          "id, agent_id, outcome, qty, value_net, objection, comment, created_at, product_id, wiedervorlage_date, wiedervorlage_time, wiedervorlage_done, products(name), profiles(full_name, agents(id))",
+          "id, agent_id, outcome, qty, value_net, objection, comment, created_at, product_id, wiedervorlage_date, wiedervorlage_time, wiedervorlage_done, batch_id, products(name), profiles(full_name, agents(id))",
         )
         .eq("company_id", id)
         .order("created_at", { ascending: false })
@@ -95,6 +98,11 @@ export default async function CompanyProfilePage({
         .from("signals")
         .select("id, type, score, reason, tier, origin, product_id, products(name)")
         .eq("company_id", id)
+        // Anis (2026-08-14): "Tier 1 i Tier 2 signale bojom razdvojio,
+        // tier 2 uvijek visocije u listi" - Tier 2 (real invoice-backed)
+        // ranks above Tier 1 regardless of score, then by score within
+        // each tier.
+        .order("tier", { ascending: false })
         .order("score", { ascending: false }),
       supabase
         .from("company_enrichment")
@@ -106,7 +114,9 @@ export default async function CompanyProfilePage({
         .maybeSingle(),
       supabase
         .from("orders")
-        .select("id, invoice_number, invoice_date, gross_total, needs_review, review_note, order_items(id)")
+        .select(
+          "id, invoice_number, invoice_date, gross_total, needs_review, review_note, order_items(id, description_raw, sku_raw, qty, unit_price, net_amount, product_id, products(name))",
+        )
         .eq("company_id", id)
         .order("invoice_date", { ascending: false }),
     ]);
@@ -319,7 +329,13 @@ export default async function CompanyProfilePage({
           <CardContent>
             <ul className="flex flex-col divide-y">
               {signals.slice(0, MAX_SIGNALS_SHOWN).map((s) => (
-                <li key={s.id} className="flex items-start justify-between gap-3 py-2.5 text-base">
+                <li
+                  key={s.id}
+                  className={cn(
+                    "flex items-start justify-between gap-3 py-2.5 pl-2 text-base",
+                    s.tier === 2 ? "border-l-2 border-l-primary" : "border-l-2 border-l-transparent",
+                  )}
+                >
                   <div>
                     <div className="flex items-center gap-2">
                       <Badge variant={signalTypeVariant(s.type)}>{signalTypeLabel(s.type)}</Badge>
@@ -343,7 +359,7 @@ export default async function CompanyProfilePage({
                     {isAdmin ? <p className="mt-1 text-muted-foreground">{s.reason}</p> : null}
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <Badge variant={s.tier === 1 ? "muted" : "secondary"}>Tier {s.tier}</Badge>
+                    <Badge variant={s.tier === 2 ? "default" : "muted"}>Tier {s.tier}</Badge>
                     <SignalDismissButton companyId={company.id} type={s.type} productId={s.product_id} />
                   </div>
                 </li>
@@ -439,21 +455,34 @@ export default async function CompanyProfilePage({
           <CardContent>
             <ul className="flex flex-col divide-y">
               {orders.map((o) => {
-                const itemCount = (o.order_items as { id: string }[] | null)?.length ?? 0;
+                const items = (
+                  (o.order_items as
+                    | { id: string; description_raw: string | null; sku_raw: string | null; qty: number | null; net_amount: number | null; product_id: string | null; products: { name: string } | null }[]
+                    | null) ?? []
+                ).map((it) => ({
+                  id: it.id,
+                  description_raw: it.description_raw,
+                  sku_raw: it.sku_raw,
+                  qty: it.qty,
+                  net_amount: it.net_amount,
+                  product_id: it.product_id,
+                  productName: it.products?.name ?? null,
+                }));
                 return (
-                  <li key={o.id} className="flex items-center justify-between gap-3 py-2.5 text-base">
-                    <div>
-                      <span className="font-medium">{date(o.invoice_date)}</span>{" "}
-                      <span className="text-muted-foreground">
-                        · Rechnung {o.invoice_number} · {itemCount} Position{itemCount === 1 ? "" : "en"}
-                      </span>
-                      {isAdmin && o.needs_review ? (
-                        <p className="mt-0.5 text-sm text-warning-foreground" title={o.review_note ?? undefined}>
-                          Zu prüfen: {o.review_note}
-                        </p>
-                      ) : null}
+                  <li key={o.id} className="flex flex-col gap-1 py-2.5 text-base">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <span className="font-medium">{date(o.invoice_date)}</span>{" "}
+                        <span className="text-muted-foreground">· Rechnung {o.invoice_number}</span>
+                        {isAdmin && o.needs_review ? (
+                          <p className="mt-0.5 text-sm text-warning-foreground" title={o.review_note ?? undefined}>
+                            Zu prüfen: {o.review_note}
+                          </p>
+                        ) : null}
+                      </div>
+                      <span className="shrink-0 font-medium">{money(o.gross_total)}</span>
                     </div>
-                    <span className="shrink-0 font-medium">{money(o.gross_total)}</span>
+                    <OrderItemsToggle items={items} />
                   </li>
                 );
               })}
@@ -478,30 +507,36 @@ export default async function CompanyProfilePage({
           </CardHeader>
           <CardContent>
             <ul className="flex flex-col divide-y">
-              {feedbackHistory.map((f) => {
-                const fp = f.profiles as { full_name: string | null; agents: { id: string }[] } | null;
-                const agentId = fp?.agents?.[0]?.id;
-                return (
-                  <FeedbackHistoryItem
-                    key={f.id}
-                    id={f.id}
-                    outcome={f.outcome}
-                    qty={f.qty}
-                    valueNet={f.value_net}
-                    objection={f.objection}
-                    comment={f.comment}
-                    createdAt={f.created_at}
-                    productId={f.product_id}
-                    productName={(f.products as { name: string } | null)?.name ?? null}
-                    agentName={fp?.full_name ?? "-"}
-                    adminAgentLink={isAdmin && agentId ? `/admin/team/${agentId}` : null}
-                    canEdit={f.agent_id === currentUser?.id || isAdmin}
-                    wiedervorlageDate={f.wiedervorlage_date}
-                    wiedervorlageTime={f.wiedervorlage_time}
-                    wiedervorlageDone={f.wiedervorlage_done}
-                  />
-                );
-              })}
+              {groupFeedbackRows(
+                feedbackHistory.map((f) => {
+                  const fp = f.profiles as { full_name: string | null; agents: { id: string }[] } | null;
+                  const agentId = fp?.agents?.[0]?.id;
+                  return {
+                    id: f.id,
+                    outcome: f.outcome,
+                    qty: f.qty,
+                    valueNet: f.value_net,
+                    objection: f.objection,
+                    comment: f.comment,
+                    createdAt: f.created_at,
+                    productId: f.product_id,
+                    productName: (f.products as { name: string } | null)?.name ?? null,
+                    agentName: fp?.full_name ?? "-",
+                    adminAgentLink: isAdmin && agentId ? `/admin/team/${agentId}` : null,
+                    canEdit: f.agent_id === currentUser?.id || isAdmin,
+                    wiedervorlageDate: f.wiedervorlage_date,
+                    wiedervorlageTime: f.wiedervorlage_time,
+                    wiedervorlageDone: f.wiedervorlage_done,
+                    batch_id: f.batch_id,
+                  };
+                }),
+              ).map((group) =>
+                group.length > 1 ? (
+                  <FeedbackSoldGroup key={group[0].id} rows={group} />
+                ) : (
+                  <FeedbackHistoryItem key={group[0].id} {...group[0]} />
+                ),
+              )}
             </ul>
           </CardContent>
         </Card>

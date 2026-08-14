@@ -5,7 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FeedbackHistoryItem } from "@/components/feedback-history-item";
+import { FeedbackSoldGroup } from "@/components/feedback-sold-group";
 import { getCurrentUser } from "@/lib/auth";
+import { groupFeedbackRows } from "@/lib/feedback-grouping";
 import { createClient } from "@/lib/supabase/server";
 
 const PAGE_SIZE = 30;
@@ -67,7 +69,7 @@ export default async function FeedbackListPage({
   let feedbackBuilder = supabase
     .from("sales_feedback")
     .select(
-      "id, agent_id, company_id, outcome, qty, value_net, objection, comment, created_at, product_id, wiedervorlage_date, wiedervorlage_time, wiedervorlage_done, companies(name), products(name), profiles(full_name, agents(id))",
+      "id, agent_id, company_id, outcome, qty, value_net, objection, comment, created_at, product_id, wiedervorlage_date, wiedervorlage_time, wiedervorlage_done, batch_id, companies(name), products(name), profiles(full_name, agents(id))",
       { count: "exact" },
     )
     .order("created_at", { ascending: false })
@@ -187,32 +189,38 @@ export default async function FeedbackListPage({
             <p className="text-sm text-muted-foreground">Keine Feedback-Einträge gefunden.</p>
           ) : (
             <ul className="flex flex-col divide-y">
-              {feedbackRows.map((f) => {
-                const fp = f.profiles as { full_name: string | null; agents: { id: string }[] } | null;
-                const linkedAgentId = fp?.agents?.[0]?.id;
-                return (
-                  <FeedbackHistoryItem
-                    key={f.id}
-                    id={f.id}
-                    outcome={f.outcome}
-                    qty={f.qty}
-                    valueNet={f.value_net}
-                    objection={f.objection}
-                    comment={f.comment}
-                    createdAt={f.created_at}
-                    productId={f.product_id}
-                    productName={(f.products as { name: string } | null)?.name ?? null}
-                    agentName={fp?.full_name ?? "-"}
-                    adminAgentLink={isAdmin && linkedAgentId ? `/admin/team/${linkedAgentId}` : null}
-                    canEdit={f.agent_id === user?.id || isAdmin}
-                    companyId={f.company_id}
-                    companyName={(f.companies as { name: string } | null)?.name ?? "-"}
-                    wiedervorlageDate={f.wiedervorlage_date}
-                    wiedervorlageTime={f.wiedervorlage_time}
-                    wiedervorlageDone={f.wiedervorlage_done}
-                  />
-                );
-              })}
+              {groupFeedbackRows(
+                feedbackRows.map((f) => {
+                  const fp = f.profiles as { full_name: string | null; agents: { id: string }[] } | null;
+                  const linkedAgentId = fp?.agents?.[0]?.id;
+                  return {
+                    id: f.id,
+                    outcome: f.outcome,
+                    qty: f.qty,
+                    valueNet: f.value_net,
+                    objection: f.objection,
+                    comment: f.comment,
+                    createdAt: f.created_at,
+                    productId: f.product_id,
+                    productName: (f.products as { name: string } | null)?.name ?? null,
+                    agentName: fp?.full_name ?? "-",
+                    adminAgentLink: isAdmin && linkedAgentId ? `/admin/team/${linkedAgentId}` : null,
+                    canEdit: f.agent_id === user?.id || isAdmin,
+                    companyId: f.company_id,
+                    companyName: (f.companies as { name: string } | null)?.name ?? "-",
+                    wiedervorlageDate: f.wiedervorlage_date,
+                    wiedervorlageTime: f.wiedervorlage_time,
+                    wiedervorlageDone: f.wiedervorlage_done,
+                    batch_id: f.batch_id,
+                  };
+                }),
+              ).map((group) =>
+                group.length > 1 ? (
+                  <FeedbackSoldGroup key={group[0].id} rows={group} />
+                ) : (
+                  <FeedbackHistoryItem key={group[0].id} {...group[0]} />
+                ),
+              )}
             </ul>
           )}
         </CardContent>
