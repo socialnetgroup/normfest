@@ -24,23 +24,51 @@ const ONLINE_THRESHOLD_MS = 90_000;
 // under the other so everything has a place" - both "is this agent doing
 // something right now" signals (our own in-app heartbeat, and the real
 // ViciDial dialer) now live on one page instead of split across two.
-function pathLabel(path: string | null): string {
+const PATH_LABELS: Record<"de" | "bs", Record<string, string>> = {
+  de: {
+    "/": "Dashboard",
+    "/firmen/": "Firmenprofil",
+    "/firmen": "Firmen",
+    "/katalog/": "Produktseite",
+    "/katalog": "Katalog",
+    "/fokus": "Fokus",
+    "/feedback": "Feedback",
+    "/email-liste": "Email-Liste",
+    "/wissen": "Wissen",
+    "/skript": "Skript",
+    "/assistent": "Assistent",
+    "/meine-ergebnisse": "Meine Ergebnisse",
+    "/konto": "Mein Konto",
+    "/bericht": "Bericht",
+    "/dialer": "Dialer",
+    "/admin": "Admin",
+  },
+  bs: {
+    "/": "Dashboard",
+    "/firmen/": "Profil firme",
+    "/firmen": "Firme",
+    "/katalog/": "Stranica proizvoda",
+    "/katalog": "Katalog",
+    "/fokus": "Fokus",
+    "/feedback": "Feedback",
+    "/email-liste": "Email lista",
+    "/wissen": "Znanje",
+    "/skript": "Skripta",
+    "/assistent": "Asistent",
+    "/meine-ergebnisse": "Moji rezultati",
+    "/konto": "Moj račun",
+    "/bericht": "Izvještaj",
+    "/dialer": "Dialer",
+    "/admin": "Admin",
+  },
+};
+
+function pathLabel(path: string | null, locale: "de" | "bs"): string {
   if (!path) return "";
-  if (path === "/") return "Dashboard";
-  if (path.startsWith("/firmen/")) return "Firmenprofil";
-  if (path === "/firmen") return "Firmen";
-  if (path.startsWith("/katalog/")) return "Produktseite";
-  if (path === "/katalog") return "Katalog";
-  if (path.startsWith("/fokus")) return "Fokus";
-  if (path.startsWith("/feedback")) return "Feedback";
-  if (path.startsWith("/email-liste")) return "Email-Liste";
-  if (path.startsWith("/wissen")) return "Wissen";
-  if (path.startsWith("/skript")) return "Skript";
-  if (path.startsWith("/assistent")) return "Assistent";
-  if (path.startsWith("/meine-ergebnisse")) return "Meine Ergebnisse";
-  if (path.startsWith("/konto")) return "Mein Konto";
-  if (path.startsWith("/dialer")) return "Dialer";
-  if (path.startsWith("/admin")) return "Admin";
+  const labels = PATH_LABELS[locale];
+  for (const [prefix, label] of Object.entries(labels)) {
+    if (prefix === "/" ? path === "/" : path.startsWith(prefix)) return label;
+  }
   return path;
 }
 
@@ -64,7 +92,65 @@ function IconTitle({
 const selectClassName =
   "h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
 
-const dateLabelFormat = new Intl.DateTimeFormat("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" });
+const dateLabelFormat: Record<"de" | "bs", Intl.DateTimeFormat> = {
+  de: new Intl.DateTimeFormat("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" }),
+  bs: new Intl.DateTimeFormat("bs", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" }),
+};
+
+// Anis, 2026-08-17: "Dialer informacije na Report takodjer prevedi na
+// bosanski" - report@'s view of this shared page renders in Bosnian; admin's
+// own daily-use view stays German (§1's "UI German labels" convention still
+// applies to admin/agents, this is a report@-only exception like /bericht).
+const T = {
+  de: {
+    title: "Dialer",
+    statusTitle: "Status im Tool",
+    statusDesc:
+      "Eigener In-App-Status (Login + Heartbeat, alle 30s) - getrennt vom echten Dialer-Status unten, zeigt nur ob und wo ein Agent gerade in diesem Tool aktiv ist.",
+    noAccounts: "Keine Agenten-Konten vorhanden.",
+    online: "Online",
+    idle: "Angemeldet, gerade nicht aktiv",
+    created: "Konto erstellt, noch nie angemeldet",
+    none: "Noch kein Konto",
+    liveTitle: "Live-Status (Dialer)",
+    liveBadge: "Live · aktualisiert alle 4s",
+    liveDesc:
+      "Direkt aus dem bestehenden Dialer gelesen (schreibgeschützt - startet, steuert oder beendet keine Anrufe). Sales, Konversion und Verkäufe/Std. kommen nicht vom Dialer selbst, sondern aus den echten, heute erfassten Verkäufen dieses Tools (gleiche Quelle wie Rangliste/Team Dashboard). Alle anderen Kennzahlen (Auslastung, Ø Bearbeitungszeit, Anrufe/Std., Zeitanteile) sind aus den rohen Dialer-Zeiten selbst berechnet, nicht vom Dialer vorgegeben.",
+    unreachable: "Dialer nicht erreichbar",
+    historyTitle: "Verlauf (Tages-Snapshots)",
+    historyDesc:
+      "Ein Snapshot der obigen Live-Status-Daten, automatisch jeden Tag um 18:00 Uhr gespeichert - der Dialer selbst hat keine eigene Historie, also läuft dieser Snapshot als Übergangslösung mit, bis eine echte Anruflog-API vom Dialer-Entwickler bereitsteht.",
+    noSnapshots: "Noch kein Snapshot vorhanden - der erste wird beim nächsten 18:00-Uhr-Lauf gespeichert.",
+    date: "Datum",
+    show: "Anzeigen",
+    savedAt: "Gespeichert um",
+    clock: "Uhr",
+  },
+  bs: {
+    title: "Dialer",
+    statusTitle: "Status u alatu",
+    statusDesc:
+      "Vlastiti status u alatu (prijava + heartbeat, svakih 30s) - odvojeno od stvarnog Dialer-statusa ispod, pokazuje samo da li i gdje je agent trenutno aktivan u ovom alatu.",
+    noAccounts: "Nema agentskih naloga.",
+    online: "Online",
+    idle: "Prijavljen, trenutno neaktivan",
+    created: "Nalog kreiran, još se nije prijavio",
+    none: "Još nema nalog",
+    liveTitle: "Uživo status (Dialer)",
+    liveBadge: "Uživo · ažurira se svakih 4s",
+    liveDesc:
+      "Direktno pročitano iz postojećeg Dialera (samo za čitanje - ne pokreće, ne kontroliše i ne završava pozive). Prodaje, Konverzija i Prodaje/h ne dolaze direktno iz Dialera, već iz stvarnih, danas unesenih prodaja ovog alata (isti izvor kao Rang lista/Team Dashboard). Sve ostale metrike (Zauzetost, Ø vrijeme obrade, Pozivi/h, vremenski udjeli) su izračunate iz sirovih Dialer-vremena, nisu date direktno od Dialera.",
+    unreachable: "Dialer nije dostupan",
+    historyTitle: "Historija (dnevni snimci)",
+    historyDesc:
+      "Snimak gornjih uživo podataka, automatski sačuvan svaki dan u 18:00 - Dialer sam po sebi nema vlastitu historiju, pa ovaj snimak služi kao privremeno rješenje dok stvarni API za log poziva od strane developera Dialera ne bude spreman.",
+    noSnapshots: "Još nema snimka - prvi će biti sačuvan pri sljedećem pokretanju u 18:00.",
+    date: "Datum",
+    show: "Prikaži",
+    savedAt: "Sačuvano u",
+    clock: "",
+  },
+} as const;
 
 export default async function DialerPage({
   searchParams,
@@ -82,6 +168,10 @@ export default async function DialerPage({
   // already gated for HR-adjacency reasons, and Anis explicitly asked for
   // full parity here rather than a trimmed-down version).
   const canView = profile?.role === "admin" || profile?.role === "report";
+  const isReport = profile?.role === "report";
+  const locale: "de" | "bs" = isReport ? "bs" : "de";
+  const t = T[locale];
+  const agentHref = (id: string) => (isReport ? `/bericht/${id}` : `/admin/team/${id}`);
 
   let liveRows: DialerAgentSummary[] | null = null;
   let dialerError: string | null = null;
@@ -161,32 +251,29 @@ export default async function DialerPage({
     <div className="flex flex-col gap-6">
       {canView ? <AutoRefresh intervalMs={4_000} /> : null}
       <div>
-        <h1 className="font-heading text-2xl font-semibold tracking-tight">Dialer</h1>
+        <h1 className="font-heading text-2xl font-semibold tracking-tight">{t.title}</h1>
       </div>
 
       {canView ? (
         <Card>
           <CardHeader>
-            <IconTitle icon={Wifi}>Status im Tool</IconTitle>
-            <p className="text-sm text-muted-foreground">
-              Eigener In-App-Status (Login + Heartbeat, alle 30s) - getrennt vom echten Dialer-Status
-              unten, zeigt nur ob und wo ein Agent gerade in diesem Tool aktiv ist.
-            </p>
+            <IconTitle icon={Wifi}>{t.statusTitle}</IconTitle>
+            <p className="text-sm text-muted-foreground">{t.statusDesc}</p>
           </CardHeader>
           <CardContent>
             {appStatusRows.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Keine Agenten-Konten vorhanden.</p>
+              <p className="text-sm text-muted-foreground">{t.noAccounts}</p>
             ) : (
               <ul className="flex flex-col divide-y">
                 {appStatusRows.map((row) => {
                   const statusLabel =
                     row.status === "online"
-                      ? `Online${row.path ? ` - ${pathLabel(row.path)}` : ""}`
+                      ? `${t.online}${row.path ? ` - ${pathLabel(row.path, locale)}` : ""}`
                       : row.status === "idle"
-                        ? "Angemeldet, gerade nicht aktiv"
+                        ? t.idle
                         : row.status === "created"
-                          ? "Konto erstellt, noch nie angemeldet"
-                          : "Noch kein Konto";
+                          ? t.created
+                          : t.none;
                   return (
                     <li key={row.agentId} className="flex items-center justify-between gap-3 py-2 text-sm">
                       <span className="font-medium">{row.name}</span>
@@ -217,24 +304,17 @@ export default async function DialerPage({
         <div className="mx-[calc(50%-50vw)] w-screen px-4 md:px-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <IconTitle icon={Activity}>Live-Status (Dialer)</IconTitle>
-              <Badge variant="success">Live · aktualisiert alle 4s</Badge>
+              <IconTitle icon={Activity}>{t.liveTitle}</IconTitle>
+              <Badge variant="success">{t.liveBadge}</Badge>
             </CardHeader>
             <CardContent>
-              <p className="mb-3 text-sm text-muted-foreground">
-                Direkt aus dem bestehenden Dialer gelesen (schreibgeschützt - startet, steuert oder beendet
-                keine Anrufe). Nur für Admin sichtbar, gleiche Einstufung wie das Team Dashboard.{" "}
-                <span className="font-medium">Sales</span>, <span className="font-medium">Konversion</span>{" "}
-                und <span className="font-medium">Verkäufe/Std.</span> kommen nicht vom Dialer selbst,
-                sondern aus den echten, heute erfassten Verkäufen dieses Tools (gleiche Quelle wie
-                Rangliste/Team Dashboard). Alle anderen Kennzahlen (Auslastung, Ø Bearbeitungszeit,
-                Anrufe/Std., Zeitanteile) sind aus den rohen Dialer-Zeiten selbst berechnet, nicht vom
-                Dialer vorgegeben.
-              </p>
+              <p className="mb-3 text-sm text-muted-foreground">{t.liveDesc}</p>
               {dialerError ? (
-                <p className="text-sm text-destructive">Dialer nicht erreichbar: {dialerError}</p>
+                <p className="text-sm text-destructive">
+                  {t.unreachable}: {dialerError}
+                </p>
               ) : (
-                <DialerStatusTable rows={liveRows ?? []} sortByStatus />
+                <DialerStatusTable rows={liveRows ?? []} sortByStatus locale={locale} agentHref={agentHref} />
               )}
             </CardContent>
           </Card>
@@ -245,23 +325,17 @@ export default async function DialerPage({
         <div className="mx-[calc(50%-50vw)] w-screen px-4 md:px-8">
           <Card>
             <CardHeader>
-              <IconTitle icon={History}>Verlauf (Tages-Snapshots)</IconTitle>
-              <p className="text-sm text-muted-foreground">
-                Ein Snapshot der obigen Live-Status-Daten, automatisch jeden Tag um 18:00 Uhr gespeichert -
-                der Dialer selbst hat keine eigene Historie, also läuft dieser Snapshot als
-                Übergangslösung mit, bis eine echte Anruflog-API vom Dialer-Entwickler bereitsteht.
-              </p>
+              <IconTitle icon={History}>{t.historyTitle}</IconTitle>
+              <p className="text-sm text-muted-foreground">{t.historyDesc}</p>
             </CardHeader>
             <CardContent>
               {snapshotDates.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Noch kein Snapshot vorhanden - der erste wird beim nächsten 18:00-Uhr-Lauf gespeichert.
-                </p>
+                <p className="text-sm text-muted-foreground">{t.noSnapshots}</p>
               ) : (
                 <div className="flex flex-col gap-4">
                   <form action="/dialer" className="flex flex-wrap items-end gap-3">
                     <div className="flex flex-col gap-1">
-                      <Label htmlFor="datum">Datum</Label>
+                      <Label htmlFor="datum">{t.date}</Label>
                       <select
                         id="datum"
                         name="datum"
@@ -270,18 +344,18 @@ export default async function DialerPage({
                       >
                         {snapshotDates.map((d) => (
                           <option key={d} value={d}>
-                            {dateLabelFormat.format(new Date(`${d}T00:00:00`))}
+                            {dateLabelFormat[locale].format(new Date(`${d}T00:00:00`))}
                           </option>
                         ))}
                       </select>
                     </div>
                     <Button type="submit" size="sm">
-                      Anzeigen
+                      {t.show}
                     </Button>
                     {selectedSnapshotCapturedAt ? (
                       <span className="pb-1.5 text-xs text-muted-foreground">
-                        Gespeichert um{" "}
-                        {new Date(selectedSnapshotCapturedAt).toLocaleTimeString("de-DE", {
+                        {t.savedAt}{" "}
+                        {new Date(selectedSnapshotCapturedAt).toLocaleTimeString(locale === "bs" ? "bs" : "de-DE", {
                           hour: "2-digit",
                           minute: "2-digit",
                           // real bug, 2026-08-11: this runs server-side (RSC), and
@@ -290,11 +364,11 @@ export default async function DialerPage({
                           // for an 18:03 CEST capture) instead of real local time.
                           timeZone: "Europe/Sarajevo",
                         })}{" "}
-                        Uhr
+                        {t.clock}
                       </span>
                     ) : null}
                   </form>
-                  <DialerStatusTable rows={selectedSnapshotRows ?? []} />
+                  <DialerStatusTable rows={selectedSnapshotRows ?? []} locale={locale} agentHref={agentHref} />
                 </div>
               )}
             </CardContent>

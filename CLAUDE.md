@@ -5496,6 +5496,64 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     don't silently alter source data) - worth a look if it recurs in a future month's
     file.
 
+93. **Bericht KPI/Umsatz redesign + full Team deep-dive + Dialer Bosnian translation
+    (2026-08-17), same day as items 88-92.** Anis, in one message: remove Anreicherung &
+    Katalog entirely, drop the Firmen/Katalog top tiles, reorder Umsatz to the first KPI
+    slot, add a new "Dnevni prosjek prometa" tile, keep Feedback third, add a new
+    "Aktivni agenti trenutno" tile fourth; expand the Umsatz section to match admin's
+    Team Dashboard monthly view (Umsatz, Ø daily, Sales, calls, conversion); and add the
+    complete admin "Team" deep-dive, not just a trimmed 2-column table. Then, mid-turn,
+    separately: "Dialer informacije na Report takodjer prevedi na bosanski."
+
+    **Removed entirely**: the "Anreicherung & Katalog" card and its two top KPI tiles
+    (Ukupno firmi, Katalog ukupno) - along with the now-unused `products` count queries
+    and `enrichmentPct`/`productsPct` helpers. `fn_report_stats()` itself untouched
+    (still needed for the AI-Assistent usage numbers), just no longer rendered for
+    enrichment/company-count fields.
+
+    **New top KPI row**, in the requested order: Timski promet (mjesec, moved to first
+    position) → **Dnevni prosjek prometa** (new - month revenue ÷ real elapsed days,
+    using today's day-of-month for the current month and the true calendar day-count for
+    past months, not divided by not-yet-happened future days) → Feedback ukupno (third,
+    unchanged) → **Aktivni agenti trenutno** (new - reuses the exact same
+    `fn_get_agent_login_status()` RPC + 90s heartbeat threshold `/dialer`'s own "Status
+    im Tool" card already uses, so the two numbers can never silently disagree).
+
+    **Umsatz section rebuilt as a full monthly deep-dive**, replacing the old single
+    current-month 2-column mini-table: the `agent_daily_performance` query dropped its
+    4-month lower bound (now full history, matching admin's own unbounded query) and
+    gained `sales_count`/`calls_count`; the monthly aggregation now mirrors
+    `admin/team/page.tsx`'s `byMonth` structure exactly (revenue/sales/calls/bonusKm per
+    agent per month). Each month renders as its own card: a summary line (Timski
+    promet, **Dnevni prosjek** ÷ real days-in-that-month, Prodaje, Pozivi ukupno,
+    Konverzija, +Timski bonus if `bonus_visible`) plus the full per-agent table
+    (Agent/Promet/Prodaje/Pozivi/Konverzija/+Bonus) - this single change satisfies both
+    "proširiti Promet dio" and "dodaj kompletnu deep dive Team menu poen" at once, since
+    admin's own Team Dashboard page **is** structured as monthly-summary-plus-full-table.
+
+    **`/dialer` (shared with admin) gets a role-conditional Bosnian translation for
+    report@ only** - admin's daily-use view stays German (§1's convention still applies
+    to admin/agents; report@ gets the same one-page exception already established for
+    `/bericht`). Implementation: `DialerStatusTable` gained `locale?: "de"|"bs"` (label
+    maps for column groups/headers/status badges) and `agentHref?: (id) => string` (so
+    report's agent links point at `/bericht/{id}`, not the blocked `/admin/team/{id}`) -
+    default `"de"`/`/admin/team/{id}` so admin's call sites need zero changes.
+    `/dialer/page.tsx` itself got a `T` object with parallel `de`/`bs` copies of every
+    card title/description/status label/`pathLabel()` mapping, selected once via
+    `const locale = isReport ? "bs" : "de"` and threaded through.
+
+    Verified live end-to-end (fresh throwaway `role='report'` + a separate throwaway
+    `role='admin'` account, both deleted after, using genuinely separate login sessions
+    since tabs in this Browser pane share cookies - a fresh tab alone doesn't isolate
+    sessions, had to explicitly log out between checks): confirmed the new `/bericht`
+    KPI row order and values, confirmed Anreicherung/Katalog is fully gone, confirmed
+    all 3 real months (August/July/June) render the full deep-dive table with real
+    numbers matching admin's own Team Dashboard exactly, confirmed `/dialer` renders
+    fully in Bosnian for report@ (including agent links correctly pointing at
+    `/bericht/{id}`) while the same page for admin renders unchanged German (including
+    agent links still pointing at `/admin/team/{id}`). Typecheck/lint clean, full suite
+    green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

@@ -18,7 +18,10 @@ import {
 const eur = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
 const eurCents = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", minimumFractionDigits: 2 });
 const pct = new Intl.NumberFormat("de-DE", { style: "percent", minimumFractionDigits: 0, maximumFractionDigits: 0 });
+const pct1 = new Intl.NumberFormat("de-DE", { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const num = (n: number) => n.toLocaleString("de-DE");
+
+const ONLINE_THRESHOLD_MS = 90_000;
 
 function capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
@@ -33,14 +36,11 @@ function monthLabel(month: string) {
 
 // Anis, 2026-08-17: "a kinda of viewing angle wheres the project at" - one
 // live-computed overview page for report@ (and admin, for QA). Deliberately
-// excludes Signale/Bestellungen/Fokus per Anis's own framing ("they dont
-// care so deep operational, they dont even know that exists") - only real
-// business-level numbers: reach (companies/catalog), Umsatz, contact
-// coverage per agent, flywheel adoption (feedback + Wiedervorlagen), data
-// quality (Anreicherung/Katalog), Dialer volume, and AI-Assistent usage.
-// Translated to Bosnian in full (2026-08-17, Anis's explicit ask) - the
-// rest of the app stays German per §1's "UI German labels" convention, this
-// one page is a deliberate exception for its CEO/board audience.
+// excludes Signale/Bestellungen/Fokus/Anreicherung-Katalog per Anis's own
+// framing ("they dont care so deep operational") - real business-level
+// numbers only: Umsatz (full monthly deep-dive, same shape as admin's Team
+// Dashboard), contact coverage per agent, flywheel adoption (feedback +
+// Wiedervorlagen), Dialer volume, and AI-Assistent usage.
 export default async function BerichtPage() {
   const { user, profile } = await getCurrentUser();
   if (!user) notFound();
@@ -49,7 +49,7 @@ export default async function BerichtPage() {
   const supabase = await createClient();
   const now = new Date();
   const todayStr = now.toISOString().slice(0, 10);
-  const monthStartStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const currentMonthKey = todayStr.slice(0, 7);
   const dayOfMonth = now.getDate();
   const dayOfWeek = (now.getDay() + 6) % 7; // Monday = 0
   const weekStart = new Date(now);
@@ -65,9 +65,6 @@ export default async function BerichtPage() {
   prevWeekSameSpanEnd.setDate(prevWeekSameSpanEnd.getDate() + dayOfWeek + 1);
   const todayStart = new Date(now);
   todayStart.setHours(0, 0, 0, 0);
-  // Last 4 real calendar months of agent_daily_performance, for the Umsatz
-  // trend + bonus totals - same shape as admin/team's own monthly cards.
-  const trendStartStr = `${new Date(now.getFullYear(), now.getMonth() - 3, 1).toISOString().slice(0, 10)}`;
 
   const [
     { data: reportStatsRows },
@@ -77,13 +74,11 @@ export default async function BerichtPage() {
     { count: feedbackToday },
     { count: wiedervorlageOpen },
     { count: wiedervorlageOverdue },
-    { data: trendRows },
+    { data: perfRows },
     { data: allAgents },
     { data: bonusSettingsRows },
-    { count: productsTotal },
-    { count: productsWithPhoto },
-    { count: productsWithDescription },
     { data: coverageStats },
+    { data: loginStatusRows },
   ] = await Promise.all([
     supabase.rpc("fn_report_stats"),
     supabase.from("sales_feedback").select("id", { count: "exact", head: true }),
@@ -105,24 +100,25 @@ export default async function BerichtPage() {
       .not("wiedervorlage_date", "is", null)
       .eq("wiedervorlage_done", false)
       .lt("wiedervorlage_date", todayStr),
+    // Kompletna historija (bez datumskog ograničenja) - Anis, 2026-08-17:
+    // "dodaj i kompletnu deep dive 'team' menu poen iz admina" - ista
+    // agregacija kao admin/team/page.tsx, ne skraćena verzija.
     supabase
       .from("agent_daily_performance")
-      .select("agent_id, date, revenue, day_off")
-      .gte("date", trendStartStr),
+      .select("agent_id, date, revenue, sales_count, calls_count, day_off"),
     supabase.from("agents").select("id, full_name, gebiet").eq("active", true),
     supabase
       .from("settings")
       .select("key, value")
       .in("key", ["bonus_thresholds", "bonus_min_contribution_pct", "bonus_min_qualifying_agents", "bonus_visible"]),
-    supabase.from("products").select("id", { count: "exact", head: true }),
-    supabase.from("products").select("id", { count: "exact", head: true }).not("image_path", "is", null),
-    supabase.from("products").select("id", { count: "exact", head: true }).not("description", "is", null),
     // Ista tabela kao na admin Dashboardu ("Kontakt-Abdeckung nach Agent") -
-    // Anis, 2026-08-17: "add the part about firmen not contacted per agent,
-    // the whole tabel as is on admin dashbaord". fn_company_gebiet_coverage()
-    // je bio admin-only; prošireno da dozvoli i report@ (migracija
+    // fn_company_gebiet_coverage() prošireno da dozvoli i report@ (migracija
     // 20260817020000, isti potpis funkcije, samo širi provjera pristupa).
     supabase.rpc("fn_company_gebiet_coverage"),
+    // "Aktivni agenti trenutno" KPI - isti RPC/prag kao /dialer's "Status im
+    // Tool" (fn_get_agent_login_status, prošireno za report@ u migraciji
+    // 20260817030000).
+    supabase.rpc("fn_get_agent_login_status"),
   ]);
 
   const stats = reportStatsRows?.[0] ?? {
@@ -146,31 +142,22 @@ export default async function BerichtPage() {
 
   const bonusByDate = bonusVisible
     ? computeBonusByDate(
-        (trendRows ?? []).map((r) => ({ agentId: r.agent_id, date: r.date, revenue: r.revenue, dayOff: r.day_off })),
+        (perfRows ?? []).map((r) => ({ agentId: r.agent_id, date: r.date, revenue: r.revenue, dayOff: r.day_off })),
         thresholds,
         minContributionPct,
         minQualifyingAgents,
       )
     : null;
 
-  const byMonth = new Map<string, { revenue: number; bonusKm: number }>();
-  for (const r of trendRows ?? []) {
-    if (r.day_off) continue;
-    const month = r.date.slice(0, 7);
-    const entry = byMonth.get(month) ?? { revenue: 0, bonusKm: 0 };
-    entry.revenue += r.revenue;
-    entry.bonusKm += bonusByDate?.get(r.date)?.get(r.agent_id) ?? 0;
-    byMonth.set(month, entry);
-  }
-  const months = [...byMonth.keys()].sort().reverse();
-  const teamRevenueMonth = byMonth.get(monthStartStr.slice(0, 7))?.revenue ?? 0;
-  const teamRevenueToday = (trendRows ?? [])
+  // Feedback WoW i "danas" Umsatz i dalje računamo direktno iz perfRows (sad
+  // bez datumskog ograničenja, ali filteri ispod i dalje rade identično).
+  const teamRevenueToday = (perfRows ?? [])
     .filter((r) => r.date === todayStr && !r.day_off)
     .reduce((sum, r) => sum + r.revenue, 0);
-  const teamRevenueWeek = (trendRows ?? [])
+  const teamRevenueWeek = (perfRows ?? [])
     .filter((r) => r.date >= weekStart.toISOString().slice(0, 10) && !r.day_off)
     .reduce((sum, r) => sum + r.revenue, 0);
-  const teamRevenuePrevWeek = (trendRows ?? [])
+  const teamRevenuePrevWeek = (perfRows ?? [])
     .filter(
       (r) =>
         r.date >= prevWeekStart.toISOString().slice(0, 10) &&
@@ -182,19 +169,50 @@ export default async function BerichtPage() {
   const feedbackWowDelta =
     (feedbackPrevWeek ?? 0) > 0 ? ((feedbackWeek ?? 0) - (feedbackPrevWeek ?? 0)) / (feedbackPrevWeek ?? 1) : null;
 
+  // Puna mjesečna agregacija po agentu - identična logici na admin/team
+  // (Umsatz/Sales/Anrufe/CR/Bonus po agentu, po mjesecu).
+  type AgentMonthEntry = {
+    agentId: string;
+    name: string;
+    revenue: number;
+    sales: number;
+    calls: number;
+    bonusKm: number;
+  };
   const agentNameById = new Map((allAgents ?? []).map((a) => [a.id, a.full_name]));
-  const perAgentRevenue = new Map<string, number>();
-  for (const r of trendRows ?? []) {
-    if (r.day_off || r.date.slice(0, 7) !== monthStartStr.slice(0, 7)) continue;
-    perAgentRevenue.set(r.agent_id, (perAgentRevenue.get(r.agent_id) ?? 0) + r.revenue);
+  const byMonth = new Map<string, Map<string, AgentMonthEntry>>();
+  for (const row of perfRows ?? []) {
+    if (row.day_off) continue;
+    const name = agentNameById.get(row.agent_id);
+    if (!name) continue;
+    const month = row.date.slice(0, 7);
+    if (!byMonth.has(month)) byMonth.set(month, new Map());
+    const agentMap = byMonth.get(month)!;
+    const entry = agentMap.get(row.agent_id) ?? { agentId: row.agent_id, name, revenue: 0, sales: 0, calls: 0, bonusKm: 0 };
+    entry.revenue += row.revenue;
+    entry.sales += row.sales_count;
+    entry.calls += row.calls_count ?? 0;
+    entry.bonusKm += bonusByDate?.get(row.date)?.get(row.agent_id) ?? 0;
+    agentMap.set(row.agent_id, entry);
   }
-  const leaderboard = [...perAgentRevenue.entries()]
-    .map(([agentId, revenue]) => ({ agentId, name: agentNameById.get(agentId) ?? "-", revenue }))
-    .sort((a, b) => b.revenue - a.revenue);
+  const months = [...byMonth.keys()].sort().reverse();
+  const teamRevenueMonth = [...(byMonth.get(currentMonthKey)?.values() ?? [])].reduce((s, v) => s + v.revenue, 0);
+  // Dnevni prosjek prometa (mjesec) - Anis, 2026-08-17: "dnevni prosjecni
+  // promet". Za trenutni mjesec dijeli se sa danima do danas (ne cijelim
+  // kalendarskim mjesecom, koji uključuje još neprotekle dane); za prošle
+  // mjesece dijeli se sa stvarnim brojem dana u tom mjesecu.
+  function daysElapsedInMonth(month: string): number {
+    if (month === currentMonthKey) return dayOfMonth;
+    const [year, m] = month.split("-").map(Number);
+    return new Date(year, m, 0).getDate();
+  }
+  const dailyAvgRevenueMonth = teamRevenueMonth / Math.max(1, daysElapsedInMonth(currentMonthKey));
 
-  const productsPct = (n: number | null) => (productsTotal ? Math.round(((n ?? 0) / productsTotal) * 100) : 0);
-  const enrichmentPct = (n: number) =>
-    stats.companies_total > 0 ? Math.round((n / stats.companies_total) * 100) : 0;
+  // "Aktivni agenti trenutno" - isti prag/logika kao /dialer's Status im
+  // Tool (fn_get_agent_login_status + 90s heartbeat prag).
+  const activeAgentsNow = (loginStatusRows ?? []).filter(
+    (row) => row.last_seen_at && now.getTime() - new Date(row.last_seen_at).getTime() < ONLINE_THRESHOLD_MS,
+  ).length;
 
   // Kontakt-Abdeckung (identična logika kao app/(app)/page.tsx - admin
   // Dashboard, namjerno kopirano, ne izdvojeno, jer je jedina druga upotreba
@@ -259,106 +277,127 @@ export default async function BerichtPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatTile label="Ukupno firmi" value={num(stats.companies_total)} accent="primary" />
-        <StatTile label="Katalog ukupno" value={num(productsTotal ?? 0)} accent="secondary" />
-        <StatTile
-          label="Feedback ukupno"
-          value={num(feedbackTotal ?? 0)}
-          sub={`Ove sedmice: ${num(feedbackWeek ?? 0)} · Danas: ${num(feedbackToday ?? 0)}`}
-          accent="success"
-        />
         <StatTile
           label="Timski promet (mjesec)"
           value={eur.format(teamRevenueMonth)}
           sub={`Danas: ${eur.format(teamRevenueToday)}`}
           accent="primary"
         />
+        <StatTile label="Dnevni prosjek prometa" value={eur.format(dailyAvgRevenueMonth)} accent="primary" />
+        <StatTile
+          label="Feedback ukupno"
+          value={num(feedbackTotal ?? 0)}
+          sub={`Ove sedmice: ${num(feedbackWeek ?? 0)} · Danas: ${num(feedbackToday ?? 0)}`}
+          accent="success"
+        />
+        <StatTile label="Aktivni agenti trenutno" value={num(activeAgentsNow)} accent="secondary" />
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <TrendingUp className="size-4 text-primary" />
-            Promet
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <div className="flex flex-wrap gap-6 text-sm">
-            <span>
-              Ove sedmice: <span className="font-medium tabular-nums">{eur.format(teamRevenueWeek)}</span>
-              {revenueWowDelta !== null ? (
-                <span className={revenueWowDelta >= 0 ? "text-success-foreground" : "text-destructive"}>
-                  {" "}
-                  ({revenueWowDelta >= 0 ? "+" : ""}
-                  {pct.format(revenueWowDelta)} u odnosu na prošlu sedmicu, isti period)
-                </span>
-              ) : null}
+      <div>
+        <div className="mb-2 flex items-center gap-2">
+          <TrendingUp className="size-4 text-primary" />
+          <h2 className="font-heading text-lg font-semibold">Promet</h2>
+        </div>
+        <p className="mb-4 text-sm text-muted-foreground">
+          Ove sedmice: <span className="font-medium tabular-nums text-foreground">{eur.format(teamRevenueWeek)}</span>
+          {revenueWowDelta !== null ? (
+            <span className={revenueWowDelta >= 0 ? "text-success-foreground" : "text-destructive"}>
+              {" "}
+              ({revenueWowDelta >= 0 ? "+" : ""}
+              {pct.format(revenueWowDelta)} u odnosu na prošlu sedmicu, isti period)
             </span>
-            {bonusVisible ? (
-              <span>
-                Timski bonus (mjesec):{" "}
-                <span className="font-medium text-success-foreground tabular-nums">
-                  {eurCents.format(byMonth.get(monthStartStr.slice(0, 7))?.bonusKm ?? 0).replace("€", "KM")}
-                </span>
-              </span>
-            ) : null}
-          </div>
+          ) : null}
+        </p>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-left text-xs text-muted-foreground">
-                <tr>
-                  <th className="px-2 py-2 font-medium">Mjesec</th>
-                  <th className="px-2 py-2 font-medium">Timski promet</th>
-                  {bonusVisible ? <th className="px-2 py-2 font-medium">Timski bonus</th> : null}
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {months.map((m) => {
-                  const v = byMonth.get(m)!;
-                  return (
-                    <tr key={m}>
-                      <td className="px-2 py-2 font-medium">{monthLabel(m)}</td>
-                      <td className="px-2 py-2 tabular-nums">{eur.format(v.revenue)}</td>
+        {months.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Još nema uvezenih podataka.</p>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {months.map((month) => {
+              const agentMap = byMonth.get(month)!;
+              const sorted = [...agentMap.values()].sort((a, b) => b.revenue - a.revenue);
+              const teamRevenue = sorted.reduce((s, v) => s + v.revenue, 0);
+              const teamSales = sorted.reduce((s, v) => s + v.sales, 0);
+              const teamCalls = sorted.reduce((s, v) => s + v.calls, 0);
+              const teamBonusKm = sorted.reduce((s, v) => s + v.bonusKm, 0);
+              const teamConversion = teamCalls > 0 ? teamSales / teamCalls : null;
+              const dailyAvg = teamRevenue / Math.max(1, daysElapsedInMonth(month));
+
+              return (
+                <Card key={month}>
+                  <CardHeader>
+                    <CardTitle>{monthLabel(month)}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="mb-4 flex flex-wrap gap-6 text-sm text-muted-foreground">
+                      <span>
+                        Timski promet: <span className="font-medium text-foreground tabular-nums">{eur.format(teamRevenue)}</span>
+                      </span>
+                      <span>
+                        Dnevni prosjek: <span className="font-medium text-foreground tabular-nums">{eur.format(dailyAvg)}</span>
+                      </span>
+                      <span>
+                        Prodaje: <span className="font-medium text-foreground tabular-nums">{teamSales}</span>
+                      </span>
+                      <span>
+                        Pozivi ukupno: <span className="font-medium text-foreground tabular-nums">{teamCalls || "-"}</span>
+                      </span>
+                      <span>
+                        Konverzija:{" "}
+                        <span className="font-medium text-foreground tabular-nums">
+                          {teamConversion !== null ? pct1.format(teamConversion) : "-"}
+                        </span>
+                      </span>
                       {bonusVisible ? (
-                        <td className="px-2 py-2 tabular-nums text-success-foreground">
-                          {v.bonusKm > 0 ? eurCents.format(v.bonusKm).replace("€", "KM") : "-"}
-                        </td>
+                        <span>
+                          Timski bonus:{" "}
+                          <span className="font-medium text-success-foreground tabular-nums">
+                            {teamBonusKm > 0 ? `${eurCents.format(teamBonusKm).replace("€", "KM")}` : "-"}
+                          </span>
+                        </span>
                       ) : null}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="text-left text-xs text-muted-foreground">
+                          <tr>
+                            <th className="px-2 py-2 font-medium">Agent</th>
+                            <th className="px-2 py-2 font-medium">Promet</th>
+                            <th className="px-2 py-2 font-medium">Prodaje</th>
+                            <th className="px-2 py-2 font-medium">Pozivi</th>
+                            <th className="px-2 py-2 font-medium">Konverzija</th>
+                            {bonusVisible ? <th className="px-2 py-2 font-medium">Bonus (KM)</th> : null}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                          {sorted.map((v) => (
+                            <tr key={v.agentId}>
+                              <td className="px-2 py-2 font-medium">
+                                <Link href={`/bericht/${v.agentId}`} className="hover:underline">
+                                  {v.name}
+                                </Link>
+                              </td>
+                              <td className="px-2 py-2 tabular-nums">{eur.format(v.revenue)}</td>
+                              <td className="px-2 py-2 tabular-nums">{v.sales}</td>
+                              <td className="px-2 py-2 tabular-nums">{v.calls > 0 ? v.calls : "-"}</td>
+                              <td className="px-2 py-2 tabular-nums">{v.calls > 0 ? pct1.format(v.sales / v.calls) : "-"}</td>
+                              {bonusVisible ? (
+                                <td className="px-2 py-2 tabular-nums text-success-foreground">
+                                  {v.bonusKm > 0 ? eurCents.format(v.bonusKm).replace("€", "KM") : "-"}
+                                </td>
+                              ) : null}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
-
-          <div>
-            <div className="mb-2 text-sm font-medium">Po agentu (ovaj mjesec)</div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="text-left text-xs text-muted-foreground">
-                  <tr>
-                    <th className="px-2 py-2 font-medium">Agent</th>
-                    <th className="px-2 py-2 font-medium">Promet</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {leaderboard.map((a) => (
-                    <tr key={a.agentId}>
-                      <td className="px-2 py-2 font-medium">
-                        <Link href={`/bericht/${a.agentId}`} className="hover:underline">
-                          {a.name}
-                        </Link>
-                      </td>
-                      <td className="px-2 py-2 tabular-nums">{eur.format(a.revenue)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+        )}
+      </div>
 
       {coverage.length > 0 ? (
         <Card>
@@ -450,42 +489,6 @@ export default async function BerichtPage() {
               label="Od toga kasne"
               value={num(wiedervorlageOverdue ?? 0)}
               accent={(wiedervorlageOverdue ?? 0) > 0 ? "warning" : "success"}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BarChart3 className="size-4 text-primary" />
-            Obogaćivanje podataka i katalog
-          </CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Kvalitet podataka za cijelu bazu - koliko dobro su firme i proizvodi obrađeni.
-          </p>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatTile
-              label={`Places razriješeno (${enrichmentPct(stats.places_resolved)}%)`}
-              value={`${num(stats.places_resolved)} / ${num(stats.companies_total)}`}
-              accent="secondary"
-            />
-            <StatTile
-              label={`AI analizirano (${enrichmentPct(stats.ai_analyzed)}%)`}
-              value={`${num(stats.ai_analyzed)} / ${num(stats.companies_total)}`}
-              accent={enrichmentPct(stats.ai_analyzed) >= 50 ? "success" : "warning"}
-            />
-            <StatTile
-              label={`Katalog fotografije (${productsPct(productsWithPhoto)}%)`}
-              value={`${num(productsWithPhoto ?? 0)} / ${num(productsTotal ?? 0)}`}
-              accent={productsPct(productsWithPhoto) >= 90 ? "success" : "warning"}
-            />
-            <StatTile
-              label={`Katalog opisi (${productsPct(productsWithDescription)}%)`}
-              value={`${num(productsWithDescription ?? 0)} / ${num(productsTotal ?? 0)}`}
-              accent={productsPct(productsWithDescription) >= 90 ? "success" : "warning"}
             />
           </div>
         </CardContent>

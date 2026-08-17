@@ -18,26 +18,108 @@ function statusVariant(status: string): "success" | "default" | "warning" | "mut
   return "muted";
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  INCALL: "Im Gespräch",
-  DISPO: "Nachbearbeitung",
-  PAUSED: "Pause",
-  OFFLINE: "Abgemeldet",
+const STATUS_LABELS: Record<"de" | "bs", Record<string, string>> = {
+  de: {
+    INCALL: "Im Gespräch",
+    DISPO: "Nachbearbeitung",
+    PAUSED: "Pause",
+    OFFLINE: "Abgemeldet",
+  },
+  bs: {
+    INCALL: "U razgovoru",
+    DISPO: "Naknadna obrada",
+    PAUSED: "Pauza",
+    OFFLINE: "Odjavljen",
+  },
 };
 
 const pct = new Intl.NumberFormat("de-DE", { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const rate = new Intl.NumberFormat("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
-const COLUMN_GROUPS = [
-  { label: "Agent", span: 3 },
-  { label: "Volumen", span: 2 },
-  { label: "Ergebnis", span: 3 },
-  { label: "Effizienz", span: 2 },
-  { label: "Zeitverteilung", span: 5 },
-  { label: "Aktivität", span: 3 },
-];
+const COLUMN_GROUPS: Record<"de" | "bs", { label: string; span: number }[]> = {
+  de: [
+    { label: "Agent", span: 3 },
+    { label: "Volumen", span: 2 },
+    { label: "Ergebnis", span: 3 },
+    { label: "Effizienz", span: 2 },
+    { label: "Zeitverteilung", span: 5 },
+    { label: "Aktivität", span: 3 },
+  ],
+  bs: [
+    { label: "Agent", span: 3 },
+    { label: "Obim", span: 2 },
+    { label: "Rezultat", span: 3 },
+    { label: "Efikasnost", span: 2 },
+    { label: "Raspodjela vremena", span: 5 },
+    { label: "Aktivnost", span: 3 },
+  ],
+};
 
-export function DialerStatusTable({ rows, sortByStatus = false }: { rows: DialerAgentSummary[]; sortByStatus?: boolean }) {
+const COLUMN_HEADERS: Record<"de" | "bs", string[]> = {
+  de: [
+    "Agent",
+    "Status",
+    "Zeit im Status",
+    "Anrufe",
+    "Anrufe/Std.",
+    "Sales",
+    "Konversion",
+    "Verkäufe/Std.",
+    "Ø Bearbeitungszeit",
+    "Auslastung",
+    "Sprechzeit",
+    "Wartezeit",
+    "Nachbearbeitung",
+    "Pausenzeit",
+    "Totzeit",
+    "Gesamtzeit",
+    "Aktiv",
+    "Inaktiv",
+  ],
+  bs: [
+    "Agent",
+    "Status",
+    "Vrijeme u statusu",
+    "Pozivi",
+    "Pozivi/h",
+    "Prodaje",
+    "Konverzija",
+    "Prodaje/h",
+    "Ø vrijeme obrade",
+    "Zauzetost",
+    "Vrijeme razgovora",
+    "Vrijeme čekanja",
+    "Naknadna obrada",
+    "Pauza",
+    "Mrtvo vrijeme",
+    "Ukupno vrijeme",
+    "Aktivno",
+    "Neaktivno",
+  ],
+};
+
+const NO_DATA_LABEL: Record<"de" | "bs", string> = {
+  de: "Keine Agenten-Daten vorhanden.",
+  bs: "Nema podataka o agentima.",
+};
+
+const TOTAL_LABEL: Record<"de" | "bs", string> = { de: "Gesamt", bs: "Ukupno" };
+const AGENTS_SUFFIX: Record<"de" | "bs", string> = { de: "Agenten", bs: "agenata" };
+
+export function DialerStatusTable({
+  rows,
+  sortByStatus = false,
+  locale = "de",
+  agentHref = (id: string) => `/admin/team/${id}`,
+}: {
+  rows: DialerAgentSummary[];
+  sortByStatus?: boolean;
+  /** report@ gets Bosnian labels + report-safe agent links (2026-08-17, Anis:
+   * "Dialer informacije na Report takodjer prevedi na bosanski") - admin's
+   * own view of this same shared table stays German, default "de". */
+  locale?: "de" | "bs";
+  agentHref?: (agentId: string) => string;
+}) {
   const sortedRows = sortByStatus
     ? [...rows].sort((a, b) => {
         const pa = STATUS_ORDER[a.status.toUpperCase()] ?? 99;
@@ -48,17 +130,20 @@ export function DialerStatusTable({ rows, sortByStatus = false }: { rows: Dialer
     : [...rows].sort((a, b) => a.fullName.localeCompare(b.fullName));
 
   if (sortedRows.length === 0) {
-    return <p className="text-sm text-muted-foreground">Keine Agenten-Daten vorhanden.</p>;
+    return <p className="text-sm text-muted-foreground">{NO_DATA_LABEL[locale]}</p>;
   }
 
   const totals = computeDialerTotals(sortedRows);
+  const groups = COLUMN_GROUPS[locale];
+  const headers = COLUMN_HEADERS[locale];
+  const statusLabels = STATUS_LABELS[locale];
 
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead className="text-left text-xs text-muted-foreground">
           <tr>
-            {COLUMN_GROUPS.map((g, i) => (
+            {groups.map((g, i) => (
               <th
                 key={g.label}
                 colSpan={g.span}
@@ -72,36 +157,36 @@ export function DialerStatusTable({ rows, sortByStatus = false }: { rows: Dialer
             ))}
           </tr>
           <tr>
-            <th className="px-2 py-2 font-medium">Agent</th>
-            <th className="px-2 py-2 font-medium">Status</th>
-            <th className="px-2 py-2 font-medium">Zeit im Status</th>
-            <th className="border-l px-2 py-2 font-medium">Anrufe</th>
-            <th className="px-2 py-2 font-medium">Anrufe/Std.</th>
-            <th className="border-l px-2 py-2 font-medium">Sales</th>
-            <th className="px-2 py-2 font-medium">Konversion</th>
-            <th className="px-2 py-2 font-medium">Verkäufe/Std.</th>
-            <th className="border-l px-2 py-2 font-medium">Ø Bearbeitungszeit</th>
-            <th className="px-2 py-2 font-medium">Auslastung</th>
-            <th className="border-l px-2 py-2 font-medium">Sprechzeit</th>
-            <th className="px-2 py-2 font-medium">Wartezeit</th>
-            <th className="px-2 py-2 font-medium">Nachbearbeitung</th>
-            <th className="px-2 py-2 font-medium">Pausenzeit</th>
-            <th className="px-2 py-2 font-medium">Totzeit</th>
-            <th className="border-l px-2 py-2 font-medium">Gesamtzeit</th>
-            <th className="px-2 py-2 font-medium">Aktiv</th>
-            <th className="px-2 py-2 font-medium">Inaktiv</th>
+            <th className="px-2 py-2 font-medium">{headers[0]}</th>
+            <th className="px-2 py-2 font-medium">{headers[1]}</th>
+            <th className="px-2 py-2 font-medium">{headers[2]}</th>
+            <th className="border-l px-2 py-2 font-medium">{headers[3]}</th>
+            <th className="px-2 py-2 font-medium">{headers[4]}</th>
+            <th className="border-l px-2 py-2 font-medium">{headers[5]}</th>
+            <th className="px-2 py-2 font-medium">{headers[6]}</th>
+            <th className="px-2 py-2 font-medium">{headers[7]}</th>
+            <th className="border-l px-2 py-2 font-medium">{headers[8]}</th>
+            <th className="px-2 py-2 font-medium">{headers[9]}</th>
+            <th className="border-l px-2 py-2 font-medium">{headers[10]}</th>
+            <th className="px-2 py-2 font-medium">{headers[11]}</th>
+            <th className="px-2 py-2 font-medium">{headers[12]}</th>
+            <th className="px-2 py-2 font-medium">{headers[13]}</th>
+            <th className="px-2 py-2 font-medium">{headers[14]}</th>
+            <th className="border-l px-2 py-2 font-medium">{headers[15]}</th>
+            <th className="px-2 py-2 font-medium">{headers[16]}</th>
+            <th className="px-2 py-2 font-medium">{headers[17]}</th>
           </tr>
         </thead>
         <tbody className="divide-y">
           {sortedRows.map((a) => (
             <tr key={a.agentId}>
               <td className="px-2 py-2 font-medium">
-                <Link href={`/admin/team/${a.agentId}`} className="hover:underline">
+                <Link href={agentHref(a.agentId)} className="hover:underline">
                   {a.fullName}
                 </Link>
               </td>
               <td className="px-2 py-2">
-                <Badge variant={statusVariant(a.status)}>{STATUS_LABELS[a.status.toUpperCase()] ?? a.status}</Badge>
+                <Badge variant={statusVariant(a.status)}>{statusLabels[a.status.toUpperCase()] ?? a.status}</Badge>
               </td>
               <td className="px-2 py-2 tabular-nums">{a.timeInStatus}</td>
               <td className="border-l px-2 py-2 tabular-nums">{a.totalCalls}</td>
@@ -135,9 +220,11 @@ export function DialerStatusTable({ rows, sortByStatus = false }: { rows: Dialer
         </tbody>
         <tfoot>
           <tr className="border-t-2 font-semibold">
-            <td className="px-2 py-2">Gesamt</td>
+            <td className="px-2 py-2">{TOTAL_LABEL[locale]}</td>
             <td className="px-2 py-2 text-muted-foreground">
-              <span className="text-xs font-normal">{sortedRows.length} Agenten</span>
+              <span className="text-xs font-normal">
+                {sortedRows.length} {AGENTS_SUFFIX[locale]}
+              </span>
             </td>
             <td className="px-2 py-2" />
             <td className="border-l px-2 py-2 tabular-nums">{totals.totalCalls}</td>
