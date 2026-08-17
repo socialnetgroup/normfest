@@ -256,13 +256,22 @@ export function AppSidebar({
 
         <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3">
           {isReport ? (
-            <NavItem
-              href="/bericht"
-              label="Izvještaj"
-              icon={BarChart3}
-              active={isActive(pathname, "/bericht")}
-              onNavigate={closeMobile}
-            />
+            <>
+              <NavItem
+                href="/bericht"
+                label="Izvještaj"
+                icon={BarChart3}
+                active={isActive(pathname, "/bericht")}
+                onNavigate={closeMobile}
+              />
+              <NavItem
+                href="/dialer"
+                label="Dialer"
+                icon={Phone}
+                active={isActive(pathname, "/dialer")}
+                onNavigate={closeMobile}
+              />
+            </>
           ) : (
             <>
           {NAV_ITEMS.map((item) => (

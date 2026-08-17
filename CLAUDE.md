@@ -5437,6 +5437,65 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     against the admin Team page in item 88's testing. Typecheck/lint clean, full suite
     green (41/41).
 
+91. **`/dialer` given to report role, real parity with admin — shipped (2026-08-17).**
+    Anis: "stavi pored izvjestaja i /dialer i bukvalno sve sto se vidi u admin /dialer
+    stavi u report" (literally everything visible on admin's /dialer, into report too).
+    Rather than build a second, parallel report-only dialer page, widened the existing
+    `/dialer` page itself: `isAdmin` renamed to `canView` (`role === 'admin' || role ===
+    'report'`), gating all three cards (Status im Tool, Live-Status, Verlauf) and the
+    data-fetch block identically for both roles. Content/language deliberately left
+    unchanged (still German) - the ask was "exactly what you see," not a translated
+    version, and this page (unlike `/bericht`) wasn't part of the earlier Bosnian-
+    translation request.
+
+    Two admin-gated RPCs this page depends on needed the same widening as
+    `fn_company_gebiet_coverage` (item 88's own precedent):
+    - `fn_get_agent_login_status()` (powers "Status im Tool") - `create or replace`,
+      identical signature, guard widened to `fn_is_admin() or fn_is_report()`.
+    - `dialer_daily_snapshots` (powers "Verlauf") only had one admin-only `for all`
+      policy - added a **separate, SELECT-only** policy for report@ instead of
+      widening the existing one, so the role's "structurally read-only, never grants
+      write access" guarantee (established in item 88) stays intact even here; nothing
+      in the app ever needs report@ to insert/update/delete this table anyway (only
+      the cron route writes, via the service-role client, which bypasses RLS
+      entirely). Migration: `20260817030000_fn_agent_login_status_report_role.sql`.
+
+    `REPORT_ALLOWED_PATHS` (proxy.ts) gained `/dialer`; `AppSidebar`'s report-only nav
+    now shows two links (Izvještaj, Dialer) instead of one.
+
+    **Real, unrelated flakiness hit during verification, not a code bug:** the first
+    two login attempts in the persistent browser tab failed with a real server-side
+    `Invalid Refresh Token: Refresh Token Not Found` error - traced to a stale session
+    cookie left over from an earlier throwaway test account already deleted in this
+    same session (its refresh token cookie was httpOnly, so a client-side
+    `document.cookie` clear couldn't touch it). Opened a genuinely fresh tab instead of
+    fighting the stuck cookie - login succeeded immediately there. Verified live end-to-
+    end (fresh throwaway `role='report'` account, deleted after): all three cards
+    render real, complete data identical in shape to the admin view (10-agent Status im
+    Tool list, the full 18-column Live-Status table incl. the Gesamt row, a real
+    Verlauf snapshot with date picker) - confirmed via `document.querySelectorAll('nav
+    a')` that the sidebar shows exactly `["Izvještaj", "Dialer"]`. Typecheck/lint
+    clean, full suite green (41/41).
+
+92. **Team Dashboard — August file re-imported (2026-08-17), same day as items 89-91.**
+    Anis: "Novi team dashboard fajl je u inputu, importuj i updateuj to generalno za
+    tool" - a fresh `input/Team Dashboard/08 2026 - Team Dashboard.xlsx` (modified
+    18:35 that day) replaced the earlier August file. Re-ran the existing idempotent
+    `scripts/import-team-dashboard.mjs` (upsert on `agent_id, date`, safe to re-run
+    with all three months' files present) - 900 agent-day rows across June/July/August,
+    same shape as every prior run of this script. Verified the import picked up
+    genuinely fresh same-day data, not just a no-op re-upsert of old values: today's
+    (2026-08-17) team revenue grew from €4,075 (seen earlier the same session, before
+    the file was dropped) to **€4,117.43** after re-import, and August's month-to-date
+    total moved from €39,291 to **€39,759.11** - both real, agents-still-logging-through-
+    the-day increases, confirming this wasn't a stale re-import. **One real anomaly
+    flagged, not silently corrected:** `2026-08-31` shows €426.00 despite being a future
+    date relative to today (2026-08-17) - likely a stray entry in the source Excel
+    (the sheet's fixed 1-31 day grid sometimes carries a value past the current date).
+    Left as-is per this project's own discipline (import what's real, flag anomalies,
+    don't silently alter source data) - worth a look if it recurs in a future month's
+    file.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

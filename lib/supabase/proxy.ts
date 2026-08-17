@@ -16,12 +16,15 @@ const PUBLIC_PATHS = ["/login", "/api/cron"];
 // request should hit its own handler, never get HTML-redirected).
 const MUST_CHANGE_PASSWORD_EXEMPT_PATHS = ["/login", "/konto", "/api"];
 
-// report@ role (2026-08-17, Anis: "a kinda of viewing angle") gets exactly
-// one page - /bericht - plus the two paths every role needs (own account,
-// logout). Enforced here rather than only hiding the nav link, same
-// discipline as must_change_password above: a route a user can't reach via
-// the UI should also 404/redirect if they type the URL directly.
-const REPORT_ALLOWED_PATHS = ["/bericht", "/konto", "/login", "/api"];
+// report@ role (2026-08-17, Anis: "a kinda of viewing angle") gets /bericht
+// (+ /bericht/[agentId] drill-down, same prefix) and /dialer ("stavi pored
+// izvjestaja i /dialer... bukvalno sve sto se vidi u admin /dialer stavi u
+// report" - literally the same admin Dialer page, widened to allow this
+// role too), plus the two paths every role needs (own account, logout).
+// Enforced here rather than only hiding the nav link, same discipline as
+// must_change_password above: a route a user can't reach via the UI should
+// also 404/redirect if they type the URL directly.
+const REPORT_ALLOWED_PATHS = ["/bericht", "/dialer", "/konto", "/login", "/api"];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });

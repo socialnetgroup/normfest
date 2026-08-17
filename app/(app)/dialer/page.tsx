@@ -74,7 +74,14 @@ export default async function DialerPage({
   const { datum: datumParam } = await searchParams;
   const { user, profile } = await getCurrentUser();
   if (!user) notFound();
-  const isAdmin = profile?.role === "admin";
+  // Anis, 2026-08-17: "stavi pored izvjestaja i /dialer i bukvalno sve sto
+  // se vidi u admin /dialer stavi u report" - report@ sees literally the
+  // same content as admin here (this page has no write actions - pure
+  // read-only display + a GET date-select form - so there's nothing to
+  // additionally lock down for a read-only role beyond what admin-only
+  // already gated for HR-adjacency reasons, and Anis explicitly asked for
+  // full parity here rather than a trimmed-down version).
+  const canView = profile?.role === "admin" || profile?.role === "report";
 
   let liveRows: DialerAgentSummary[] | null = null;
   let dialerError: string | null = null;
@@ -83,7 +90,7 @@ export default async function DialerPage({
   let selectedSnapshotCapturedAt: string | null = null;
   let appStatusRows: { agentId: string; name: string; status: LoginStatus; path: string | null }[] = [];
 
-  if (isAdmin) {
+  if (canView) {
     const supabase = await createClient();
     const todayStr = new Date().toISOString().slice(0, 10);
     const [
@@ -152,12 +159,12 @@ export default async function DialerPage({
 
   return (
     <div className="flex flex-col gap-6">
-      {isAdmin ? <AutoRefresh intervalMs={4_000} /> : null}
+      {canView ? <AutoRefresh intervalMs={4_000} /> : null}
       <div>
         <h1 className="font-heading text-2xl font-semibold tracking-tight">Dialer</h1>
       </div>
 
-      {isAdmin ? (
+      {canView ? (
         <Card>
           <CardHeader>
             <IconTitle icon={Wifi}>Status im Tool</IconTitle>
@@ -206,7 +213,7 @@ export default async function DialerPage({
         </Card>
       ) : null}
 
-      {isAdmin ? (
+      {canView ? (
         <div className="mx-[calc(50%-50vw)] w-screen px-4 md:px-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
@@ -234,7 +241,7 @@ export default async function DialerPage({
         </div>
       ) : null}
 
-      {isAdmin ? (
+      {canView ? (
         <div className="mx-[calc(50%-50vw)] w-screen px-4 md:px-8">
           <Card>
             <CardHeader>
