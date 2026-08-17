@@ -24,7 +24,7 @@ const MUST_CHANGE_PASSWORD_EXEMPT_PATHS = ["/login", "/konto", "/api"];
 // Enforced here rather than only hiding the nav link, same discipline as
 // must_change_password above: a route a user can't reach via the UI should
 // also 404/redirect if they type the URL directly.
-const REPORT_ALLOWED_PATHS = ["/bericht", "/dialer", "/konto", "/login", "/api"];
+const REPORT_ALLOWED_PATHS = ["/bericht", "/dialer", "/tim", "/konto", "/login", "/api"];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });

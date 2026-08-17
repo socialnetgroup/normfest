@@ -271,6 +271,13 @@ export function AppSidebar({
                 active={isActive(pathname, "/dialer")}
                 onNavigate={closeMobile}
               />
+              <NavItem
+                href="/tim"
+                label="Tim"
+                icon={Users}
+                active={isActive(pathname, "/tim")}
+                onNavigate={closeMobile}
+              />
             </>
           ) : (
             <>

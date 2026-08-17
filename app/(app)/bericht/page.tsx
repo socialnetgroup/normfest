@@ -38,9 +38,10 @@ function monthLabel(month: string) {
 // live-computed overview page for report@ (and admin, for QA). Deliberately
 // excludes Signale/Bestellungen/Fokus/Anreicherung-Katalog per Anis's own
 // framing ("they dont care so deep operational") - real business-level
-// numbers only: Umsatz (full monthly deep-dive, same shape as admin's Team
-// Dashboard), contact coverage per agent, flywheel adoption (feedback +
-// Wiedervorlagen), Dialer volume, and AI-Assistent usage.
+// numbers only: Umsatz (compact monthly summary here - the full per-agent
+// deep-dive moved to its own "Tim" menu page), contact coverage per agent,
+// flywheel adoption (feedback + Wiedervorlagen), Dialer volume, and
+// AI-Assistent usage.
 export default async function BerichtPage() {
   const { user, profile } = await getCurrentUser();
   if (!user) notFound();
@@ -100,9 +101,9 @@ export default async function BerichtPage() {
       .not("wiedervorlage_date", "is", null)
       .eq("wiedervorlage_done", false)
       .lt("wiedervorlage_date", todayStr),
-    // Kompletna historija (bez datumskog ograničenja) - Anis, 2026-08-17:
-    // "dodaj i kompletnu deep dive 'team' menu poen iz admina" - ista
-    // agregacija kao admin/team/page.tsx, ne skraćena verzija.
+    // Kompletna historija (bez datumskog ograničenja) - potrebno i za tačan
+    // "dnevni prosjek" (stvarni broj radnih dana, ne kalendarski) i za
+    // mjesečni sažetak ispod.
     supabase
       .from("agent_daily_performance")
       .select("agent_id, date, revenue, sales_count, calls_count, day_off"),
@@ -149,8 +150,6 @@ export default async function BerichtPage() {
       )
     : null;
 
-  // Feedback WoW i "danas" Umsatz i dalje računamo direktno iz perfRows (sad
-  // bez datumskog ograničenja, ali filteri ispod i dalje rade identično).
   const teamRevenueToday = (perfRows ?? [])
     .filter((r) => r.date === todayStr && !r.day_off)
     .reduce((sum, r) => sum + r.revenue, 0);
@@ -169,44 +168,48 @@ export default async function BerichtPage() {
   const feedbackWowDelta =
     (feedbackPrevWeek ?? 0) > 0 ? ((feedbackWeek ?? 0) - (feedbackPrevWeek ?? 0)) / (feedbackPrevWeek ?? 1) : null;
 
-  // Puna mjesečna agregacija po agentu - identična logici na admin/team
-  // (Umsatz/Sales/Anrufe/CR/Bonus po agentu, po mjesecu).
-  type AgentMonthEntry = {
-    agentId: string;
-    name: string;
-    revenue: number;
-    sales: number;
-    calls: number;
-    bonusKm: number;
-  };
-  const agentNameById = new Map((allAgents ?? []).map((a) => [a.id, a.full_name]));
-  const byMonth = new Map<string, Map<string, AgentMonthEntry>>();
+  // Mjesečni sažetak (timski nivo, ne po agentu - puna deep-dive tabela po
+  // agentu je premještena na zasebnu "Tim" stranicu, Anis 2026-08-17: "Vrati
+  // kao sto je bilo pregled po mjesecu promet npr rezimirano ali sa
+  // dodatnim detaljima").
+  type MonthSummary = { revenue: number; sales: number; calls: number; bonusKm: number };
+  const byMonth = new Map<string, MonthSummary>();
+  // Stvarni promet po datumu (za sve agente zajedno) - koristi se za "dnevni
+  // prosjek" da se dijeli sa stvarnim brojem radnih dana, ne kalendarskih.
+  const revenueByDate = new Map<string, number>();
   for (const row of perfRows ?? []) {
     if (row.day_off) continue;
-    const name = agentNameById.get(row.agent_id);
-    if (!name) continue;
     const month = row.date.slice(0, 7);
-    if (!byMonth.has(month)) byMonth.set(month, new Map());
-    const agentMap = byMonth.get(month)!;
-    const entry = agentMap.get(row.agent_id) ?? { agentId: row.agent_id, name, revenue: 0, sales: 0, calls: 0, bonusKm: 0 };
+    const entry = byMonth.get(month) ?? { revenue: 0, sales: 0, calls: 0, bonusKm: 0 };
     entry.revenue += row.revenue;
     entry.sales += row.sales_count;
     entry.calls += row.calls_count ?? 0;
     entry.bonusKm += bonusByDate?.get(row.date)?.get(row.agent_id) ?? 0;
-    agentMap.set(row.agent_id, entry);
+    byMonth.set(month, entry);
+    revenueByDate.set(row.date, (revenueByDate.get(row.date) ?? 0) + row.revenue);
   }
   const months = [...byMonth.keys()].sort().reverse();
-  const teamRevenueMonth = [...(byMonth.get(currentMonthKey)?.values() ?? [])].reduce((s, v) => s + v.revenue, 0);
-  // Dnevni prosjek prometa (mjesec) - Anis, 2026-08-17: "dnevni prosjecni
-  // promet". Za trenutni mjesec dijeli se sa danima do danas (ne cijelim
-  // kalendarskim mjesecom, koji uključuje još neprotekle dane); za prošle
-  // mjesece dijeli se sa stvarnim brojem dana u tom mjesecu.
-  function daysElapsedInMonth(month: string): number {
-    if (month === currentMonthKey) return dayOfMonth;
-    const [year, m] = month.split("-").map(Number);
-    return new Date(year, m, 0).getDate();
+  const teamRevenueMonth = byMonth.get(currentMonthKey)?.revenue ?? 0;
+
+  // Dnevni prosjek prometa - Anis, 2026-08-17: "2339 euro dnevno prosjek
+  // prometa nije tacan, ja racunam oko 3576 eura? kako smo razliciti
+  // brojevi". Prvobitna verzija je dijelila sa SVIM kalendarskim danima
+  // dosad prošlim u mjesecu (uklj. vikende, kad niko ne radi) - to umjetno
+  // snižava prosjek, jer vikendi ulaze u nazivnik sa 0 € prometa. Ispravno:
+  // dijeliti samo sa stvarnim danima koji imaju bar nešto prometa (tj.
+  // stvarno odrađenim radnim danima), izvedeno direktno iz podataka umjesto
+  // pretpostavljanja radne sedmice - automatski isključuje vikende (0 €) i
+  // eventualne buduće/anomalne redove u fajlu (jer su isto 0 € do danas).
+  function realWorkingDaysInMonth(month: string): number {
+    let count = 0;
+    for (const [date, revenue] of revenueByDate) {
+      if (!date.startsWith(month)) continue;
+      if (month === currentMonthKey && date > todayStr) continue;
+      if (revenue > 0) count++;
+    }
+    return count;
   }
-  const dailyAvgRevenueMonth = teamRevenueMonth / Math.max(1, daysElapsedInMonth(currentMonthKey));
+  const dailyAvgRevenueMonth = teamRevenueMonth / Math.max(1, realWorkingDaysInMonth(currentMonthKey));
 
   // "Aktivni agenti trenutno" - isti prag/logika kao /dialer's Status im
   // Tool (fn_get_agent_login_status + 90s heartbeat prag).
@@ -293,111 +296,104 @@ export default async function BerichtPage() {
         <StatTile label="Aktivni agenti trenutno" value={num(activeAgentsNow)} accent="secondary" />
       </div>
 
-      <div>
-        <div className="mb-2 flex items-center gap-2">
-          <TrendingUp className="size-4 text-primary" />
-          <h2 className="font-heading text-lg font-semibold">Promet</h2>
-        </div>
-        <p className="mb-4 text-sm text-muted-foreground">
-          Ove sedmice: <span className="font-medium tabular-nums text-foreground">{eur.format(teamRevenueWeek)}</span>
-          {revenueWowDelta !== null ? (
-            <span className={revenueWowDelta >= 0 ? "text-success-foreground" : "text-destructive"}>
-              {" "}
-              ({revenueWowDelta >= 0 ? "+" : ""}
-              {pct.format(revenueWowDelta)} u odnosu na prošlu sedmicu, isti period)
-            </span>
-          ) : null}
-        </p>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Phone className="size-4 text-primary" />
+            Dialer (danas)
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {dialerError || !dialerTotals ? (
+            <p className="text-sm text-muted-foreground">Dialer podaci trenutno nisu dostupni.</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+              <StatTile label="Pozivi ukupno" value={num(dialerTotals.totalCalls)} accent="secondary" />
+              <StatTile
+                label="Vrijeme razgovora"
+                value={formatSecondsAsHms(dialerTotals.talkSeconds)}
+                sub={talkShare !== null ? `${pct.format(talkShare)} od ukupnog vremena` : undefined}
+                accent="secondary"
+              />
+              <StatTile
+                label="Prosječno vrijeme obrade"
+                value={`${Math.round(dialerTotals.ahtSeconds)}s`}
+                accent="secondary"
+              />
+              <StatTile label="Zauzetost" value={pct.format(dialerTotals.occupancy)} accent="secondary" />
+              <StatTile label="Konverzija (Prodaje/Pozivi)" value={pct.format(dialerTotals.conversion)} accent="success" />
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-        {months.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Još nema uvezenih podataka.</p>
-        ) : (
-          <div className="flex flex-col gap-4">
-            {months.map((month) => {
-              const agentMap = byMonth.get(month)!;
-              const sorted = [...agentMap.values()].sort((a, b) => b.revenue - a.revenue);
-              const teamRevenue = sorted.reduce((s, v) => s + v.revenue, 0);
-              const teamSales = sorted.reduce((s, v) => s + v.sales, 0);
-              const teamCalls = sorted.reduce((s, v) => s + v.calls, 0);
-              const teamBonusKm = sorted.reduce((s, v) => s + v.bonusKm, 0);
-              const teamConversion = teamCalls > 0 ? teamSales / teamCalls : null;
-              const dailyAvg = teamRevenue / Math.max(1, daysElapsedInMonth(month));
-
-              return (
-                <Card key={month}>
-                  <CardHeader>
-                    <CardTitle>{monthLabel(month)}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="mb-4 flex flex-wrap gap-6 text-sm text-muted-foreground">
-                      <span>
-                        Timski promet: <span className="font-medium text-foreground tabular-nums">{eur.format(teamRevenue)}</span>
-                      </span>
-                      <span>
-                        Dnevni prosjek: <span className="font-medium text-foreground tabular-nums">{eur.format(dailyAvg)}</span>
-                      </span>
-                      <span>
-                        Prodaje: <span className="font-medium text-foreground tabular-nums">{teamSales}</span>
-                      </span>
-                      <span>
-                        Pozivi ukupno: <span className="font-medium text-foreground tabular-nums">{teamCalls || "-"}</span>
-                      </span>
-                      <span>
-                        Konverzija:{" "}
-                        <span className="font-medium text-foreground tabular-nums">
-                          {teamConversion !== null ? pct1.format(teamConversion) : "-"}
-                        </span>
-                      </span>
-                      {bonusVisible ? (
-                        <span>
-                          Timski bonus:{" "}
-                          <span className="font-medium text-success-foreground tabular-nums">
-                            {teamBonusKm > 0 ? `${eurCents.format(teamBonusKm).replace("€", "KM")}` : "-"}
-                          </span>
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead className="text-left text-xs text-muted-foreground">
-                          <tr>
-                            <th className="px-2 py-2 font-medium">Agent</th>
-                            <th className="px-2 py-2 font-medium">Promet</th>
-                            <th className="px-2 py-2 font-medium">Prodaje</th>
-                            <th className="px-2 py-2 font-medium">Pozivi</th>
-                            <th className="px-2 py-2 font-medium">Konverzija</th>
-                            {bonusVisible ? <th className="px-2 py-2 font-medium">Bonus (KM)</th> : null}
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y">
-                          {sorted.map((v) => (
-                            <tr key={v.agentId}>
-                              <td className="px-2 py-2 font-medium">
-                                <Link href={`/bericht/${v.agentId}`} className="hover:underline">
-                                  {v.name}
-                                </Link>
-                              </td>
-                              <td className="px-2 py-2 tabular-nums">{eur.format(v.revenue)}</td>
-                              <td className="px-2 py-2 tabular-nums">{v.sales}</td>
-                              <td className="px-2 py-2 tabular-nums">{v.calls > 0 ? v.calls : "-"}</td>
-                              <td className="px-2 py-2 tabular-nums">{v.calls > 0 ? pct1.format(v.sales / v.calls) : "-"}</td>
-                              {bonusVisible ? (
-                                <td className="px-2 py-2 tabular-nums text-success-foreground">
-                                  {v.bonusKm > 0 ? eurCents.format(v.bonusKm).replace("€", "KM") : "-"}
-                                </td>
-                              ) : null}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="size-4 text-primary" />
+            Promet
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Ove sedmice: <span className="font-medium tabular-nums text-foreground">{eur.format(teamRevenueWeek)}</span>
+            {revenueWowDelta !== null ? (
+              <span className={revenueWowDelta >= 0 ? "text-success-foreground" : "text-destructive"}>
+                {" "}
+                ({revenueWowDelta >= 0 ? "+" : ""}
+                {pct.format(revenueWowDelta)} u odnosu na prošlu sedmicu, isti period)
+              </span>
+            ) : null}
+          </p>
+        </CardHeader>
+        <CardContent>
+          {months.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Još nema uvezenih podataka.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-left text-xs text-muted-foreground">
+                  <tr>
+                    <th className="px-2 py-2 font-medium">Mjesec</th>
+                    <th className="px-2 py-2 font-medium">Timski promet</th>
+                    <th className="px-2 py-2 font-medium">Dnevni prosjek</th>
+                    <th className="px-2 py-2 font-medium">Prodaje</th>
+                    <th className="px-2 py-2 font-medium">Pozivi ukupno</th>
+                    <th className="px-2 py-2 font-medium">Konverzija</th>
+                    {bonusVisible ? <th className="px-2 py-2 font-medium">Timski bonus</th> : null}
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {months.map((m) => {
+                    const v = byMonth.get(m)!;
+                    const conversion = v.calls > 0 ? v.sales / v.calls : null;
+                    const dailyAvg = v.revenue / Math.max(1, realWorkingDaysInMonth(m));
+                    return (
+                      <tr key={m}>
+                        <td className="px-2 py-2 font-medium">{monthLabel(m)}</td>
+                        <td className="px-2 py-2 tabular-nums">{eur.format(v.revenue)}</td>
+                        <td className="px-2 py-2 tabular-nums">{eur.format(dailyAvg)}</td>
+                        <td className="px-2 py-2 tabular-nums">{v.sales}</td>
+                        <td className="px-2 py-2 tabular-nums">{v.calls || "-"}</td>
+                        <td className="px-2 py-2 tabular-nums">{conversion !== null ? pct1.format(conversion) : "-"}</td>
+                        {bonusVisible ? (
+                          <td className="px-2 py-2 tabular-nums text-success-foreground">
+                            {v.bonusKm > 0 ? eurCents.format(v.bonusKm).replace("€", "KM") : "-"}
+                          </td>
+                        ) : null}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="mt-3 text-xs text-muted-foreground">
+            Puni pregled po agentu, po mjesecu:{" "}
+            <Link href="/tim" className="underline">
+              Tim →
+            </Link>
+          </p>
+        </CardContent>
+      </Card>
 
       {coverage.length > 0 ? (
         <Card>
@@ -491,37 +487,6 @@ export default async function BerichtPage() {
               accent={(wiedervorlageOverdue ?? 0) > 0 ? "warning" : "success"}
             />
           </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Phone className="size-4 text-primary" />
-            Dialer (danas)
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {dialerError || !dialerTotals ? (
-            <p className="text-sm text-muted-foreground">Dialer podaci trenutno nisu dostupni.</p>
-          ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-              <StatTile label="Pozivi ukupno" value={num(dialerTotals.totalCalls)} accent="secondary" />
-              <StatTile
-                label="Vrijeme razgovora"
-                value={formatSecondsAsHms(dialerTotals.talkSeconds)}
-                sub={talkShare !== null ? `${pct.format(talkShare)} od ukupnog vremena` : undefined}
-                accent="secondary"
-              />
-              <StatTile
-                label="Prosječno vrijeme obrade"
-                value={`${Math.round(dialerTotals.ahtSeconds)}s`}
-                accent="secondary"
-              />
-              <StatTile label="Zauzetost" value={pct.format(dialerTotals.occupancy)} accent="secondary" />
-              <StatTile label="Konverzija (Prodaje/Pozivi)" value={pct.format(dialerTotals.conversion)} accent="success" />
-            </div>
-          )}
         </CardContent>
       </Card>
 

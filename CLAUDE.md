@@ -5554,6 +5554,69 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     agent links still pointing at `/admin/team/{id}`). Typecheck/lint clean, full suite
     green (41/41).
 
+94. **Bericht follow-up round 2: Dialer repositioned, daily-average-revenue bug fixed,
+    new standalone "Tim" page, Promet reverted to a compact summary — shipped
+    (2026-08-17).** Anis, reviewing item 93's redesign, four asks in one message: *"Dialer
+    (danas) na izvjestaju stavi ispod kartica na vrhu i prije prometa. 2339 euro dnevno
+    prosjek promjeta nije tacan, ja racunam oko 3576 eura? kako smo razliciti brojevi.
+    dodaj 'TEAM' iz Admina ovamo u Report kao poseban Meni dio. Vrati kao sto je bilo
+    pregled po mjeesecu promet npr rezimirano ali sa dodatnim detaljima."*
+
+    - **Dialer card moved** on `/bericht` from the bottom (after Aktivnost u alatu) to
+      directly under the top 4-tile KPI grid, above the Promet card - matches the
+      requested reading order.
+    - **Real bug found and fixed: the "Dnevni prosjek prometa" tile was dividing by
+      calendar days elapsed, not real working days.** The prior version's
+      `daysElapsedInMonth()` used `now.getDate()` (17 for August so far) as the
+      denominator - but weekends have real €0 team revenue (nobody works), so dividing
+      August's €39,759.11 by all 17 calendar days silently included 4-5 zero-revenue
+      weekend days and understated the average (~2,339 €). Anis's own ~3,576 € mental
+      estimate was implicitly dividing by working days only. Fixed with
+      `realWorkingDaysInMonth(month)`: built from a `revenueByDate: Map<string, number>`
+      (team-wide revenue per real date, already being aggregated alongside `byMonth`) and
+      counts only dates where revenue > 0, capped at `<= todayStr` for the current month
+      so future dates never count. Real result for August: 39,759.11 / 11 real working
+      days = **3,614 €** - close to Anis's own estimate and a genuinely different,
+      correct number, not a cosmetic rounding change. This also naturally absorbs the
+      already-documented `2026-08-31` future-dated stray €426 anomaly (item 92) without
+      any special-casing, since a date past `todayStr` is excluded from the denominator
+      regardless of what revenue value it carries.
+    - **New standalone `/tim` page** - a line-for-line Bosnian port of
+      `admin/team/page.tsx` (daily bonus card when `bonus_visible`, one Card per month
+      with a full per-agent table: Promet/Prodaje/Pozivi/Konverzija, agent names linking
+      to the existing `/bericht/[agentId]` drill-down), gated
+      `profile?.role !== "admin" && profile?.role !== "report"` (same `notFound()`
+      pattern as `/bericht`/`/dialer`). Added to `REPORT_ALLOWED_PATHS`
+      (`lib/supabase/proxy.ts`) and to the report-role sidebar nav (`components/
+      app-sidebar.tsx`, third item after Izvještaj/Dialer).
+    - **`/bericht`'s own Promet card reverted to a compact team-level summary** - the
+      full per-agent monthly tables that item 93 had added directly into Bericht are
+      removed from there and now live exclusively on `/tim`; Bericht's Promet card is a
+      single small table (Mjesec / Timski promet / Dnevni prosjek / Prodaje / Pozivi
+      ukupno / Konverzija, + Bonus column if visible) with a "Tim →" link to the new page
+      for the full breakdown - matches "vrati kao sto je bilo... rezimirano ali sa
+      dodatnim detaljima" (extra detail columns vs. the pre-item-93 version, but no longer
+      the full per-agent drill-down inline).
+
+    **Real, unrelated infra bug hit during verification, not caused by any of the above
+    edits:** after implementing all four changes and passing typecheck/lint, live
+    verification (throwaway `role='report'` test account) hit a site-wide 404 on every
+    route - not just `/bericht`/`/dialer`/`/tim`, but also `/konto` and even `/` (routes
+    with zero role-gating logic). Root-caused via `npx tsc --noEmit -p .`:
+    `.next/dev/types/routes.d.ts` (Turbopack's generated typed-routes file) was corrupted/
+    truncated, most likely from an earlier mid-session dev-server restart interrupting a
+    write to it - a stale build-cache artifact, not a code defect in any of the touched
+    files. Fixed by `rm -rf .next` + a clean server restart; typecheck went from dozens of
+    real-looking syntax errors in that generated file to clean immediately after.
+
+    Verified live end-to-end after the cache fix (throwaway `role='report'` test account,
+    deleted after): `/bericht` now shows the Dialer card between the KPI grid and Promet,
+    the "Dnevni prosjek prometa" tile correctly shows 3.614 € (not 2.339 €), and Promet
+    renders as the compact 3-month table with a working "Tim →" link; `/tim` renders all
+    three real months with correct per-agent tables and correct agent-name links into
+    `/bericht/[agentId]`; sidebar confirmed exactly 3 nav items (Izvještaj/Dialer/Tim).
+    Typecheck/lint clean on all 4 touched files, full suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
