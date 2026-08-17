@@ -258,7 +258,7 @@ export function AppSidebar({
           {isReport ? (
             <NavItem
               href="/bericht"
-              label="Bericht"
+              label="Izvještaj"
               icon={BarChart3}
               active={isActive(pathname, "/bericht")}
               onNavigate={closeMobile}

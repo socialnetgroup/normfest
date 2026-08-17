@@ -5359,6 +5359,60 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     ways). Both throwaway accounts deleted after. Typecheck/lint clean, full suite
     green (41/41), `visibility_mode` confirmed still `'gebiet'` afterward.
 
+89. **Bericht follow-ups: stale-deploy diagnosis, Kontakt-Abdeckung table, real dialer
+    talk-time stat, full Bosnian translation (2026-08-17).** Anis reported the real
+    `report@` account "has the Agent view role" - investigated the actual shipped code
+    first rather than assuming a bug: a throwaway `role='report'` test confirmed the
+    new sidebar/middleware logic was correct, and the symptom (full agent nav) matches
+    exactly what the OLD pre-item-88 code would do for a non-admin role. Root cause
+    confirmed via `AskUserQuestion`: **GitHub → Vercel auto-deploy wasn't firing**;
+    Anis deployed manually and the real account then worked correctly. No code bug -
+    logged here so this doesn't get re-investigated as a code issue if it recurs before
+    the auto-deploy trigger itself is fixed (separate, still-open infra issue).
+
+    Three real additions to `/bericht` on top of item 88:
+    - **Kontakt-Abdeckung nach Agent table** ("add the part about firmen not contacted
+      per agent, the whole tabel as is on admin dashboard") - `fn_company_gebiet_
+      coverage()` was admin-only (`if not fn_is_admin() then raise exception`);
+      migration `20260817020000_fn_company_gebiet_coverage_report_role.sql` widens the
+      same guard to `fn_is_admin() or fn_is_report()` (identical signature, `create or
+      replace`, no overload risk - single real call site, `app/(app)/page.tsx`, so low
+      blast radius to touch directly). `/bericht` now runs the exact same aggregation/
+      sort/unassigned-Gebiet logic as the admin Dashboard's own table (deliberately
+      duplicated, not extracted into a shared helper, since there are only these two
+      call sites) - verified live the numbers match the admin Dashboard's table
+      row-for-row (e.g. Nejra Adzemovic 1343/1146/672/523/39%).
+    - **Real dialer talk-time stat** ("add ... how many they talked and how many %
+      that is"). Confirmed again before building: `agents.php` has no per-call connect/
+      no-connect flag, so a true "how many calls were answered" isn't derivable - but
+      real, honest **talk time** is (`DialerAgentTotals.talkSeconds`, already computed
+      by the shared `computeDialerTotals()`). Added a "Vrijeme razgovora" tile
+      (`formatSecondsAsHms(talkSeconds)`) with its share of total logged time as the
+      sub-line - answers the spirit of the ask (how much actual talking happened, and
+      what % of the day that is) without fabricating a per-call answer-rate the data
+      can't support.
+    - **Full Bosnian translation** ("Translate whole Report to Bosnian language") -
+      every visible string on the page (title, card titles/descriptions, StatTile
+      labels/subs, table headers, the "Nicht zugeordnet"→"Nedodijeljeno" fallback row)
+      translated to Bosnian, plus the sidebar's "Bericht" nav label →"Izvještaj". A
+      deliberate one-page exception to §1's "UI German labels" convention, scoped to
+      this page only (matches the standalone Bosnian "Go-Live Izvještaj" artifact
+      precedent from earlier in this project - Bosnian content in this app isn't new,
+      just not the default UI language). Number/currency formatting (`de-DE` Intl)
+      deliberately left as-is - matches the convention every other page in this
+      Bosnian-speaking-agent-facing tool already uses, only the words changed. Month
+      names use `Intl.DateTimeFormat("bs", ...)` (confirmed Node's ICU data actually
+      has Bosnian locale support before relying on it, not assumed) + a small
+      `capitalize()` helper since the raw Bosnian month format is lowercase
+      ("august 2026.").
+
+    Verified live end-to-end (fresh throwaway `role='report'` test account, deleted
+    after): full page renders correctly in Bosnian, the Kontakt-Abdeckung table matches
+    the admin Dashboard's real numbers, the new "Vrijeme razgovora" tile showed a real
+    computed value (14:51:47, 21% od ukupnog vremena) against real dialer data, and the
+    sidebar nav link correctly reads "Izvještaj". Typecheck/lint clean, full suite
+    green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
