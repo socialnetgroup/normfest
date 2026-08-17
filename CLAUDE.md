@@ -5413,6 +5413,30 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     sidebar nav link correctly reads "Izvještaj". Typecheck/lint clean, full suite
     green (41/41).
 
+90. **`/bericht/[agentId]` drill-down — shipped (2026-08-17).** Anis: "We need the
+    going deeper possibility by clicking on each name, something like the Team menu
+    point in admin. So I kinda need all information as well." New route mirrors
+    `admin/team/[agentId]` (monthly cards + `MonthCalendar` drill-in, same
+    `computeBonusByDate` logic) - deliberately NOT the separate admin-only Kontrolling
+    sub-page (QA-Bewertungen/AI coaching reports, a different and deeper HR-adjacent
+    screen the "Team menu point" reference wasn't pointing at). No new RLS/RPC needed -
+    `agents`/`agent_daily_performance` are already shared-read for any authenticated
+    user (confirmed in item 88's own investigation). Agent names in both `/bericht`
+    tables (per-agent Umsatz, Kontakt-Abdeckung) now link to `/bericht/{agentId}`
+    (the "Nedodijeljeno" unassigned-Gebiet row stays plain text, no agentId to link
+    to). Page content is Bosnian, matching item 89's page-wide translation; the shared
+    `MonthCalendar` component's own micro-labels (weekday abbreviations, "Vollständige
+    Liste anzeigen") were deliberately left as-is since it's reused by
+    `admin/team/[agentId]` and `meine-ergebnisse` too - translating it would be a
+    separate, broader change affecting other pages, not scoped to this ask.
+
+    Verified live end-to-end (fresh throwaway `role='report'` account, deleted after):
+    confirmed both tables' agent names are real links (`/bericht/{realAgentId}`), and
+    clicking through to a real agent (Maja Biso) rendered the exact same real monthly
+    figures (August 5.131,00 €/35 Prodaje/609 Pozivi/5,7% Konverzija) already confirmed
+    against the admin Team page in item 88's testing. Typecheck/lint clean, full suite
+    green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

@@ -1,4 +1,5 @@
 import { BarChart3, TrendingUp, Sparkles, Phone } from "lucide-react";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { StatTile } from "@/components/ui/stat-tile";
@@ -224,6 +225,7 @@ export default async function BerichtPage() {
   const coverage = [
     ...(allAgents ?? []).map((a) => ({
       label: a.full_name,
+      agentId: a.id as string | null,
       ...(coverageByGebiet.get(a.gebiet) ?? emptyCoverage),
     })),
   ].sort((a, b) => b.notContactedLast3Months - a.notContactedLast3Months);
@@ -239,7 +241,7 @@ export default async function BerichtPage() {
       emptyCoverage,
     );
   if (unassignedTotals.total > 0) {
-    coverage.push({ label: "Nedodijeljeno", ...unassignedTotals });
+    coverage.push({ label: "Nedodijeljeno", agentId: null, ...unassignedTotals });
   }
 
   const { data: dialerRows, error: dialerError } = await fetchDialerAgentStatuses();
@@ -343,7 +345,11 @@ export default async function BerichtPage() {
                 <tbody className="divide-y">
                   {leaderboard.map((a) => (
                     <tr key={a.agentId}>
-                      <td className="px-2 py-2 font-medium">{a.name}</td>
+                      <td className="px-2 py-2 font-medium">
+                        <Link href={`/bericht/${a.agentId}`} className="hover:underline">
+                          {a.name}
+                        </Link>
+                      </td>
                       <td className="px-2 py-2 tabular-nums">{eur.format(a.revenue)}</td>
                     </tr>
                   ))}
@@ -384,7 +390,15 @@ export default async function BerichtPage() {
                     const rowPct = row.total > 0 ? row.notContactedLast3Months / row.total : 0;
                     return (
                       <tr key={row.label} className={row.label === "Nedodijeljeno" ? "opacity-60" : undefined}>
-                        <td className="px-2 py-2 font-medium">{row.label}</td>
+                        <td className="px-2 py-2 font-medium">
+                          {row.agentId ? (
+                            <Link href={`/bericht/${row.agentId}`} className="hover:underline">
+                              {row.label}
+                            </Link>
+                          ) : (
+                            row.label
+                          )}
+                        </td>
                         <td className="px-2 py-2 tabular-nums">{row.total}</td>
                         <td className="px-2 py-2 tabular-nums">{row.notContactedThisMonth}</td>
                         <td className="px-2 py-2 tabular-nums">{row.notContactedLast2Months}</td>
