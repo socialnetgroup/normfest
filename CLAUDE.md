@@ -5135,6 +5135,40 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     table and the real Verlauf snapshot picker, all functioning as
     before. Typecheck/lint clean, full suite green (41/41).
 
+83. **Nejra Adzemovic's account fully reset — real bug found: `agents.
+    profile_id` FK blocks `auth.admin.deleteUser()` (2026-08-17).** Anis:
+    "something is not working... lets reset the email/user completely."
+    Checked her real state first (no guessing) - real login existed, real
+    `email_confirmed_at`/`last_sign_in_at`, `must_change_password: false`,
+    zero `sales_feedback`/`chat_log` rows tied to her - safe to fully
+    delete and recreate rather than patch in place.
+
+    **Real, repeatable bug hit while doing it:** `admin.auth.admin.
+    deleteUser()` failed twice in a row with a bare `500
+    AuthRetryableFetchError: {}` - confirmed via direct `getUserById`
+    re-checks after each attempt that the user genuinely was NOT deleted
+    (not an SDK response-parsing artifact). Root cause: `agents.
+    profile_id` has a foreign key to `profiles(id)` with no `ON DELETE
+    SET NULL`/`CASCADE`, so deleting the `auth.users` row (which cascades
+    to `profiles`) hit a real FK violation on `agents` mid-transaction,
+    and Supabase Auth's admin API surfaces that as an opaque 500 rather
+    than a clear constraint-violation message. Fixed by nulling
+    `agents.profile_id` first, then the delete succeeded immediately.
+
+    **Worth remembering for the next agent account reset:** always
+    `update agents set profile_id = null where id = ...` before calling
+    `deleteUser()` on that agent's linked account, or the delete will
+    fail with this same misleading 500. Recreated fresh via
+    `admin.auth.admin.createUser()` (same `firstname.lastname@social-
+    net.ba` / temp-password convention as §14 item 65), `profiles.
+    must_change_password = true`, `agents.profile_id` relinked to the new
+    id, real `gebiet` (130012) untouched since it lives on the `agents`
+    row itself, not the profile. Verified end-to-end via a real
+    `signInWithPassword()` call under the anon client (not the UI): login
+    succeeds, `profiles` row correctly shows `must_change_password: true`
+    under her own RLS-scoped session, `agents` row correctly points to
+    the new profile id.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
