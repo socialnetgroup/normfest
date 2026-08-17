@@ -5238,6 +5238,43 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     numbers (Team-Bonus, per-agent KM, qualifying agents); unchecked and re-saved to
     restore the real intended hidden state. Typecheck/lint clean, full suite green (41/41).
 
+87. **Anthropic key rotated (again) + 14 real new invoices imported from the wissen@
+    mailbox (2026-08-17).** Anis: "Pogleda wissen Inboud, stizali su novi mailovi."
+    Checked the mailbox directly (63 total messages, not just the newest) rather than
+    trusting the subject filter alone - same "check everything" discipline as §14 item
+    71's original invoice-import pass (which had already caught a real invoice with a
+    blank subject that a naive filter would have missed). Two non-invoice messages
+    ("mail liste - sammelpostfach", "Fwd: WG: Wer ist NORMFEST") turned out to be old
+    ones already processed in an earlier session (the Email-Liste extras and the
+    "Nicht vergessen" Wissen doc both trace back to these) - confirmed, not re-processed.
+
+    The bulk of the new mail (61 PDF attachments across messages dated 2026-08-12
+    through 2026-08-17) turned out to be agents bulk-resending most of their invoice
+    history rather than new business activity: diffed all 61 real invoice numbers
+    against the 47 already in `orders` and found **47 were duplicates, 14 genuinely
+    new** (spanning real dates from March 2025 through August 2026 - a real historical
+    backfill, not recent sales). Downloading and diffing before parsing avoided paying
+    to re-run the vision extraction on 47 already-imported PDFs.
+
+    **Real, second occurrence of the same rotated-Anthropic-key issue already
+    documented in §10/§14 item 70** - `import-invoices.mjs` failed all 14 with a real
+    `401 authentication_error` even though `.env.local` had a key present; this time
+    confirmed it was genuinely invalid (not stale-dev-server) by testing a fresh direct
+    API call, which also failed. Anis provided a new key directly; written into
+    `.env.local` (gitignored, never committed, per §12 key hygiene) and verified with a
+    real minimal API call before re-running the import. **Anis still needs to add the
+    same new key as the `ANTHROPIC_API_KEY` env var on Vercel** for `/assistent` and the
+    server-side enrichment/invoice routes in production to pick it up - not something
+    doable from this environment (same caveat as the original item 70 fix).
+
+    Re-ran `import-invoices.mjs` against the 14 new PDFs with the refreshed key:
+    **14/14 imported, 0 errors**, real cost $0.2151 (Sonnet 5 vision, analyze tier).
+    Verified directly against the DB, not just the script's own summary: `orders` went
+    47 → 61, `order_items` SKU-match rate held at 98.3% (174/177), consistent with the
+    original batch's 99.2% (§14 item 71). Downloaded PDFs and throwaway verification
+    scripts cleaned up from the scratchpad/repo afterward - nothing committed from this
+    pass besides this note.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
