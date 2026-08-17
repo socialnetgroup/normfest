@@ -5169,6 +5169,17 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     under her own RLS-scoped session, `agents` row correctly points to
     the new profile id.
 
+84. **Dialer Tages-Snapshot cron scoped to weekdays only, weekend rows
+    deleted (2026-08-17).** Anis: "wird fuer Samstag und Sonntag nicht
+    benutzt. Nicht speichern und die letzten 2 tage loschen" - the dialer
+    isn't worked on weekends, so the daily 18:00 snapshot (§14 item 24)
+    was capturing two real but meaningless empty/near-empty days every
+    week. `vercel.json`'s cron schedule changed from `0 16 * * *` to
+    `0 16 * * 1-5` (Mon-Fri only, cron day-of-week field). Deleted the two
+    real weekend rows already sitting in `dialer_daily_snapshots`
+    (2026-08-15 Samstag, 2026-08-16 Sonntag) - checked their real weekday
+    directly before deleting rather than assuming.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

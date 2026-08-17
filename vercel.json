@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/dialer-snapshot",
-      "schedule": "0 16 * * *"
+      "schedule": "0 16 * * 1-5"
     }
   ]
 }
