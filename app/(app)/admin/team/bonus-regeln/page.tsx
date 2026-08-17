@@ -16,7 +16,7 @@ export default async function BonusRegelnPage() {
   const { data: settingsRows } = await supabase
     .from("settings")
     .select("key, value")
-    .in("key", ["bonus_thresholds", "bonus_min_contribution_pct", "bonus_min_qualifying_agents"]);
+    .in("key", ["bonus_thresholds", "bonus_min_contribution_pct", "bonus_min_qualifying_agents", "bonus_visible"]);
 
   const settingsMap: Record<string, unknown> = {};
   for (const row of settingsRows ?? []) settingsMap[row.key] = row.value;
@@ -24,6 +24,7 @@ export default async function BonusRegelnPage() {
   const thresholds = (settingsMap.bonus_thresholds as BonusThreshold[] | undefined) ?? [];
   const minContributionPct = Number(settingsMap.bonus_min_contribution_pct ?? 5);
   const minQualifyingAgents = Number(settingsMap.bonus_min_qualifying_agents ?? 7);
+  const bonusVisible = settingsMap.bonus_visible === true;
 
   return (
     <div className="flex flex-col gap-6">
@@ -37,6 +38,12 @@ export default async function BonusRegelnPage() {
           Mindestanzahl qualifizierter Agenten. Änderungen gelten sofort für alle künftigen Berechnungen
           (Dashboard, Team Dashboard, Tagesansicht) - kein Code-Deploy nötig.
         </p>
+        {!bonusVisible ? (
+          <p className="mt-2 text-sm text-warning-foreground">
+            Bonus-Anzeige ist derzeit im Tool ausgeblendet - die Berechnung läuft im Hintergrund weiter.
+            Zum Reaktivieren unten den Haken setzen und speichern.
+          </p>
+        ) : null}
       </div>
 
       <Card>
@@ -48,6 +55,7 @@ export default async function BonusRegelnPage() {
             thresholds={thresholds}
             minContributionPct={minContributionPct}
             minQualifyingAgents={minQualifyingAgents}
+            bonusVisible={bonusVisible}
           />
         </CardContent>
       </Card>

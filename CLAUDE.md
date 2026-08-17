@@ -5180,6 +5180,64 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     (2026-08-15 Samstag, 2026-08-16 Sonntag) - checked their real weekday
     directly before deleting rather than assuming.
 
+85. **Dashboard "Team-Umsatz" tile: "Heute" sub-line — shipped (2026-08-17).** Anis:
+    "Team-Usamtz Tile add Heute-Umsatz undernetzh: xxx €" - same `StatTile.sub` pattern
+    already built for "Feedback heute" (§14 item 78). `app/(app)/page.tsx`'s admin
+    `monthRows` query now also selects `date` (was `agent_id, revenue, agents(full_name)`
+    only), and `teamRevenueToday` filters that already-fetched array to `todayStr` rather
+    than issuing a second query. Verified live (throwaway admin test account, deleted
+    after): tile correctly rendered "36.610 € / Heute: 1.394 €", matching the real
+    Rangliste-implied daily total. Typecheck/lint clean, full suite green (41/41).
+
+86. **Bonus-Regeln UI hidden tool-wide, calculation kept running in the background —
+    shipped (2026-08-17).** Anis: "Bonus-Regeln ganz ausblendet, aber system im
+    hintergrund speichern, bis es aktiv wird." Agent-side bonus visibility was already
+    hidden (§14 item 111); this extends the same idea to admin too, via a settings flag
+    rather than deleting any UI/logic - `computeDailyBonus()`/`computeBonusByDate()`
+    (`lib/team/bonus.ts`) keep running unconditionally everywhere they already did, only
+    JSX rendering is gated. New `bonus_visible` settings key (no migration needed - jsonb
+    `value`, unseeded key reads as `undefined !== true` = hidden by default, matching the
+    "off until reactivated" ask). Gated in all 4 places that render bonus data:
+    `admin/team/page.tsx` (the "Bonus-Regeln" nav link relabels to "Bonus-Regeln
+    (ausgeblendet)" instead of disappearing - see reactivation note below; the "Täglicher
+    Bonus - heute" card; the "Team-Bonus:" monthly summary line; the "Bonus (KM)" table
+    column), `admin/team/[agentId]/page.tsx` (the "Bonus:" summary line; `MonthCalendar`'s
+    existing `showBonus` prop, already built for the agent-hiding case in item 111, now
+    driven by this same flag instead of a hardcoded `true`), and
+    `admin/team/tag/[date]/page.tsx` (the whole "Tagesbonus" card swaps for a plain
+    "Anwesenheit" card - agent/revenue/Frei-toggle only, so the day-off control stays
+    reachable even with bonus hidden - rather than rendering an empty shell).
+
+    **Reactivation path** (the part of "bis es aktiv wird" that needed a real answer, not
+    just a flag nobody could flip back): `components/team/bonus-rules-form.tsx` gained a
+    `bonus_visible` checkbox (own `useState`, included in the same settings upsert as the
+    three existing bonus keys) and `admin/team/bonus-regeln/page.tsx` now fetches/passes
+    it, with a small explanatory note when hidden. The "Bonus-Regeln" link on
+    `admin/team` is deliberately NOT itself hidden by the flag (that would strand the only
+    way back) - it just relabels to make the hidden state visible at a glance.
+
+    **Real bug found while cleaning up the throwaway test account used to verify this**
+    (same FK-blocking-`deleteUser()` class already documented for `agents.profile_id` in
+    item 83): `settings.updated_by references profiles(id)` with no `ON DELETE
+    SET NULL`/`CASCADE` either - the test admin had saved `settings` rows twice during
+    verification (toggling `bonus_visible` on then back off), leaving 4 rows with
+    `updated_by` pointing at the about-to-be-deleted test account, which made
+    `admin.auth.admin.deleteUser()` fail with the same opaque `500 AuthRetryableFetchError:
+    {}`. Confirmed by checking `settings` directly, nulled the 4 `updated_by` values, retry
+    succeeded immediately. Worth remembering generally: **any table with an FK to
+    `profiles(id)` and no cascade/set-null will block a real account deletion** - check
+    `agents.profile_id` and `settings.updated_by` first (both hit for real now), and any
+    new FK to `profiles(id)` added later should default to `on delete set null` unless
+    there's a real reason to keep it hard.
+
+    Verified live end-to-end (throwaway admin test account, deleted after - with the above
+    FK issue found and fixed along the way): confirmed all bonus UI hidden across all 3
+    admin/team pages while agent/revenue/day-off data still renders correctly; confirmed
+    the "Bonus-Regeln (ausgeblendet)" link still reaches the settings page; checked the new
+    checkbox, saved, confirmed bonus UI reappeared tool-wide with correct real computed
+    numbers (Team-Bonus, per-agent KM, qualifying agents); unchecked and re-saved to
+    restore the real intended hidden state. Typecheck/lint clean, full suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

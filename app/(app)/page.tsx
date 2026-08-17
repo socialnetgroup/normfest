@@ -78,7 +78,7 @@ export default async function DashboardPage() {
   ] = await Promise.all([
     supabase
       .from("agent_daily_performance")
-      .select("agent_id, revenue, agents(full_name)")
+      .select("agent_id, date, revenue, agents(full_name)")
       .gte("date", monthStartStr),
     supabase
       .from("sales_feedback")
@@ -199,6 +199,10 @@ export default async function DashboardPage() {
 
   const teamRevenue = leaderboard.reduce((sum, a) => sum + a.revenue, 0);
   const myRevenue = myAgent ? (byAgent.get(myAgent.id)?.revenue ?? 0) : null;
+  // Anis, 2026-08-17: "Team-Umsatz Tile add Heute-Umsatz" - same sub-line
+  // pattern as "Feedback heute" (§14 item 78), just filtered from the
+  // already-fetched monthRows instead of a separate query.
+  const teamRevenueToday = (monthRows ?? []).filter((r) => r.date === todayStr).reduce((sum, r) => sum + r.revenue, 0);
 
   const monthLabel = new Intl.DateTimeFormat("de-DE", { month: "long", year: "numeric" }).format(new Date());
 
@@ -274,7 +278,12 @@ export default async function DashboardPage() {
       {isAdmin ? (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
           <StatTile label="Firmen gesamt" value={String(totalCompanies ?? 0)} accent="primary" />
-          <StatTile label="Team-Umsatz" value={eur.format(teamRevenue)} accent="primary" />
+          <StatTile
+            label="Team-Umsatz"
+            value={eur.format(teamRevenue)}
+            accent="primary"
+            sub={`Heute: ${eur.format(teamRevenueToday)}`}
+          />
           <StatTile
             label="Feedback diese Woche"
             value={String(feedbackCountThisWeek ?? 0)}

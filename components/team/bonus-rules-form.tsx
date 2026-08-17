@@ -15,15 +15,18 @@ export function BonusRulesForm({
   thresholds: initialThresholds,
   minContributionPct: initialMinContributionPct,
   minQualifyingAgents: initialMinQualifyingAgents,
+  bonusVisible: initialBonusVisible,
 }: {
   thresholds: Threshold[];
   minContributionPct: number;
   minQualifyingAgents: number;
+  bonusVisible: boolean;
 }) {
   const router = useRouter();
   const [thresholds, setThresholds] = useState<Threshold[]>(initialThresholds);
   const [minContributionPct, setMinContributionPct] = useState(String(initialMinContributionPct));
   const [minQualifyingAgents, setMinQualifyingAgents] = useState(String(initialMinQualifyingAgents));
+  const [bonusVisible, setBonusVisible] = useState(initialBonusVisible);
   const [status, setStatus] = useState<"idle" | "saving" | "done" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -81,6 +84,7 @@ export function BonusRulesForm({
         { key: "bonus_thresholds", value: cleanThresholds, updated_by: user?.id },
         { key: "bonus_min_contribution_pct", value: pct, updated_by: user?.id },
         { key: "bonus_min_qualifying_agents", value: qualifiers, updated_by: user?.id },
+        { key: "bonus_visible", value: bonusVisible, updated_by: user?.id },
       ],
       { onConflict: "key" },
     );
@@ -99,6 +103,19 @@ export function BonusRulesForm({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+      <div className="flex items-center gap-2 rounded-md border bg-muted/30 p-3">
+        <input
+          id="bonus-visible"
+          type="checkbox"
+          checked={bonusVisible}
+          onChange={(e) => setBonusVisible(e.target.checked)}
+          className="size-4"
+        />
+        <Label htmlFor="bonus-visible" className="cursor-pointer">
+          Bonus-Anzeige im Tool aktiv (Team Dashboard, Tagesansicht, Meine Ergebnisse)
+        </Label>
+      </div>
+
       <div>
         <Label className="mb-2 block">Umsatz-Stufen (Team, pro Tag)</Label>
         <div className="flex flex-col gap-2">

@@ -38,7 +38,7 @@ export default async function AgentHistoryPage({ params }: { params: Promise<{ a
     supabase
       .from("settings")
       .select("key, value")
-      .in("key", ["bonus_thresholds", "bonus_min_contribution_pct", "bonus_min_qualifying_agents"]),
+      .in("key", ["bonus_thresholds", "bonus_min_contribution_pct", "bonus_min_qualifying_agents", "bonus_visible"]),
   ]);
 
   if (!agent) notFound();
@@ -55,6 +55,7 @@ export default async function AgentHistoryPage({ params }: { params: Promise<{ a
   const thresholds = (bonusSettingsMap.bonus_thresholds as BonusThreshold[] | undefined) ?? [];
   const minContributionPct = Number(bonusSettingsMap.bonus_min_contribution_pct ?? 5);
   const minQualifyingAgents = Number(bonusSettingsMap.bonus_min_qualifying_agents ?? 7);
+  const bonusVisible = bonusSettingsMap.bonus_visible === true;
 
   const bonusByDate = computeBonusByDate(
     (allRows ?? []).map((r) => ({ agentId: r.agent_id, date: r.date, revenue: r.revenue, dayOff: r.day_off })),
@@ -127,14 +128,16 @@ export default async function AgentHistoryPage({ params }: { params: Promise<{ a
                       {calls > 0 ? pct.format(sales / calls) : "-"}
                     </span>
                   </span>
-                  <span>
-                    Bonus:{" "}
-                    <span className="font-medium text-success-foreground tabular-nums">
-                      {bonusKm > 0 ? `${eurCents.format(bonusKm).replace("€", "KM")}` : "-"}
+                  {bonusVisible ? (
+                    <span>
+                      Bonus:{" "}
+                      <span className="font-medium text-success-foreground tabular-nums">
+                        {bonusKm > 0 ? `${eurCents.format(bonusKm).replace("€", "KM")}` : "-"}
+                      </span>
                     </span>
-                  </span>
+                  ) : null}
                 </div>
-                <MonthCalendar month={month} days={days} />
+                <MonthCalendar month={month} days={days} showBonus={bonusVisible} />
               </CardContent>
             </Card>
           );

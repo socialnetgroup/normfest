@@ -35,7 +35,7 @@ export default async function TeamDayPage({ params }: { params: Promise<{ date: 
     supabase
       .from("settings")
       .select("key, value")
-      .in("key", ["bonus_thresholds", "bonus_min_contribution_pct", "bonus_min_qualifying_agents"]),
+      .in("key", ["bonus_thresholds", "bonus_min_contribution_pct", "bonus_min_qualifying_agents", "bonus_visible"]),
   ]);
 
   const bonusSettingsMap: Record<string, unknown> = {};
@@ -43,6 +43,10 @@ export default async function TeamDayPage({ params }: { params: Promise<{ date: 
   const thresholds = (bonusSettingsMap.bonus_thresholds as BonusThreshold[] | undefined) ?? [];
   const minContributionPct = Number(bonusSettingsMap.bonus_min_contribution_pct ?? 5);
   const minQualifyingAgents = Number(bonusSettingsMap.bonus_min_qualifying_agents ?? 7);
+  // Anis, 2026-08-17: "Bonus-Regeln ganz ausblendet, aber system im
+  // hintergrund speichern, bis es aktiv wird" - same settings-flag gate as
+  // admin/team and admin/team/[agentId]; computeDailyBonus below still runs.
+  const bonusVisible = bonusSettingsMap.bonus_visible === true;
 
   const byAgent = new Map(
     (dayRows ?? []).map((r) => [
@@ -99,87 +103,123 @@ export default async function TeamDayPage({ params }: { params: Promise<{ date: 
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Tagesbonus</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="mb-4 flex flex-wrap gap-6 text-sm">
-            <span>
-              Team-Umsatz: <span className="font-medium tabular-nums">{eur.format(dailyBonus.teamRevenue)}</span>
-            </span>
-            <span>
-              Prag erreicht:{" "}
-              <span className="font-medium">
-                {dailyBonus.thresholdReached
-                  ? `${eur.format(dailyBonus.thresholdReached.team_revenue)} → ${dailyBonus.budget} KM Budget`
-                  : "Nicht erreicht"}
+      {bonusVisible ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Tagesbonus</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="mb-4 flex flex-wrap gap-6 text-sm">
+              <span>
+                Team-Umsatz: <span className="font-medium tabular-nums">{eur.format(dailyBonus.teamRevenue)}</span>
               </span>
-            </span>
-            <span>
-              Qualifizierte Agenten:{" "}
-              <span className="font-medium tabular-nums">{dailyBonus.qualifyingCount}</span>
-              <span className="text-muted-foreground"> (mind. {dailyBonus.minQualifyingAgents} nötig)</span>
-              {!dailyBonus.enoughQualifiers ? (
-                <Badge variant="muted" className="ml-2">
-                  Bonus wird nicht verteilt
-                </Badge>
-              ) : null}
-            </span>
-          </div>
-          <div className="overflow-hidden rounded-lg border">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
-                <tr>
-                  <th className="px-3 py-2 font-medium">Agent</th>
-                  <th className="px-3 py-2 font-medium">Umsatz</th>
-                  <th className="px-3 py-2 font-medium">% Beitrag</th>
-                  <th className="px-3 py-2 font-medium">Qualifiziert</th>
-                  <th className="px-3 py-2 font-medium">Bonus (KM)</th>
-                  <th className="px-3 py-2 font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {dailyBonus.results.map((r) => (
-                  <tr key={r.agentId}>
-                    <td className="px-3 py-2 font-medium">
-                      <Link href={`/admin/team/${r.agentId}`} className="hover:underline">
-                        {r.name}
-                      </Link>
-                    </td>
-                    <td className="px-3 py-2 tabular-nums">{eur.format(r.revenue)}</td>
-                    <td className="px-3 py-2 tabular-nums">{pct.format(r.contributionPct / 100)}</td>
-                    <td className="px-3 py-2">{r.qualifies ? "Ja" : "Nein"}</td>
-                    <td className="px-3 py-2 tabular-nums">
-                      {r.bonusKm > 0 ? `${eurCents.format(r.bonusKm).replace("€", "KM")}` : "-"}
-                    </td>
-                    <td className="px-3 py-2">
-                      <DayOffToggle agentId={r.agentId} date={date} dayOff={r.dayOff} />
-                    </td>
+              <span>
+                Prag erreicht:{" "}
+                <span className="font-medium">
+                  {dailyBonus.thresholdReached
+                    ? `${eur.format(dailyBonus.thresholdReached.team_revenue)} → ${dailyBonus.budget} KM Budget`
+                    : "Nicht erreicht"}
+                </span>
+              </span>
+              <span>
+                Qualifizierte Agenten:{" "}
+                <span className="font-medium tabular-nums">{dailyBonus.qualifyingCount}</span>
+                <span className="text-muted-foreground"> (mind. {dailyBonus.minQualifyingAgents} nötig)</span>
+                {!dailyBonus.enoughQualifiers ? (
+                  <Badge variant="muted" className="ml-2">
+                    Bonus wird nicht verteilt
+                  </Badge>
+                ) : null}
+              </span>
+            </div>
+            <div className="overflow-hidden rounded-lg border">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">Agent</th>
+                    <th className="px-3 py-2 font-medium">Umsatz</th>
+                    <th className="px-3 py-2 font-medium">% Beitrag</th>
+                    <th className="px-3 py-2 font-medium">Qualifiziert</th>
+                    <th className="px-3 py-2 font-medium">Bonus (KM)</th>
+                    <th className="px-3 py-2 font-medium">Status</th>
                   </tr>
-                ))}
-                {agents
-                  .filter((a) => a.dayOff)
-                  .map((a) => (
-                    <tr key={a.agentId} className="opacity-50">
+                </thead>
+                <tbody className="divide-y">
+                  {dailyBonus.results.map((r) => (
+                    <tr key={r.agentId}>
+                      <td className="px-3 py-2 font-medium">
+                        <Link href={`/admin/team/${r.agentId}`} className="hover:underline">
+                          {r.name}
+                        </Link>
+                      </td>
+                      <td className="px-3 py-2 tabular-nums">{eur.format(r.revenue)}</td>
+                      <td className="px-3 py-2 tabular-nums">{pct.format(r.contributionPct / 100)}</td>
+                      <td className="px-3 py-2">{r.qualifies ? "Ja" : "Nein"}</td>
+                      <td className="px-3 py-2 tabular-nums">
+                        {r.bonusKm > 0 ? `${eurCents.format(r.bonusKm).replace("€", "KM")}` : "-"}
+                      </td>
+                      <td className="px-3 py-2">
+                        <DayOffToggle agentId={r.agentId} date={date} dayOff={r.dayOff} />
+                      </td>
+                    </tr>
+                  ))}
+                  {agents
+                    .filter((a) => a.dayOff)
+                    .map((a) => (
+                      <tr key={a.agentId} className="opacity-50">
+                        <td className="px-3 py-2 font-medium">
+                          <Link href={`/admin/team/${a.agentId}`} className="hover:underline">
+                            {a.name}
+                          </Link>
+                        </td>
+                        <td className="px-3 py-2" colSpan={4}>
+                          Frei
+                        </td>
+                        <td className="px-3 py-2">
+                          <DayOffToggle agentId={a.agentId} date={date} dayOff={a.dayOff} />
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>Anwesenheit</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-hidden rounded-lg border">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">Agent</th>
+                    <th className="px-3 py-2 font-medium">Umsatz</th>
+                    <th className="px-3 py-2 font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {agents.map((a) => (
+                    <tr key={a.agentId} className={a.dayOff ? "opacity-50" : undefined}>
                       <td className="px-3 py-2 font-medium">
                         <Link href={`/admin/team/${a.agentId}`} className="hover:underline">
                           {a.name}
                         </Link>
                       </td>
-                      <td className="px-3 py-2" colSpan={4}>
-                        Frei
-                      </td>
+                      <td className="px-3 py-2 tabular-nums">{a.dayOff ? "Frei" : eur.format(a.revenue)}</td>
                       <td className="px-3 py-2">
                         <DayOffToggle agentId={a.agentId} date={date} dayOff={a.dayOff} />
                       </td>
                     </tr>
                   ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
