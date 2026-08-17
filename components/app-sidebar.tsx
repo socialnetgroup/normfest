@@ -139,13 +139,19 @@ function NavItem({
 
 export function AppSidebar({
   isAdmin,
+  isReport,
   userLabel,
   logoutAction,
 }: {
   isAdmin: boolean;
+  /** report@ role (2026-08-17) - a single-page, read-only "viewing angle"
+   * account (CEO/board). Gets one nav link (Bericht) instead of the full
+   * app nav, matching the route gating already enforced in proxy.ts. */
+  isReport: boolean;
   userLabel: string;
   logoutAction: () => void;
 }) {
+  const homeHref = isReport ? "/bericht" : "/";
   const pathname = usePathname();
   const settingsActive = SETTINGS_ITEMS.some((i) => isActive(pathname, i.href));
   const [settingsOpen, setSettingsOpen] = useState(settingsActive);
@@ -173,7 +179,7 @@ export function AppSidebar({
   return (
     <>
       <div className="flex shrink-0 items-center justify-between border-b bg-sidebar px-4 py-3 text-sidebar-foreground md:hidden">
-        <Link href="/" className="flex items-center gap-2.5" onClick={closeMobile}>
+        <Link href={homeHref} className="flex items-center gap-2.5" onClick={closeMobile}>
           <Image src="/logo.png" alt="Social Net" width={24} height={24} priority />
           <span className="font-heading text-sm font-semibold tracking-tight">Normfest</span>
         </Link>
@@ -220,7 +226,7 @@ export function AppSidebar({
         )}
       >
         <div className="flex items-center justify-between px-5 py-5">
-          <Link href="/" className="flex items-center gap-2.5" onClick={closeMobile}>
+          <Link href={homeHref} className="flex items-center gap-2.5" onClick={closeMobile}>
             <Image src="/logo.png" alt="Social Net" width={28} height={28} priority />
             <span className="font-heading text-[15px] font-semibold tracking-tight">Normfest</span>
           </Link>
@@ -249,6 +255,16 @@ export function AppSidebar({
         </div>
 
         <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3">
+          {isReport ? (
+            <NavItem
+              href="/bericht"
+              label="Bericht"
+              icon={BarChart3}
+              active={isActive(pathname, "/bericht")}
+              onNavigate={closeMobile}
+            />
+          ) : (
+            <>
           {NAV_ITEMS.map((item) => (
             <NavItem key={item.href} {...item} active={isActive(pathname, item.href)} onNavigate={closeMobile} />
           ))}
@@ -342,6 +358,8 @@ export function AppSidebar({
               ) : null}
             </>
           ) : null}
+            </>
+          )}
         </nav>
 
         <div className="flex flex-col gap-2 border-t px-4 py-4">

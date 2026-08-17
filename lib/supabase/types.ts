@@ -1926,6 +1926,7 @@ export type Database = {
       }
       fn_heartbeat: { Args: { p_path: string }; Returns: undefined }
       fn_is_admin: { Args: never; Returns: boolean }
+      fn_is_report: { Args: never; Returns: boolean }
       fn_log_call: {
         Args: never
         Returns: {
@@ -1990,6 +1991,20 @@ export type Database = {
         Returns: undefined
       }
       fn_refresh_signals: { Args: never; Returns: undefined }
+      fn_report_stats: {
+        Args: never
+        Returns: {
+          ai_analyzed: number
+          ambiguous: number
+          chat_active_agents: number
+          chat_messages_today: number
+          chat_messages_total: number
+          chat_messages_week: number
+          companies_total: number
+          places_resolved: number
+          website_fetched: number
+        }[]
+      }
       fn_search_companies: {
         Args: { p_limit?: number; p_offset?: number; p_query: string }
         Returns: {

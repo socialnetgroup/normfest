@@ -16,6 +16,13 @@ const PUBLIC_PATHS = ["/login", "/api/cron"];
 // request should hit its own handler, never get HTML-redirected).
 const MUST_CHANGE_PASSWORD_EXEMPT_PATHS = ["/login", "/konto", "/api"];
 
+// report@ role (2026-08-17, Anis: "a kinda of viewing angle") gets exactly
+// one page - /bericht - plus the two paths every role needs (own account,
+// logout). Enforced here rather than only hiding the nav link, same
+// discipline as must_change_password above: a route a user can't reach via
+// the UI should also 404/redirect if they type the URL directly.
+const REPORT_ALLOWED_PATHS = ["/bericht", "/konto", "/login", "/api"];
+
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
 
@@ -67,13 +74,18 @@ export async function updateSession(request: NextRequest) {
     if (!isExempt) {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("must_change_password")
+        .select("must_change_password, role")
         .eq("id", user.id)
         .single();
       if (profile?.must_change_password) {
         const kontoUrl = request.nextUrl.clone();
         kontoUrl.pathname = "/konto";
         return NextResponse.redirect(kontoUrl);
+      }
+      if (profile?.role === "report" && !REPORT_ALLOWED_PATHS.some((p) => request.nextUrl.pathname.startsWith(p))) {
+        const berichtUrl = request.nextUrl.clone();
+        berichtUrl.pathname = "/bericht";
+        return NextResponse.redirect(berichtUrl);
       }
     }
   }

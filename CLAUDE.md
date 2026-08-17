@@ -5275,6 +5275,90 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     scripts cleaned up from the scratchpad/repo afterward - nothing committed from this
     pass besides this note.
 
+88. **New `report` role + `/bericht` overview page — shipped (2026-08-17), a real
+    third role alongside admin/agent.** Anis: "Lets make a new user and a new view for
+    that user... report@social-net.ba... a kinda of viewing angle wheres the project
+    at." Scoped via a short back-and-forth before building: new distinct role (not an
+    admin login pointed at one page - structurally read-only), always whole-book (never
+    gebiet-scoped), single live-computed page (not a drill-down section), includes
+    per-agent Umsatz/bonus figures. Explicitly excludes Signale/Bestellungen/Fokus per
+    Anis's own framing for the audience ("CEO, board... they dont care so deep
+    operational, they dont even know that exists").
+
+    `profiles.role` CHECK constraint widened to `('agent','admin','report')`
+    (migration `20260817010000_report_role.sql`) + `fn_is_report()` (same shape as
+    `fn_is_admin()`). Checked every relevant RLS policy directly before touching
+    anything, rather than assuming: `products`, `sales_feedback`,
+    `agent_daily_performance`, `agents`, and `settings` were **already** shared-read
+    for any authenticated user (widened back in the very first M2 migration,
+    `20260723120000_log_sale_and_goals.sql` - confirmed by reading the real policy
+    history, not the possibly-stale CLAUDE.md §4.11 prose) - report@ gets those for
+    free the moment the account exists, no RLS change needed. The one real gap is
+    `companies`/`company_enrichment`, gated by the gebiet-scoped `fn_company_visible()`
+    - deliberately did NOT widen that function itself (used everywhere, including
+    agent-facing pages - too broad a blast radius for one page's needs) or touch
+    `chat_log`'s RLS (private-per-agent by design, §10 - must never expose raw
+    transcripts here). Instead, one narrow `fn_report_stats()` security-definer RPC
+    computes both the company-enrichment aggregate and chat-usage counts (never raw
+    chat content) directly, explicitly gated `fn_is_admin() or fn_is_report()`.
+    Verified this boundary is real, not assumed: signed in as the real report@ account
+    via a direct `signInWithPassword()` call (not the browser UI, same "don't type the
+    real handoff credential into a form" discipline as §14 item 65) and confirmed
+    `fn_report_stats()` returns the real whole-book numbers (14,311 companies, 14,290
+    Places-resolved, etc.) while a **direct** `companies` count under the same session
+    came back `null` - i.e. `fn_company_visible()` correctly still blocks it, the RPC
+    is the only path in.
+
+    Route gating in `lib/supabase/proxy.ts`: a new `REPORT_ALLOWED_PATHS` list
+    (`/bericht`, `/konto`, `/login`, `/api`) redirects any other path back to
+    `/bericht` for `role === 'report'` - same "block the route, not just hide the nav
+    link" discipline as the existing `must_change_password` redirect. `AppSidebar`
+    gained an `isReport` prop: renders exactly one nav link (Bericht) plus the shared
+    Mein Konto/Abmelden footer, skipping the full nav/admin section entirely; the
+    logo link also points at `/bericht` instead of `/` for this role.
+    `(app)/layout.tsx` skips `FloatingAssistant`/`HeartbeatPing` for report - neither
+    is relevant to a single-page read-only viewer, and the chat tools would return
+    little anyway given `fn_company_visible()` was deliberately not widened.
+
+    `/bericht` page: KPI tiles (Firmen/Katalog/Feedback/Team-Umsatz), Umsatz (monthly
+    trend + per-agent table + bonus, bonus gated behind the same `bonus_visible`
+    settings flag that hides it tool-wide right now, per Anis's explicit "disable the
+    bonus part here as well"), Flywheel-Gesundheit (feedback week-over-week +
+    Wiedervorlagen open/overdue), Anreicherung & Katalog (reusing the exact same
+    coverage numbers already shown on `/admin/anreicherung-uebersicht` and
+    `/admin/katalog-qualitaet`), Dialer (today's aggregate via the same
+    `buildDialerAgentSummaries`/`computeDialerTotals` helpers `/dialer` uses - total
+    calls/AHT/Auslastung/Konversion only, no per-agent table, and explicitly no
+    "answering rate" - confirmed with Anis that `agents.php` only gives dial-attempt
+    counts and time-in-status buckets, not per-call connect/no-connect, so a real
+    answered/dialed ratio isn't derivable from current dialer data), and AI-Assistent
+    usage (question counts from `chat_log`, aggregate only).
+
+    **Real accuracy bug caught and fixed before shipping, not just eyeballed and
+    accepted:** the first live render (on a Monday, 1 day into the week) showed a
+    week-over-week revenue delta of "-78%" and a feedback delta of "-65%" - both
+    artifacts of comparing a partial current week (1 day) against a FULL previous
+    week (7 days), not a real decline. Fixed by comparing against the **same elapsed
+    span** in the previous week (`prevWeekSameSpanEnd = prevWeekStart + dayOfWeek + 1
+    days`) instead of the full 7 days - re-verified live: the revenue delta correctly
+    disappeared (last Monday alone had €0 revenue, so the ratio is undefined and is
+    now correctly hidden rather than shown as a fabricated 0% or a divide-by-zero
+    artifact) and the feedback delta became a real, honestly-computed (if still
+    startling-looking, "+1,388%") apples-to-apples number - a real, noisy-but-correct
+    result of comparing two single Mondays, not a bug.
+
+    Real `report@social-net.ba` account created (`admin.auth.admin.createUser()`,
+    `must_change_password: true`, same handoff pattern as every other real account
+    this project creates) - temp password handed to Anis directly, not committed
+    anywhere. Verified end-to-end via a disposable throwaway `role='report'` test
+    account instead (browser login, confirmed `/` → `/bericht` redirect, confirmed
+    the sidebar shows only Bericht + Mein Konto + Abmelden with no other nav/admin
+    section, confirmed navigating directly to `/firmen` bounces back to `/bericht`)
+    - then separately confirmed a plain agent account gets a real 404 on `/bericht`
+    (the `profile?.role !== "admin" && profile?.role !== "report"` guard holds both
+    ways). Both throwaway accounts deleted after. Typecheck/lint clean, full suite
+    green (41/41), `visibility_mode` confirmed still `'gebiet'` afterward.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
