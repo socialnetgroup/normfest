@@ -530,6 +530,35 @@ export type Database = {
         }
         Relationships: []
       }
+      company_daily_calls: {
+        Row: {
+          call_count: number
+          call_date: string
+          company_id: string
+          updated_at: string
+        }
+        Insert: {
+          call_count?: number
+          call_date: string
+          company_id: string
+          updated_at?: string
+        }
+        Update: {
+          call_count?: number
+          call_date?: string
+          company_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_daily_calls_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       company_enrichment: {
         Row: {
           analysis_input_tokens: number | null

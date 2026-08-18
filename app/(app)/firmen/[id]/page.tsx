@@ -28,6 +28,11 @@ const MAX_SIGNALS_SHOWN = 8;
 // A single high-volume type (cross_sell) shouldn't be able to claim every
 // slot - Anis (2026-08-19), noticed seasonal signals disappearing.
 const MAX_SIGNALS_PER_TYPE = 3;
+// Real, checked constraint (§14 item 105's CDR investigation) - the
+// dialer's metrike.php has no call history before this date, so
+// company_daily_calls can't reflect anything earlier either. Shown next to
+// the call count so it never reads as "this firm's entire call history".
+const CALL_LOG_START = "10.08.2026";
 
 const ratingFmt = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 1 });
 
@@ -75,6 +80,7 @@ export default async function CompanyProfilePage({
     { data: signals },
     { data: enrichment },
     { data: orders },
+    { data: callStats },
   ] = await Promise.all([
       supabase
         .from("companies")
@@ -122,6 +128,14 @@ export default async function CompanyProfilePage({
         )
         .eq("company_id", id)
         .order("invoice_date", { ascending: false }),
+      // "Koliko puta je neka firma nazvana?" (Anis, 2026-08-19) - real
+      // per-company call counts, matched from the dialer's CDR by phone
+      // number (lib/dialer/company-calls.ts), synced daily via the
+      // dialer-snapshot cron. Real history only goes back to 2026-08-10
+      // (nothing before that exists on the dialer's side, same constraint
+      // already documented for the QA-Bewertungen call picker) - CALL_LOG_
+      // START below reflects that, not a display trick.
+      supabase.from("company_daily_calls").select("call_count, call_date").eq("company_id", id),
     ]);
 
   if (error || !company) {
@@ -129,6 +143,11 @@ export default async function CompanyProfilePage({
   }
 
   const isAdmin = currentProfile?.role === "admin";
+  const totalCalls = (callStats ?? []).reduce((sum, r) => sum + r.call_count, 0);
+  const lastCallDate = (callStats ?? []).reduce<string | null>(
+    (latest, r) => (!latest || r.call_date > latest ? r.call_date : latest),
+    null,
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -442,6 +461,10 @@ export default async function CompanyProfilePage({
               <Field label="Letzter Kontakt" value={date(company.last_contact_date)} />
               <Field label="Letzte Rechnung" value={company.last_invoice_period} />
               <Field label="Letzte Kundenbewertung" value={date(company.last_review_date)} />
+              <Field
+                label={`Anrufe (seit ${CALL_LOG_START})`}
+                value={totalCalls > 0 ? `${totalCalls}${lastCallDate ? ` - zuletzt ${date(lastCallDate)}` : ""}` : "0"}
+              />
             </dl>
           </CardContent>
         </Card>

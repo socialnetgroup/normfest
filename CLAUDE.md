@@ -6864,6 +6864,57 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     real `Cross-Sell` rows, instead of cross_sell alone filling the list.
     Full suite green (41/41) after both migrations, typecheck/lint clean.
 
+120. **"Anrufe" (real call count) added to the Firmenprofil's Aktivität card —
+    shipped (2026-08-19), Anis: "Koliko puta je neka firma nazvana? kako bi
+    bilo najlogičnije, kad već imamo pristup tome."** Answered the design
+    question first (Aktivität card, next to Letzter Besuch/Letzter Kontakt -
+    the same place an agent already looks before deciding whether/when to
+    call) before building. Sourced from the dialer's already-integrated CDR
+    (`metrike.php`, §14 items 105/109) rather than a new dev question - the
+    real per-call `phone_number` field is enough to match calls to
+    companies on our own side.
+
+    New `company_daily_calls` table (`company_id, call_date, call_count`,
+    migration `20260819080000_company_daily_calls.sql`, shared-read/
+    admin-write RLS - matches `sales_feedback`/`signals`' visibility
+    precedent, since this is company activity already implicitly visible to
+    anyone who can open the Firmenprofil). Stored per (company, day) rather
+    than one running total, so a re-run of the sync for the same day is a
+    plain idempotent overwrite - same discipline as `dialer_daily_snapshots`.
+
+    New `lib/dialer/company-calls.ts`: `buildPhoneSuffixMap()` (from
+    `companies.telefon`/`telefon_2`/`telefon_3`, keyed by the real last-8-
+    digit suffix - robust to the leading-0/country-code difference already
+    documented between the dialer's phone format and VIS-sourced numbers,
+    confirmed again live this session: a real CDR row `6221707231` matched
+    `companies.telefon = '06221707231'` exactly) and
+    `matchCallsToCompanies()`. A suffix matching more than one company is
+    treated as ambiguous and skipped, never guessed - same "don't fabricate
+    a match" discipline as the enrichment ambiguous-queue (§9/§14 items
+    50-52). Wired into the existing `dialer-snapshot` cron
+    (`app/api/cron/dialer-snapshot/route.ts`, §14 item 98) as a best-effort
+    step (a failure here logs to console but doesn't fail the cron's
+    primary Live-Status snapshot) - fetches today's CDR, matches, upserts.
+
+    **One-off historical backfill run for real value from day one**, not
+    just starting at zero today: fetched real CDR day-by-day for
+    2026-08-10 through 2026-08-18 (the full real history that exists on the
+    dialer's side, §14 item 105) - 6,019 real call rows, **4,978 matched
+    (82.7%), 67 correctly skipped as ambiguous, 974 no-match** (real,
+    expected - callback/other numbers not in VIS). Wrote 3,921 real
+    (company, day) rows. Verified one real match by hand before trusting
+    the batch: CDR row `phone_number: '6221707231'` for Priebe-Camper GmbH
+    matched exactly against its VIS `telefon: '06221707231'`.
+
+    `CALL_LOG_START = "10.08.2026"` shown inline next to the count on
+    `/firmen/[id]` (`Anrufe (seit 10.08.2026)`) so it never reads as the
+    company's complete call history - the dialer's own CDR genuinely has
+    nothing before that date. Verified live (throwaway admin test account,
+    deleted after) on a real company (Ersatzteilhandel Kai Figorra,
+    20 real matched calls): "Anrufe (seit 10.08.2026) - 20 - zuletzt
+    14.08.2026" rendered correctly, matching the DB exactly. Typecheck/lint
+    clean, full suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

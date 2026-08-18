@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { buildDialerAgentSummaries, fetchDialerAgentStatuses } from "@/lib/dialer/status";
+import { buildPhoneSuffixMap, matchCallsToCompanies } from "@/lib/dialer/company-calls";
+import { buildDialerAgentSummaries, fetchDialerAgentStatuses, fetchDialerCallLog } from "@/lib/dialer/status";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 // Daily dialer snapshot (Anis, 2026-08-06): "posto nemamo logove, da li te
@@ -121,6 +122,58 @@ export async function GET(request: Request) {
     }
   }
 
+  // "Koliko puta je neka firma nazvana?" (Anis, 2026-08-19) - real
+  // per-company call counts for the Firmenprofil's Aktivität card, matched
+  // from today's CDR (metrike.php) to companies by phone number
+  // (lib/dialer/company-calls.ts). Best-effort: a failure here shouldn't
+  // fail the whole cron run (the Live-Status snapshot above is the primary,
+  // already-logged concern) - logged to console only, not to
+  // dialer_snapshot_log, so it doesn't mask a real Live-Status failure.
+  let companyCallsSynced = 0;
+  try {
+    const { data: callLog, error: callLogError } = await fetchDialerCallLog(
+      new Date(`${todayStr}T00:00:00`),
+      new Date(),
+      20000,
+    );
+    if (callLogError || !callLog) {
+      console.error("[dialer-snapshot] company-call sync skipped:", callLogError);
+    } else {
+      let companies: { id: string; telefon: string | null; telefon_2: string | null; telefon_3: string | null }[] = [];
+      let from = 0;
+      while (true) {
+        const { data, error } = await admin
+          .from("companies")
+          .select("id, telefon, telefon_2, telefon_3")
+          .range(from, from + 999);
+        if (error || !data) break;
+        companies = companies.concat(data);
+        if (data.length < 1000) break;
+        from += 1000;
+      }
+      const suffixMap = buildPhoneSuffixMap(companies);
+      const { rows } = matchCallsToCompanies(callLog, suffixMap);
+      if (rows.length > 0) {
+        const { error: callsUpsertError } = await admin
+          .from("company_daily_calls")
+          .upsert(rows, { onConflict: "company_id,call_date" });
+        if (callsUpsertError) {
+          console.error("[dialer-snapshot] company_daily_calls upsert failed:", callsUpsertError.message);
+        } else {
+          companyCallsSynced = rows.length;
+        }
+      }
+    }
+  } catch (e) {
+    console.error("[dialer-snapshot] company-call sync threw:", e instanceof Error ? e.message : e);
+  }
+
   await logAttempt(true, null, summaries.length, attemptsUsed);
-  return NextResponse.json({ snapshot_date: todayStr, agent_count: summaries.length, calls_synced: callsRows.length, attemptsUsed });
+  return NextResponse.json({
+    snapshot_date: todayStr,
+    agent_count: summaries.length,
+    calls_synced: callsRows.length,
+    company_calls_synced: companyCallsSynced,
+    attemptsUsed,
+  });
 }
