@@ -6457,6 +6457,29 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     109's own re-run reproduced once more mid-session, unrelated to this
     change - passed cleanly on the next re-run).
 
+111. **QA-Bewertungen call picker: status filter — shipped (2026-08-19).**
+    Anis: "add posibility to filter on status in of the calls." A real day
+    for one agent can carry 70+ calls across ~6 real Vici status codes (N,
+    CBHOLD, NI, KV, APNE, PARK), making the picker table long to scan for
+    one specific outcome. Client-side only, since every call for the
+    selected agent/day is already fetched server-side (§14 item 109) - no
+    new request needed. `components/qa-call-picker.tsx`'s `QaCallPicker`
+    gained a `statusFilter` state + a `<select>` ("Status filtern") derived
+    from the real distinct statuses present in that day's calls, each
+    option labeled with its own real count (e.g. "N (36)"); an empty-state
+    message when a filter yields zero rows. Purely narrows what's
+    displayed/selectable - doesn't touch the underlying `calls` prop, the
+    Agent/Datum form, or anything server-side.
+
+    Verified live (throwaway admin test account, deleted after) against
+    Alan Sačić's real 2026-08-17 call log: dropdown correctly showed real
+    per-status counts (APNE 6, CBHOLD 9, KV 7, N 36, NI 12, PARK 2, summing
+    to the real 72-call total); selecting "PARK" correctly narrowed the
+    table from 72 rows to exactly the 2 real PARK calls. Typecheck/lint
+    clean (one real `react/no-unescaped-entities` lint error on the
+    empty-state message's literal quotes, fixed with `&quot;`), full suite
+    green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

@@ -50,6 +50,10 @@ export function QaCallPicker({
   selectedDate: string;
 }) {
   const [selectedCall, setSelectedCall] = useState<DialerCallLogRow | null>(null);
+  const [statusFilter, setStatusFilter] = useState("");
+
+  const statusOptions = [...new Set(calls.map((c) => c.status))].sort();
+  const filteredCalls = statusFilter ? calls.filter((c) => c.status === statusFilter) : calls;
 
   const prefill: EvaluationPrefill | undefined = selectedCall
     ? {
@@ -89,6 +93,25 @@ export function QaCallPicker({
           </Button>
         </form>
 
+        {calls.length > 0 ? (
+          <div className="mt-3 flex flex-col gap-1">
+            <Label htmlFor="statusFilter">Status filtern</Label>
+            <select
+              id="statusFilter"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className={`${selectClassName} w-fit`}
+            >
+              <option value="">Alle Status ({calls.length})</option>
+              {statusOptions.map((status) => (
+                <option key={status} value={status}>
+                  {status} ({calls.filter((c) => c.status === status).length})
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+
         <div className="mt-4">
           {dialerError ? (
             <p className="text-sm text-destructive">Dialer nicht erreichbar: {dialerError}</p>
@@ -97,6 +120,8 @@ export function QaCallPicker({
               Keine Anrufe für diesen Mitarbeiter an diesem Tag gefunden (echte Anruf-Historie beginnt am
               10.08.2026).
             </p>
+          ) : filteredCalls.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Keine Anrufe mit Status &quot;{statusFilter}&quot; gefunden.</p>
           ) : (
             <div className="overflow-x-auto rounded-lg border">
               <table className="w-full text-sm">
@@ -111,7 +136,7 @@ export function QaCallPicker({
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {calls.map((call, i) => (
+                  {filteredCalls.map((call, i) => (
                     <tr key={`${call.startTime}-${i}`} className={selectedCall === call ? "bg-accent" : undefined}>
                       <td className="px-3 py-2 tabular-nums">{formatCallTime(call.startTime)}</td>
                       <td className="px-3 py-2 tabular-nums">{formatDurationMinSec(call.lengthInSec)}</td>
