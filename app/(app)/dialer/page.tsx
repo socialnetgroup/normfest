@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { Activity, History, Wifi } from "lucide-react";
+import { Activity, History } from "lucide-react";
 
 import { AutoRefresh } from "@/components/auto-refresh";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +9,6 @@ import { Label } from "@/components/ui/label";
 import { DialerStatusTable } from "@/components/dialer-status-table";
 import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { cn } from "@/lib/utils";
 import {
   buildDialerAgentSummaries,
   fetchDialerAgentStatuses,
@@ -103,10 +102,6 @@ const dateLabelFormat: Record<"de" | "bs", Intl.DateTimeFormat> = {
 const T = {
   de: {
     title: "Dialer",
-    statusTitle: "Status im Tool",
-    statusDesc:
-      "Eigener In-App-Status (Login + Heartbeat, alle 30s) - getrennt vom echten Dialer-Status unten, zeigt nur ob und wo ein Agent gerade in diesem Tool aktiv ist.",
-    noAccounts: "Keine Agenten-Konten vorhanden.",
     online: "Online",
     idle: "Angemeldet, gerade nicht aktiv",
     created: "Konto erstellt, noch nie angemeldet",
@@ -127,10 +122,6 @@ const T = {
   },
   bs: {
     title: "Dialer",
-    statusTitle: "Status u alatu",
-    statusDesc:
-      "Vlastiti status u alatu (prijava + heartbeat, svakih 30s) - odvojeno od stvarnog Dialer-statusa ispod, pokazuje samo da li i gdje je agent trenutno aktivan u ovom alatu.",
-    noAccounts: "Nema agentskih naloga.",
     online: "Online",
     idle: "Prijavljen, trenutno neaktivan",
     created: "Nalog kreiran, još se nije prijavio",
@@ -257,12 +248,14 @@ export default async function DialerPage({
         return order[a.status] - order[b.status] || a.name.localeCompare(b.name);
       });
 
-    // "Status u alatu" merged into the Live-Status table for report@
-    // (2026-08-18, "status u alatu dodati poslije statusa u dialeru i istu
-    // tabelu") - pre-formatted here (where pathLabel/locale already live)
-    // rather than duplicated inside DialerStatusTable. Only built/passed
-    // for report - admin keeps the existing separate "Status im Tool" card
-    // untouched ("u adminu ostaviti puni prikaz").
+    // "Status im Tool" merged into the Live-Status table (2026-08-18 for
+    // report@: "status u alatu dodati poslije statusa u dialeru i istu
+    // tabelu"; 2026-08-19 for admin too: "Add the status im tool to the
+    // status im dialer in the live status part, so we merge it like in
+    // report") - pre-formatted here (where pathLabel/locale already live)
+    // rather than duplicated inside DialerStatusTable. The old standalone
+    // "Status im Tool" card (admin-only) is gone now that its data lives in
+    // this merged column instead.
     appStatusByAgentId = new Map(
       appStatusRows.map((row) => {
         const label =
@@ -341,52 +334,6 @@ export default async function DialerPage({
         <h1 className="font-heading text-2xl font-semibold tracking-tight">{t.title}</h1>
       </div>
 
-      {isAdmin ? (
-        <Card>
-          <CardHeader>
-            <IconTitle icon={Wifi}>{t.statusTitle}</IconTitle>
-            <p className="text-sm text-muted-foreground">{t.statusDesc}</p>
-          </CardHeader>
-          <CardContent>
-            {appStatusRows.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{t.noAccounts}</p>
-            ) : (
-              <ul className="flex flex-col divide-y">
-                {appStatusRows.map((row) => {
-                  const statusLabel =
-                    row.status === "online"
-                      ? `${t.online}${row.path ? ` - ${pathLabel(row.path, locale)}` : ""}`
-                      : row.status === "idle"
-                        ? t.idle
-                        : row.status === "created"
-                          ? t.created
-                          : t.none;
-                  return (
-                    <li key={row.agentId} className="flex items-center justify-between gap-3 py-2 text-sm">
-                      <span className="font-medium">{row.name}</span>
-                      <span
-                        className={cn(
-                          "rounded-full px-2 py-0.5 text-xs font-medium",
-                          row.status === "online"
-                            ? "bg-success/20 text-success-foreground"
-                            : row.status === "idle"
-                              ? "bg-primary/15 text-primary"
-                              : row.status === "created"
-                                ? "bg-warning/20 text-warning-foreground"
-                                : "bg-muted text-muted-foreground",
-                        )}
-                      >
-                        {statusLabel}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      ) : null}
-
       {canView ? (
         <div className="mx-[calc(50%-50vw)] w-screen px-4 md:px-8">
           <Card>
@@ -407,7 +354,7 @@ export default async function DialerPage({
                   locale={locale}
                   agentHref={agentHref}
                   variant={isReport ? "compact" : "full"}
-                  appStatusByAgentId={isReport ? appStatusByAgentId : undefined}
+                  appStatusByAgentId={appStatusByAgentId}
                 />
               )}
             </CardContent>

@@ -6559,6 +6559,58 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     / Assistent-Fragen - QA-Anrufe confirmed absent. Typecheck/lint clean,
     full suite green (41/41).
 
+114. **Dialer Zeitverteilung colors darkened + "Status im Tool" merged into
+    admin's Live-Status table too — shipped (2026-08-19).**
+
+    Anis: "in the dialer the 'green and yellow' at zeitverteilung
+    (admin/report). Color them a bit darker green/yellows to be better
+    visible on white." §14 item 102's earlier fix had moved
+    Sprechzeit/Pausenzeit from the too-dark/muted `-foreground` tokens to
+    the plain `--success`/`--warning` tokens (chosen because badges/other
+    UI use them and they read correctly there) - but those are deliberately
+    light+saturated for use as a badge FILL, not built for plain text
+    against white, so they were still hard to read here. New
+    `--success-text`/`--warning-text` tokens (`app/globals.css`, registered
+    in `@theme inline` as `--color-success-text`/`--color-warning-text`) -
+    meaningfully darker (light-mode L 0.72→0.5 and 0.83→0.55) while dark
+    mode reuses the existing `--success`/`--warning` values unchanged (that
+    background already gave them enough contrast per item 102's own
+    verification). Scoped to just this one use in
+    `components/dialer-status-table.tsx` (`text-success-text`/
+    `text-warning-text` on the talk/pause cells only) rather than changing
+    the shared `--success`/`--warning` tokens themselves, which are already
+    tuned and verified for badges/other UI elsewhere in the app. Verified
+    live via `getComputedStyle` (throwaway admin test account, deleted
+    after): talk color moved from a light `lab(69.4 ...)` to a clearly
+    darker, still-green `lab(43.9 -47.1 28.6)`; pause moved from
+    `lab(80.3 ...)` to `lab(47.5 22.5 91.6)`.
+
+    Second ask, same message: "Add the status im tool to the status im
+    dialer in the live status part, so we merge it like in report. This is
+    in admin." Item 100's merge (`appStatusByAgentId` passed into
+    `DialerStatusTable`) had only ever been wired for report@ ("admin
+    keeps the existing separate 'Status im Tool' card... u adminu ostaviti
+    puni prikaz" was the explicit call at the time) - now reversed: the
+    standalone admin-only "Status im Tool" card on `/dialer`
+    (`app/(app)/dialer/page.tsx`) is removed, and the same merged column
+    used for report@ is now passed unconditionally
+    (`appStatusByAgentId={appStatusByAgentId}`, no longer report-gated) so
+    admin sees it inline in the Live-Status table too, right after the
+    real dialer Status column - matching report's layout exactly, per
+    Anis's own framing. The Verlauf (historical snapshot) table
+    intentionally still has no "Status im Tool" column, unchanged - that's
+    a point-in-time dialer capture with no in-app-heartbeat equivalent to
+    merge in. Dead code cleanup that fell out of removing the standalone
+    card: the `Wifi` icon import, the `cn` import, and the now-unused
+    `statusTitle`/`statusDesc`/`noAccounts` DE/BS translation strings in
+    `T` were all removed rather than left dangling. Verified live
+    (throwaway admin test account, deleted after): `/dialer` no longer
+    renders a standalone "Status im Tool" card, and the real Live-Status
+    table shows a "Status im Tool" column with real per-agent values (e.g.
+    "Online - Firmenprofil", "Angemeldet, gerade nicht aktiv") between
+    Status and Zeit im Status - identical shape to what report@ already
+    had. Typecheck/lint clean, full suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

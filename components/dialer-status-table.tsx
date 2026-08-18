@@ -304,8 +304,8 @@ function buildColumns(
       key: "talkTime",
       group: "vrijeme",
       header: t.razgovor,
-      cell: (a) => <span className="text-success">{a.talkTime}</span>,
-      foot: (tt) => <span className="text-success">{formatSecondsAsHms(tt.talkSeconds)}</span>,
+      cell: (a) => <span className="text-success-text">{a.talkTime}</span>,
+      foot: (tt) => <span className="text-success-text">{formatSecondsAsHms(tt.talkSeconds)}</span>,
       alwaysReal: true,
     },
     {
@@ -327,12 +327,12 @@ function buildColumns(
       group: "vrijeme",
       header: t.pauza,
       cell: (a) => (
-        <span className="text-warning">
+        <span className="text-warning-text">
           {a.pauseTime} <span className="text-muted-foreground">({pct.format(a.pauseShare)})</span>
         </span>
       ),
       foot: (tt) => (
-        <span className="text-warning">
+        <span className="text-warning-text">
           {formatSecondsAsHms(tt.pauseSeconds)}{" "}
           <span className="font-normal text-muted-foreground">({pct.format(tt.pauseShare)})</span>
         </span>
