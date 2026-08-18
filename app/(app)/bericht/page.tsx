@@ -19,6 +19,7 @@ const eur = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR",
 const eurCents = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", minimumFractionDigits: 2 });
 const pct = new Intl.NumberFormat("de-DE", { style: "percent", minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const pct1 = new Intl.NumberFormat("de-DE", { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const minutesFmt = new Intl.NumberFormat("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const num = (n: number) => n.toLocaleString("de-DE");
 
 const ONLINE_THRESHOLD_MS = 90_000;
@@ -211,7 +212,25 @@ export default async function BerichtPage() {
   }
   const dailyAvgRevenueMonth = teamRevenueMonth / Math.max(1, realWorkingDaysInMonth(currentMonthKey));
 
-  // "Aktivni agenti trenutno" - isti prag/logika kao /dialer's Status im
+  // Projektovani promet za tekući mjesec - Anis, 2026-08-18: "Dodati
+  // PROJEKTOVANI OČEKIVANI PROMET ZA TEKUĆI MJESEC u Tiles". Run-rate
+  // procjena: stvarni dnevni prosjek (već izračunat gore, dijeljen sa
+  // stvarnim radnim danima dosad) pomnožen sa UKUPNIM brojem radnih dana
+  // (pon-pet) u cijelom mjesecu - ne kalendarskim danima, jer se vikendom
+  // ne radi (isti princip kao "Dnevni prosjek prometa" iznad).
+  function totalWeekdaysInMonth(month: string): number {
+    const [year, m] = month.split("-").map(Number);
+    const daysInMonth = new Date(year, m, 0).getDate();
+    let count = 0;
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dow = new Date(year, m - 1, d).getDay();
+      if (dow !== 0 && dow !== 6) count++;
+    }
+    return count;
+  }
+  const projectedRevenueMonth = dailyAvgRevenueMonth * totalWeekdaysInMonth(currentMonthKey);
+
+  // "Online agenti trenutno" - isti prag/logika kao /dialer's Status im
   // Tool (fn_get_agent_login_status + 90s heartbeat prag).
   const activeAgentsNow = (loginStatusRows ?? []).filter(
     (row) => row.last_seen_at && now.getTime() - new Date(row.last_seen_at).getTime() < ONLINE_THRESHOLD_MS,
@@ -279,7 +298,7 @@ export default async function BerichtPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <StatTile
           label="Timski promet (mjesec)"
           value={eur.format(teamRevenueMonth)}
@@ -288,12 +307,18 @@ export default async function BerichtPage() {
         />
         <StatTile label="Dnevni prosjek prometa" value={eur.format(dailyAvgRevenueMonth)} accent="primary" />
         <StatTile
+          label="Projektovani promet (mjesec)"
+          value={eur.format(projectedRevenueMonth)}
+          sub="Na osnovu dnevnog prosjeka"
+          accent="primary"
+        />
+        <StatTile
           label="Feedback ukupno"
           value={num(feedbackTotal ?? 0)}
           sub={`Ove sedmice: ${num(feedbackWeek ?? 0)} · Danas: ${num(feedbackToday ?? 0)}`}
           accent="success"
         />
-        <StatTile label="Aktivni agenti trenutno" value={num(activeAgentsNow)} accent="secondary" />
+        <StatTile label="Online agenti trenutno" value={num(activeAgentsNow)} accent="secondary" />
       </div>
 
       <Card>
@@ -317,7 +342,7 @@ export default async function BerichtPage() {
               />
               <StatTile
                 label="Prosječno vrijeme obrade"
-                value={`${Math.round(dialerTotals.ahtSeconds)}s`}
+                value={`${minutesFmt.format(dialerTotals.ahtSeconds / 60)} min`}
                 accent="secondary"
               />
               <StatTile label="Zauzetost" value={pct.format(dialerTotals.occupancy)} accent="secondary" />

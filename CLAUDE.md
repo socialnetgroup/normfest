@@ -5715,6 +5715,42 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     narrowed to that agent's own 15 real questions. Typecheck/lint clean, full suite green
     (41/41).
 
+97. **Four Bericht/Tim follow-ups — shipped (2026-08-18).** Anis, one message: *"Feedback
+    po Agentu dodati u TIM; Dodati PROJEKTOVANI OČEKIVANI PROMET ZA TEKUĆI MJESEC u Tiles
+    na Izvještaj gore; Aktivni agenti trenutno = online agenti trenutno u izvjestaju u
+    tiles; Prosječno vrijeme obrade u MINUTE pretovriti u izvjestaju u tiles."*
+
+    - **`/tim`: real per-agent, per-month Feedback count added.** New `sales_feedback`
+      query (`agent_id, created_at`, no filter - full history like the rest of the page)
+      joined via `agents.profile_id` (same key-space conversion as every other
+      `sales_feedback.agent_id`-is-a-profile-id case in this app, e.g. §14 items 30/83/95)
+      into the existing month→agent aggregation. New "Feedback" column between
+      Prodaje/Pozivi in each monthly table, plus a "Timski feedback" line in each month's
+      summary row alongside Timski promet/Timske prodaje.
+    - **New "Projektovani promet (mjesec)" tile on `/bericht`.** A run-rate projection:
+      the already-correct `dailyAvgRevenueMonth` (§14 item 94's own working-days fix)
+      multiplied by the total real weekdays (Mon-Fri) in the whole current month, not
+      just the days elapsed - same "don't divide/multiply by calendar days when weekends
+      are real €0" principle already applied to the daily average itself. Top tile grid
+      widened from 4 to 5 columns (`lg:grid-cols-5`).
+    - **"Aktivni agenti trenutno" renamed "Online agenti trenutno"** - Anis's message
+      states the intended definition explicitly; the underlying calculation was already
+      exactly that (real-time online count via `fn_get_agent_login_status` + the same 90s
+      heartbeat threshold `/dialer`'s own "Status im Tool" uses) - only the label was
+      ambiguous, now made explicit rather than left implicit.
+    - **"Prosječno vrijeme obrade" (AHT) tile converted from seconds to minutes** in the
+      Dialer (danas) card - was `${Math.round(ahtSeconds)}s`, now
+      `${(ahtSeconds/60).toFixed(1)} min` (de-DE decimal comma via `Intl.NumberFormat`).
+
+    Verified live end-to-end (throwaway admin test account, deleted after): Izvještaj's
+    top row now shows 5 tiles incl. "Projektovani promet (mjesec)" (70.959 € for August -
+    sanity-checked: 3.379 € daily avg × 21 real August weekdays ≈ matches), "Online
+    agenti trenutno" (10, matching the real currently-online count), and "Prosječno
+    vrijeme obrade" correctly showing "2,2 min" instead of raw seconds; `/tim`'s monthly
+    tables show real Feedback counts per agent (e.g. Alan Sačić 373 for August, matching
+    real `sales_feedback` volume) with correctly-empty "-" for July/June (before real
+    feedback activity started). Typecheck/lint clean, full suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

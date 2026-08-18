@@ -45,18 +45,24 @@ export default async function TimPage() {
   const supabase = await createClient();
   const today = new Date().toISOString().slice(0, 10);
 
-  const [{ data, error }, { data: allAgents }, { data: todayRows }, { data: bonusSettings }] = await Promise.all([
-    supabase
-      .from("agent_daily_performance")
-      .select("date, revenue, sales_count, calls_count, agent_id, day_off, agents(full_name)")
-      .order("date"),
-    supabase.from("agents").select("id, full_name").eq("active", true).order("full_name"),
-    supabase.from("agent_daily_performance").select("agent_id, revenue, day_off").eq("date", today),
-    supabase
-      .from("settings")
-      .select("key, value")
-      .in("key", ["bonus_thresholds", "bonus_min_contribution_pct", "bonus_min_qualifying_agents", "bonus_visible"]),
-  ]);
+  const [{ data, error }, { data: allAgents }, { data: todayRows }, { data: bonusSettings }, { data: feedbackRows }] =
+    await Promise.all([
+      supabase
+        .from("agent_daily_performance")
+        .select("date, revenue, sales_count, calls_count, agent_id, day_off, agents(full_name)")
+        .order("date"),
+      supabase.from("agents").select("id, full_name, profile_id").eq("active", true).order("full_name"),
+      supabase.from("agent_daily_performance").select("agent_id, revenue, day_off").eq("date", today),
+      supabase
+        .from("settings")
+        .select("key, value")
+        .in("key", ["bonus_thresholds", "bonus_min_contribution_pct", "bonus_min_qualifying_agents", "bonus_visible"]),
+      // Anis, 2026-08-18: "Feedback po Agentu dodati u TIM" - sales_feedback.agent_id
+      // is a PROFILE id (auth.uid()), not agents.id (same key-space distinction
+      // already hit multiple times elsewhere in this app) - converted via
+      // agents.profile_id below before grouping by month.
+      supabase.from("sales_feedback").select("agent_id, created_at"),
+    ]);
 
   if (error) {
     return (
@@ -93,7 +99,10 @@ export default async function TimPage() {
 
   const byMonth = new Map<
     string,
-    Map<string, { agentId: string; name: string; revenue: number; sales: number; calls: number; bonusKm: number }>
+    Map<
+      string,
+      { agentId: string; name: string; revenue: number; sales: number; calls: number; feedback: number; bonusKm: number }
+    >
   >();
   for (const row of rows) {
     const agentName = row.agents?.full_name;
@@ -101,12 +110,25 @@ export default async function TimPage() {
     const month = row.date.slice(0, 7);
     if (!byMonth.has(month)) byMonth.set(month, new Map());
     const agentMap = byMonth.get(month)!;
-    const entry = agentMap.get(row.agent_id) ?? { agentId: row.agent_id, name: agentName, revenue: 0, sales: 0, calls: 0, bonusKm: 0 };
+    const entry =
+      agentMap.get(row.agent_id) ?? { agentId: row.agent_id, name: agentName, revenue: 0, sales: 0, calls: 0, feedback: 0, bonusKm: 0 };
     entry.revenue += row.revenue;
     entry.sales += row.sales_count;
     entry.calls += row.calls_count ?? 0;
     entry.bonusKm += bonusByDate.get(row.date)?.get(row.agent_id) ?? 0;
     agentMap.set(row.agent_id, entry);
+  }
+
+  const agentIdByProfileId = new Map(
+    (allAgents ?? []).filter((a) => a.profile_id).map((a) => [a.profile_id as string, a.id]),
+  );
+  for (const row of feedbackRows ?? []) {
+    const agentId = agentIdByProfileId.get(row.agent_id);
+    if (!agentId) continue;
+    const month = row.created_at.slice(0, 7);
+    const agentMap = byMonth.get(month);
+    const entry = agentMap?.get(agentId);
+    if (entry) entry.feedback += 1;
   }
 
   const months = [...byMonth.keys()].sort().reverse();
@@ -203,6 +225,7 @@ export default async function TimPage() {
           const sorted = [...agentMap.entries()].sort((a, b) => b[1].revenue - a[1].revenue);
           const teamRevenue = sorted.reduce((sum, [, v]) => sum + v.revenue, 0);
           const teamSales = sorted.reduce((sum, [, v]) => sum + v.sales, 0);
+          const teamFeedback = sorted.reduce((sum, [, v]) => sum + v.feedback, 0);
           const teamBonusKm = sorted.reduce((sum, [, v]) => sum + v.bonusKm, 0);
 
           return (
@@ -217,6 +240,9 @@ export default async function TimPage() {
                   </span>
                   <span>
                     Timske prodaje: <span className="font-medium text-foreground">{teamSales}</span>
+                  </span>
+                  <span>
+                    Timski feedback: <span className="font-medium text-foreground">{teamFeedback}</span>
                   </span>
                   {bonusVisible ? (
                     <span>
@@ -234,6 +260,7 @@ export default async function TimPage() {
                         <th className="px-3 py-2 font-medium">Agent</th>
                         <th className="px-3 py-2 font-medium">Promet</th>
                         <th className="px-3 py-2 font-medium">Prodaje</th>
+                        <th className="px-3 py-2 font-medium">Feedback</th>
                         <th className="px-3 py-2 font-medium">Pozivi</th>
                         <th className="px-3 py-2 font-medium">Konverzija (Prodaje/Pozivi)</th>
                         {bonusVisible ? <th className="px-3 py-2 font-medium">Bonus (KM)</th> : null}
@@ -249,6 +276,7 @@ export default async function TimPage() {
                           </td>
                           <td className="px-3 py-2">{eur.format(v.revenue)}</td>
                           <td className="px-3 py-2">{v.sales}</td>
+                          <td className="px-3 py-2">{v.feedback > 0 ? v.feedback : "-"}</td>
                           <td className="px-3 py-2">{v.calls > 0 ? v.calls : "-"}</td>
                           <td className="px-3 py-2">{v.calls > 0 ? pct.format(v.sales / v.calls) : "-"}</td>
                           {bonusVisible ? (
