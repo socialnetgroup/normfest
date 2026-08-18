@@ -6915,6 +6915,47 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     14.08.2026" rendered correctly, matching the DB exactly. Typecheck/lint
     clean, full suite green (41/41).
 
+121. **ANALYZE batch for the 203 companies resolved from "Unklare Treffer" —
+    done (2026-08-19).** Anis manually resolved a chunk of the ambiguous
+    Places queue by hand; per the already-agreed rollout plan (§14 item
+    67's step 3), submitted the resulting backlog via the Batches API
+    (`node scripts/submit-analyze-batch.mjs`, `msgbatch_01Ak1K6zamzZVGU3BiWAdGfj`)
+    - 203/203 succeeded, **real cost $2.0357 ($0.0101/company)**, cheaper
+    than the sync-call-derived estimate thanks to the batch discount.
+    `/admin/anreicherung-uebersicht` reads live (confirmed no cache/
+    revalidate override on that page), so it reflected the new numbers
+    automatically, no separate action needed.
+
+    **1 of 203 write-backs failed** - "Gericke Transport GmbH", the exact
+    same company that already failed 3 times for the same reason in §14
+    item 67 ("Unterminated string in JSON", root-caused there to a real
+    review containing an informal apostrophe-as-quote-mark the model
+    apparently mis-escapes when reproducing it verbatim). Confirmed the
+    same review text is still present (`"...bei mir zuhaus'."`) - this time,
+    since the failure genuinely recurred rather than being a one-off,
+    fixed it properly instead of deferring a third time: added an explicit
+    "gültiges JSON"/quote-escaping instruction to `buildPrompt()`
+    (`lib/enrichment/analyze.mjs`) - literal quotes/apostrophes inside a
+    verbatim excerpt must be valid-JSON-escaped, and the model should trim
+    the quote at an unambiguous point rather than risk a malformed string.
+
+    **Real, honest result of the fix: still non-deterministic, not a clean
+    single-shot resolution.** Retried this one company 3 times after the
+    prompt change - attempt 1 failed with a *different* malformed-JSON
+    position (still not the `zuhaus'` review, a different quoted excerpt
+    entirely), attempt 2 failed with an empty/no-text-block response (the
+    already-documented rare model-level variance from §10 M7 finding #2,
+    unrelated to escaping), attempt 3 succeeded cleanly (4 strengths, 5
+    weaknesses, 5 opportunities, real quotes). Verified via direct DB
+    query: `analyzed_at` set, backlog now genuinely at **0 remaining**
+    (project-wide: 14,169 companies analyzed). The prompt fix is a real,
+    permanent improvement (explicit escaping guidance for every future
+    ANALYZE call, sync and batch alike) but doesn't guarantee zero-retry
+    success on a single stubborn company - consistent with this project's
+    already-documented experience that Claude's structured JSON output
+    has genuine run-to-run variance under `json_schema` mode, not a fixed
+    bug with one fix.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
