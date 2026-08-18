@@ -41,11 +41,20 @@ export default async function MeineErgebnissePage() {
     );
   }
 
-  const { data: rows, error } = await supabase
-    .from("agent_daily_performance")
-    .select("date, revenue, sales_count, calls_count, day_off")
-    .eq("agent_id", myAgent.id)
-    .order("date");
+  const [{ data: rows, error }, { data: feedbackRows }] = await Promise.all([
+    supabase
+      .from("agent_daily_performance")
+      .select("date, revenue, sales_count, calls_count, day_off")
+      .eq("agent_id", myAgent.id)
+      .order("date"),
+    // Wiedervorlage per day (2026-08-18) - agents can read their own
+    // sales_feedback (shared-visibility RLS, §14 item 19), unlike
+    // dialer_daily_snapshots (admin/report-only), so Sprechzeit stays null
+    // here while Wiedervorlage is real.
+    user
+      ? supabase.from("sales_feedback").select("created_at, wiedervorlage_date").eq("agent_id", user.id)
+      : Promise.resolve({ data: [] as { created_at: string; wiedervorlage_date: string | null }[] }),
+  ]);
 
   if (error) {
     return (
@@ -53,6 +62,13 @@ export default async function MeineErgebnissePage() {
         Fehler beim Laden: {error.message}
       </p>
     );
+  }
+
+  const wiedervorlageByDate = new Map<string, number>();
+  for (const row of feedbackRows ?? []) {
+    if (!row.wiedervorlage_date) continue;
+    const date = row.created_at.slice(0, 10);
+    wiedervorlageByDate.set(date, (wiedervorlageByDate.get(date) ?? 0) + 1);
   }
 
   const byMonth = new Map<string, DayEntry[]>();
@@ -66,6 +82,8 @@ export default async function MeineErgebnissePage() {
       callsCount: r.calls_count,
       dayOff: r.day_off,
       bonusKm: 0,
+      talkSeconds: null,
+      wiedervorlageCount: wiedervorlageByDate.get(r.date) ?? 0,
     });
   }
   const months = [...byMonth.keys()].sort().reverse();

@@ -6,6 +6,7 @@ import { MonthCalendar, type DayEntry } from "@/components/team/month-calendar";
 import { computeBonusByDate, type BonusThreshold } from "@/lib/team/bonus";
 import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { parseDialerTimeToSeconds, type DialerAgentSummary } from "@/lib/dialer/status";
 
 const eur = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
 const eurCents = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", minimumFractionDigits: 2 });
@@ -38,21 +39,32 @@ export default async function BerichtAgentPage({ params }: { params: Promise<{ a
   if (profile?.role !== "admin" && profile?.role !== "report") notFound();
 
   const supabase = await createClient();
-  const [{ data: agent }, { data: rows, error }, { data: allRows }, { data: bonusSettings }] = await Promise.all([
-    supabase.from("agents").select("id, full_name, gebiet, active").eq("id", agentId).single(),
-    supabase
-      .from("agent_daily_performance")
-      .select("date, revenue, sales_count, calls_count, day_off")
-      .eq("agent_id", agentId)
-      .order("date"),
-    supabase.from("agent_daily_performance").select("agent_id, date, revenue, day_off"),
-    supabase
-      .from("settings")
-      .select("key, value")
-      .in("key", ["bonus_thresholds", "bonus_min_contribution_pct", "bonus_min_qualifying_agents", "bonus_visible"]),
-  ]);
-
+  const { data: agent } = await supabase
+    .from("agents")
+    .select("id, full_name, gebiet, active, profile_id")
+    .eq("id", agentId)
+    .single();
   if (!agent) notFound();
+
+  const [{ data: rows, error }, { data: allRows }, { data: bonusSettings }, { data: snapshotRows }, { data: feedbackRows }] =
+    await Promise.all([
+      supabase
+        .from("agent_daily_performance")
+        .select("date, revenue, sales_count, calls_count, day_off")
+        .eq("agent_id", agentId)
+        .order("date"),
+      supabase.from("agent_daily_performance").select("agent_id, date, revenue, day_off"),
+      supabase
+        .from("settings")
+        .select("key, value")
+        .in("key", ["bonus_thresholds", "bonus_min_contribution_pct", "bonus_min_qualifying_agents", "bonus_visible"]),
+      // Sprechzeit + Wiedervorlage per day (2026-08-18) - same real fields
+      // as admin/team/[agentId], see that page's own comments.
+      supabase.from("dialer_daily_snapshots").select("snapshot_date, agents"),
+      agent.profile_id
+        ? supabase.from("sales_feedback").select("created_at, wiedervorlage_date").eq("agent_id", agent.profile_id)
+        : Promise.resolve({ data: [] as { created_at: string; wiedervorlage_date: string | null }[] }),
+    ]);
   if (error) {
     return (
       <p className="text-sm text-destructive" role="alert">
@@ -75,6 +87,19 @@ export default async function BerichtAgentPage({ params }: { params: Promise<{ a
     minQualifyingAgents,
   );
 
+  const talkSecondsByDate = new Map<string, number>();
+  for (const snap of snapshotRows ?? []) {
+    const summaries = (snap.agents as DialerAgentSummary[] | null) ?? [];
+    const mine = summaries.find((s) => s.agentId === agentId);
+    if (mine) talkSecondsByDate.set(snap.snapshot_date, parseDialerTimeToSeconds(mine.talkTime));
+  }
+  const wiedervorlageByDate = new Map<string, number>();
+  for (const row of feedbackRows ?? []) {
+    if (!row.wiedervorlage_date) continue;
+    const date = row.created_at.slice(0, 10);
+    wiedervorlageByDate.set(date, (wiedervorlageByDate.get(date) ?? 0) + 1);
+  }
+
   const byMonth = new Map<string, DayEntry[]>();
   for (const r of rows ?? []) {
     const month = r.date.slice(0, 7);
@@ -86,6 +111,8 @@ export default async function BerichtAgentPage({ params }: { params: Promise<{ a
       callsCount: r.calls_count,
       dayOff: r.day_off,
       bonusKm: bonusByDate.get(r.date)?.get(agentId) ?? 0,
+      talkSeconds: talkSecondsByDate.get(r.date) ?? null,
+      wiedervorlageCount: wiedervorlageByDate.get(r.date) ?? 0,
     });
   }
   const months = [...byMonth.keys()].sort().reverse();
@@ -145,7 +172,7 @@ export default async function BerichtAgentPage({ params }: { params: Promise<{ a
                     </span>
                   ) : null}
                 </div>
-                <MonthCalendar month={month} days={days} showBonus={bonusVisible} />
+                <MonthCalendar month={month} days={days} showBonus={bonusVisible} locale="bs" />
               </CardContent>
             </Card>
           );

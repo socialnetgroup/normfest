@@ -6026,6 +6026,89 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     Both test accounts deleted after. Typecheck/lint clean, full suite
     green (41/41).
 
+    **Same-day follow-up: dialer colors weren't reading as green/yellow —
+    real color-token mistake.** Anis: *"Vrijeme razgovora nije zeleno,
+    Pauza isto nije žuta boja."* Root cause: item 102's coloring used the
+    `-foreground` variants (`text-success-foreground`/`text-warning-foreground`),
+    which per `app/globals.css` are dark, low-lightness tokens designed to
+    pair WITH a matching tinted background (e.g. a badge:
+    `bg-success/15 text-success-foreground`, the exact pattern
+    `attendance-month-calendar.tsx` already used) - applied standalone on a
+    plain table cell, they read as a muted, barely-green/barely-yellow
+    color instead of a clear one. Switched Sprechzeit to `text-success`
+    and Pausenzeit to `text-warning` (the base tokens, already proven to
+    read correctly standalone elsewhere in this app, e.g. `text-destructive`
+    on Wartezeit/Nachbearbeitung/Totzeit and `text-success` on `/skript`'s
+    section captions). Verified via `getComputedStyle()` before and after:
+    talk moved from a dark `lab(17.6 -28.4 17.3)` to a visibly lighter,
+    more saturated `lab(69.4 -46.3 27.7)`; pause moved from a dark brownish
+    `lab(20.8 15.9 38.2)` to a light, clearly amber `lab(80.3 14.0 61.3)`.
+
+103. **MonthCalendar ("Vollständige Liste anzeigen") extended with real
+    Sprechzeit + Wiedervorlage, plus Bosnian locale support — shipped
+    (2026-08-18), same session.** Anis: *"sve ove glavne stvari kao umsatz,
+    sales, anrufe, s koliko je pricano, cr, wiedervorlage dodaj u
+    Vollständige Liste Anzeigen dio kod svakog agenta, prevedi na Bosanski i
+    taj dio toola."* `components/team/month-calendar.tsx` is shared by
+    `admin/team/[agentId]`, `bericht/[agentId]` (report role), and
+    `meine-ergebnisse` (agent's own view) - previously hardcoded German with
+    no talk-time/Wiedervorlage columns.
+
+    `DayEntry` gained `talkSeconds: number | null` and
+    `wiedervorlageCount: number`; the component gained a `locale?: "de"|"bs"`
+    prop with a small `T` translation table (day/revenue/sales/calls/talk/
+    cr/wv/bonus/off labels, "Vollständige Liste anzeigen"/"Prikaži punu
+    listu", weekday abbreviations) - "Wiedervorlage" itself stays
+    untranslated in bs too, already an established loanword on other
+    Bosnian pages (`/bericht`, `/tim`). Both the day-detail popover (click a
+    calendar day) and the full list table now show real Sprechzeit and
+    Wiedervorlage alongside the existing Umsatz/Sales/Anrufe/CR/Bonus.
+
+    **Data sourcing, two different real sources, one genuinely unavailable
+    per role:**
+    - Sprechzeit: `dialer_daily_snapshots` (date, agents jsonb), matched to
+      this agent's real `talkTime` per stored day - only ever available
+      from 2026-08-10 on (§14 item 24, when real daily snapshots started),
+      shown as "-" for earlier/missing days rather than a fabricated zero.
+      `dialer_daily_snapshots` has no agent-read RLS policy (admin-all +
+      report-select only, §14 item 91) - `meine-ergebnisse` correctly never
+      fetches it and always renders "-" for Sprechzeit, by design, not an
+      oversight.
+    - Wiedervorlage: real `sales_feedback` rows for this agent, counted per
+      calendar day by `created_at` (not by the scheduled `wiedervorlage_date`)
+      - the exact same "count by creation day" convention already
+      established in `/tim` (§14 item 97), reused rather than inventing a
+      second semantic for the same underlying signal. `agent_daily_performance`
+      pages scope this query by the agent's real `profile_id` (admin/report
+      pages) or the logged-in session's own `user.id` (`meine-ergebnisse`) -
+      never a full-table fetch.
+
+    **Real bug found and fixed before shipping, not guessed:**
+    `Intl.DateTimeFormat("bs", {day,month,year})` renders `"2026-08-31"`
+    (ISO order) in this environment's ICU data instead of the expected
+    `"31.08.2026."` - caught live while verifying the report role's rendered
+    dates, not assumed correct. Fixed by building the date string manually
+    (`formatDdMmYyyy()`, day.month.year with a trailing dot for bs, matching
+    the convention every other Bosnian page in this app already uses)
+    instead of trusting Intl's locale-numeric ordering.
+
+    Verified live end-to-end with three throwaway sessions (admin, report,
+    and a real agent - achieved by temporarily repointing a real agent's
+    `agents.profile_id` to a throwaway test account and reverting
+    immediately after, same pattern already established elsewhere in this
+    project, e.g. §14 items 30/58): admin's `/admin/team/[agentId]` shows
+    real Sprechzeit (e.g. "01:08:21" on a real day) and real Wiedervorlage
+    counts (e.g. "11" on 14.08) in German with `31.08.2026` (no trailing
+    dot); report's `/bericht/[agentId]` shows the identical real numbers
+    fully in Bosnian with `31.08.2026.` (trailing dot, after the date-format
+    fix); `/meine-ergebnisse` correctly shows real Wiedervorlage counts from
+    the logged-in session's own feedback (zero for the throwaway swap
+    session, which has no feedback history of its own - confirmed this is
+    expected given the test methodology, not a bug) while Sprechzeit stayed
+    "-" throughout, confirming the RLS boundary holds. Agent-row swap fully
+    reverted and confirmed (`profile_id` restored, throwaway accounts
+    deleted). Typecheck/lint clean, full suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
