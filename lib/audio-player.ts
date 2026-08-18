@@ -15,6 +15,17 @@
 // (same pattern already used for the sidebar's collapsed state) is how
 // components subscribe to this outside-React mutable source without an
 // effect-driven re-render.
+//
+// Real follow-up bug (2026-08-19, Anis: "Abspielen von Calls funktioniert
+// iwie noch nicht") - this worked in local dev (http://localhost) but
+// silently failed in production. Production is served over
+// https://normfest.social-net.ba, while the real recording URLs are plain
+// http:// (the dialer server has no HTTPS) - a browser loading http:// media
+// from an https:// page either silently fails the auto-upgraded request or
+// blocks it as mixed content, with no visible error either way. Playback
+// now goes through /api/dialer/recording, a same-origin (https) server-side
+// proxy - mixed-content rules only apply to requests the browser itself
+// makes, not ones the Next.js server makes on its behalf.
 
 let audioEl: HTMLAudioElement | null = null;
 let currentUrl: string | null = null;
@@ -85,7 +96,7 @@ export function toggleAudioPlayback(url: string) {
     return;
   }
 
-  audio.src = url;
+  audio.src = `/api/dialer/recording?url=${encodeURIComponent(url)}`;
   currentUrl = url;
   isLoading = true;
   notify();

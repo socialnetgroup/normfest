@@ -6735,6 +6735,76 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     afterward, confirming the signals/product_relations changes didn't
     regress anything already covered by the RLS/logic test suite.
 
+118. **Call-recording playback fixed — two real production-only root causes,
+    shipped (2026-08-19), Anis: "Abspielen von Calls funktioniert iwie noch
+    nicht."** The inline `AudioPlayButton` player (§14 item 117's own
+    prerequisite, shipped earlier the same day) worked correctly in local
+    dev but silently did nothing in production - "nothing happens" with no
+    visible error either way, on both counts, which is exactly what made
+    this look unexplainable from the UI alone.
+
+    **Root cause 1: mixed content.** Production is served over
+    `https://normfest.social-net.ba`, but the real recording URLs the
+    dialer returns are plain `http://` (the recording server,
+    `95.179.153.33`, has no HTTPS). A browser loading an `http://` media
+    resource from an `https://` page either silently fails the
+    auto-upgraded request or blocks it outright as mixed content - neither
+    produces a visible console error in most browsers, and this class of
+    bug never reproduces against `http://localhost` in local dev, which is
+    exactly why it passed every earlier local check. Fixed with a new
+    same-origin server-side proxy, `app/api/dialer/recording/route.ts`
+    (`GET`, session-authenticated, `ALLOWED_HOSTS` allow-list against
+    `95.179.153.33`/`socialnet.dialer.ba` so an authenticated proxy can't
+    become an open relay for arbitrary URLs/SSRF): the browser only ever
+    talks to our own HTTPS origin, and the real `http://` fetch happens
+    server-side, where mixed-content rules don't apply. Forwards `Range`
+    request headers (and returns `Content-Range`/`Accept-Ranges`/206
+    responses) so the `<audio>` element can seek/start without waiting for
+    the full file.
+
+    **Root cause 2, found by inspecting the real proxied response headers
+    before assuming the first fix was enough:** the dialer server itself
+    serves every recording with `Content-Type: application/forcedownload` -
+    a genuine "download this" instruction from the upstream, not a browser
+    quirk, and the real reason the original plain
+    `<a href target="_blank">` links never played audibly either. Since
+    every real recording URL path is `.../RECORDINGS/MP3/...`, the proxy
+    hardcodes `Content-Type: audio/mpeg` on its response rather than
+    trusting upstream, and deliberately does not forward any
+    `Content-Disposition` header (which could still force a download prompt
+    even with a corrected Content-Type).
+
+    `lib/audio-player.ts`'s module-level singleton `<audio>` element (§14
+    item 117) now points its `src` at
+    `/api/dialer/recording?url=<encoded original url>` instead of the raw
+    dialer URL directly - `toggleAudioPlayback()`'s own play/pause/loading
+    state logic is otherwise unchanged.
+
+    Verified live end-to-end against the real deployed proxy behavior
+    (throwaway admin test account on a real QA-Bewertungen call picker
+    page, deleted after): confirmed via `fetch(..., {cache: "no-store"})`
+    that the proxy returns `200`/`Content-Type: audio/mpeg` (not the
+    upstream's `application/forcedownload`); clicked a real recording's
+    play button through the actual UI and confirmed the button's
+    `aria-label` correctly flipped to "...pausieren" (playing state);
+    confirmed via `read_network_requests` that the real
+    `/api/dialer/recording?url=...` requests fired with `200 OK` then
+    `206 Partial Content` (proving Range-based seeking is genuinely
+    working, not just a full-file fetch); clicked again and confirmed the
+    label flipped back to "...abspielen" (pause). Typecheck/lint clean on
+    all touched files, full suite green (41/41).
+
+    **Not built, a suggestion Anis raised and this assessment answers:**
+    downloading/re-hosting played recordings into Supabase Storage. Not
+    recommended - the proxy fix already solves the real bug (playback)
+    without it, and re-storing real customer call audio would add real
+    storage cost plus a new data-retention/privacy surface for content this
+    app doesn't currently need to keep beyond what the dialer already
+    retains. Worth revisiting only if the proxy approach proves
+    insufficient in practice (e.g. the dialer's own recording retention
+    window turns out to be short and older calls need to stay reviewable
+    here).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
