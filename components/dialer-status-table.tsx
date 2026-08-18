@@ -280,52 +280,71 @@ function buildColumns(
     foot: (tt) => pct.format(tt.occupancy),
   });
 
-  if (variant === "full") {
-    cols.push(
-      {
-        key: "talkTime",
-        group: "vrijeme",
-        header: t.razgovor,
-        cell: (a) => a.talkTime,
-        foot: (tt) => formatSecondsAsHms(tt.talkSeconds),
-        alwaysReal: true,
-      },
-      { key: "waitTime", group: "vrijeme", header: t.cekanje, cell: (a) => a.waitTime, foot: (tt) => formatSecondsAsHms(tt.waitSeconds) },
-      { key: "dispoTime", group: "vrijeme", header: t.naknadna, cell: (a) => a.dispoTime, foot: (tt) => formatSecondsAsHms(tt.dispoSeconds) },
-      {
-        key: "pauseTime",
-        group: "vrijeme",
-        header: t.pauza,
-        cell: (a) => (
-          <>
-            {a.pauseTime} <span className="text-muted-foreground">({pct.format(a.pauseShare)})</span>
-          </>
-        ),
-        foot: (tt) => (
-          <>
-            {formatSecondsAsHms(tt.pauseSeconds)}{" "}
-            <span className="font-normal text-muted-foreground">({pct.format(tt.pauseShare)})</span>
-          </>
-        ),
-      },
-      {
-        key: "deadTime",
-        group: "vrijeme",
-        header: t.mrtvo,
-        cell: (a) => (
-          <>
-            {a.deadTime} <span className="text-muted-foreground">({pct.format(a.deadShare)})</span>
-          </>
-        ),
-        foot: (tt) => (
-          <>
-            {formatSecondsAsHms(tt.deadSeconds)}{" "}
-            <span className="font-normal text-muted-foreground">({pct.format(tt.deadShare)})</span>
-          </>
-        ),
-      },
-    );
-  }
+  // Zeitverteilung/Raspodjela vremena (2026-08-18 - originally "compact"
+  // dropped this entirely, Anis: "Hajde ipak vrati i Zeitverteilung u
+  // Dialer na Reportu" - restored for both variants; only Ø Bearbeitungszeit
+  // (AHT, above) stays admin-only. Labels are already locale-aware (bs
+  // strings set at the top of this function), so no separate translation
+  // pass was needed here. Color-coded same day per Anis's ask ("obojiti
+  // pauzu zuto, razgovor zeleno a ostalo crveno"): talk = green (the one
+  // genuinely productive bucket), pause = amber, everything else
+  // (wait/dispo/dead - non-talking overhead) = red.
+  cols.push(
+    {
+      key: "talkTime",
+      group: "vrijeme",
+      header: t.razgovor,
+      cell: (a) => <span className="text-success-foreground">{a.talkTime}</span>,
+      foot: (tt) => <span className="text-success-foreground">{formatSecondsAsHms(tt.talkSeconds)}</span>,
+      alwaysReal: true,
+    },
+    {
+      key: "waitTime",
+      group: "vrijeme",
+      header: t.cekanje,
+      cell: (a) => <span className="text-destructive">{a.waitTime}</span>,
+      foot: (tt) => <span className="text-destructive">{formatSecondsAsHms(tt.waitSeconds)}</span>,
+    },
+    {
+      key: "dispoTime",
+      group: "vrijeme",
+      header: t.naknadna,
+      cell: (a) => <span className="text-destructive">{a.dispoTime}</span>,
+      foot: (tt) => <span className="text-destructive">{formatSecondsAsHms(tt.dispoSeconds)}</span>,
+    },
+    {
+      key: "pauseTime",
+      group: "vrijeme",
+      header: t.pauza,
+      cell: (a) => (
+        <span className="text-warning-foreground">
+          {a.pauseTime} <span className="text-muted-foreground">({pct.format(a.pauseShare)})</span>
+        </span>
+      ),
+      foot: (tt) => (
+        <span className="text-warning-foreground">
+          {formatSecondsAsHms(tt.pauseSeconds)}{" "}
+          <span className="font-normal text-muted-foreground">({pct.format(tt.pauseShare)})</span>
+        </span>
+      ),
+    },
+    {
+      key: "deadTime",
+      group: "vrijeme",
+      header: t.mrtvo,
+      cell: (a) => (
+        <span className="text-destructive">
+          {a.deadTime} <span className="text-muted-foreground">({pct.format(a.deadShare)})</span>
+        </span>
+      ),
+      foot: (tt) => (
+        <span className="text-destructive">
+          {formatSecondsAsHms(tt.deadSeconds)}{" "}
+          <span className="font-normal text-muted-foreground">({pct.format(tt.deadShare)})</span>
+        </span>
+      ),
+    },
+  );
 
   cols.push(
     { key: "totalTime", group: "aktivnost", header: t.ukupno, cell: (a) => a.totalTime, foot: (tt) => formatSecondsAsHms(tt.totalSeconds) },
@@ -388,7 +407,9 @@ export function DialerStatusTable({
   reconstructed?: boolean;
   /** "full" = every column (admin's daily-use view, unchanged). "compact"
    * (2026-08-18, "za REPORT samo... genralno smanjiti velicina dialer
-   * tabele") drops Ø Bearbeitungszeit and the whole Zeitverteilung group. */
+   * tabele") drops only Ø Bearbeitungszeit - the Zeitverteilung/Raspodjela
+   * vremena group was dropped too at first, then restored same day
+   * ("Hajde ipak vrati i Zeitverteilung u Dialer na Reportu"). */
   variant?: "full" | "compact";
   /** When provided, merges a "Status im Tool" column right after the real
    * dialer Status column (2026-08-18, "status u alatu dodati poslije

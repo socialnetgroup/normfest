@@ -5995,6 +5995,37 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     that matched the Bericht tile exactly (210, 47%). Typecheck/lint clean,
     full suite green (41/41).
 
+102. **Report's Dialer table: Raspodjela vremena restored + color-coded —
+    shipped (2026-08-18), same day as item 101.** Anis: *"Hajde ipak vrati i
+    Zeitverteilung u Dialer na Reportu, ali sve prevedi na bosanski."* -
+    item 100's "compact" variant had dropped the whole Zeitverteilung group
+    for report@ along with Ø Bearbeitungszeit; only the latter stays
+    admin-only now. `components/dialer-status-table.tsx`'s `buildColumns()`
+    no longer gates the 5 time-breakdown columns behind `variant === "full"`
+    - labels were already locale-aware Bosnian strings from item 100's own
+    translation pass, so nothing new needed translating.
+
+    Same-day follow-up, Anis: *"mozes li obojiti pauzu zuto, razgovor
+    zeleno a ostalo crveno?"* - Sprechzeit/Vrijeme razgovora now renders
+    `text-success-foreground` (green, the one genuinely productive bucket),
+    Pausenzeit/Pauza `text-warning-foreground` (amber), and
+    Wartezeit/Vrijeme čekanja + Nachbearbeitung/Naknadna obrada +
+    Totzeit/Mrtvo vrijeme all `text-destructive` (red - non-talking
+    overhead), applied to both per-agent rows and the Gesamt/Ukupno foot
+    row, using the same semantic color tokens already established
+    elsewhere in this app (§14 item 67's design system,
+    `attendance-month-calendar.tsx`'s day-status coloring).
+
+    Verified live end-to-end: fresh throwaway report account confirmed the
+    RASPODJELA VREMENA group renders fully in Bosnian
+    (Vrijeme razgovora/Vrijeme čekanja/Naknadna obrada/Pauza/Mrtvo vrijeme)
+    with Ø vrijeme obrade still correctly absent; a fresh throwaway admin
+    account confirmed via direct `getComputedStyle()` on the rendered cells
+    that talk/wait/pause resolve to three genuinely distinct colors
+    (green/red/amber respectively), not just three different class names.
+    Both test accounts deleted after. Typecheck/lint clean, full suite
+    green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
