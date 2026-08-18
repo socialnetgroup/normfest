@@ -142,6 +142,7 @@ export function AppSidebar({
   isReport,
   userLabel,
   logoutAction,
+  unreadEvaluationCount,
 }: {
   isAdmin: boolean;
   /** report@ role (2026-08-17) - a single-page, read-only "viewing angle"
@@ -150,6 +151,10 @@ export function AppSidebar({
   isReport: boolean;
   userLabel: string;
   logoutAction: () => void;
+  /** Unread agent_evaluations count (2026-08-19, §14 item 109's follow-up) -
+   * only meaningful for a non-admin agent account; 0/undefined renders no
+   * badge, same as every other NavItem badge in this file. */
+  unreadEvaluationCount?: number;
 }) {
   const homeHref = isReport ? "/bericht" : "/";
   const pathname = usePathname();
@@ -286,13 +291,23 @@ export function AppSidebar({
           ))}
 
           {!isAdmin ? (
-            <NavItem
-              href="/meine-ergebnisse"
-              label="Meine Ergebnisse"
-              icon={BarChart3}
-              active={isActive(pathname, "/meine-ergebnisse")}
-              onNavigate={closeMobile}
-            />
+            <>
+              <NavItem
+                href="/meine-ergebnisse"
+                label="Meine Ergebnisse"
+                icon={BarChart3}
+                active={isActive(pathname, "/meine-ergebnisse")}
+                onNavigate={closeMobile}
+              />
+              <NavItem
+                href="/bewertungen"
+                label="Bewertungen"
+                icon={ClipboardCheck}
+                active={isActive(pathname, "/bewertungen")}
+                badge={unreadEvaluationCount ? String(unreadEvaluationCount) : undefined}
+                onNavigate={closeMobile}
+              />
+            </>
           ) : null}
 
           {isAdmin ? (

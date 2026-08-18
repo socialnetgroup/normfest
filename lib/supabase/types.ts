@@ -189,8 +189,8 @@ export type Database = {
           agent_id: string
           call_date: string
           call_duration_minutes: number | null
-          call_reference: string | null
           call_recording_url: string | null
+          call_reference: string | null
           comment: string | null
           created_at: string
           evaluated_by: string | null
@@ -212,8 +212,8 @@ export type Database = {
           agent_id: string
           call_date: string
           call_duration_minutes?: number | null
-          call_reference?: string | null
           call_recording_url?: string | null
+          call_reference?: string | null
           comment?: string | null
           created_at?: string
           evaluated_by?: string | null
@@ -235,8 +235,8 @@ export type Database = {
           agent_id?: string
           call_date?: string
           call_duration_minutes?: number | null
-          call_reference?: string | null
           call_recording_url?: string | null
+          call_reference?: string | null
           comment?: string | null
           created_at?: string
           evaluated_by?: string | null
@@ -1963,6 +1963,31 @@ export type Database = {
           last_sign_in_at: string
         }[]
       }
+      fn_get_my_evaluations: {
+        Args: never
+        Returns: {
+          call_date: string
+          call_duration_minutes: number
+          call_recording_url: string
+          call_reference: string
+          comment: string
+          created_at: string
+          evaluated_by_name: string
+          f1_note: string
+          f1_score: number
+          f2_note: string
+          f2_score: number
+          f3_note: string
+          f3_score: number
+          f4_note: string
+          f4_score: number
+          f5_note: string
+          f5_score: number
+          id: string
+          total_score: number
+          viewed_at: string
+        }[]
+      }
       fn_heartbeat: { Args: { p_path: string }; Returns: undefined }
       fn_is_admin: { Args: never; Returns: boolean }
       fn_is_report: { Args: never; Returns: boolean }
@@ -2025,6 +2050,7 @@ export type Database = {
         }
         Returns: string
       }
+      fn_mark_evaluation_viewed: { Args: { p_id: string }; Returns: undefined }
       fn_merge_duplicate_products: {
         Args: { p_keep_id: string; p_remove_id: string }
         Returns: undefined

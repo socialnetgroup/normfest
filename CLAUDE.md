@@ -6374,6 +6374,89 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     Typecheck and lint clean on every touched file, full suite green
     (41/41).
 
+110. **Agent-facing "Bewertungen" tab — shipped (2026-08-19), completes item
+    109's foundation.** Anis: "genereting a Bewertungen menu tab at each
+    agent, showing the bewertungen they got from the Teamleader with a
+    notification that they have new, unread, unlistened Bewertungen from
+    their TL. Also show which TL did the Bewertung." New `/bewertungen`
+    page - a read-only mirror of the admin QA-Bewertungen detail view,
+    scoped to the logged-in agent's own rows via the self-select RLS policy
+    + `fn_get_my_evaluations()` shipped in item 109.
+
+    **Real gap closed for "which TL did the Bewertung":** `agent_
+    evaluations.evaluated_by` is a `profiles.id`, but `profiles_select_
+    own_or_admin` RLS only lets a caller read their own profile row or, if
+    admin, everyone's - a plain agent has no RLS path to their TL's name.
+    Rather than widen `profiles` RLS project-wide (a real change to every
+    other page's data-exposure surface, for one label), new migration
+    `20260819030000_fn_get_my_evaluations.sql` adds a narrow security-
+    definer RPC that pre-joins just the evaluator's `full_name` (falling
+    back to `email`, then "Unbekannt"), scoped server-side to `agent_id in
+    (select id from agents where profile_id = auth.uid())` - same shape as
+    `fn_chat_get_company_brief`/`fn_email_list`.
+
+    **"New, unread, unlistened" modeled as the single `viewed_at`
+    timestamp** already shipped in item 109 (simplest honest reading of the
+    ask, not separately confirmed with Anis - flagged here in case he wants
+    "listened" tracked as its own state later, e.g. only once the recording
+    link is actually clicked). New `components/evaluation-view-tracker.tsx`
+    (`EvaluationViewTracker`, client component, renders `null`) fires
+    `fn_mark_evaluation_viewed` for every still-unread row once `/bewertungen`
+    has rendered them - "open the inbox, it's read" semantics, same as
+    every other unread-state pattern in this app. The RPC is idempotent
+    (coalesce, first call wins), so a re-mount is harmless. Deliberately
+    does NOT call `router.refresh()` after marking read - flipping the
+    sidebar's "Neu" badge away mid-read would be a distracting jump; the
+    badge (a plain server-rendered `agent_evaluations` count in `(app)/
+    layout.tsx`, filtered `viewed_at is null`, RLS-scoped automatically by
+    the same self-select policy) updates naturally on the next navigation
+    instead.
+
+    `components/app-sidebar.tsx`'s `AppSidebar` gained an
+    `unreadEvaluationCount?: number` prop, rendered via the existing
+    `NavItem` `badge` prop (same shape as the "Bald" badges elsewhere) on a
+    new "Bewertungen" entry right after "Meine Ergebnisse" - both inside the
+    same `{!isAdmin ? ... : null}` block, so report@ (routed through its own
+    separate `isReport` branch entirely) never sees either.
+
+    Types (`lib/supabase/types.ts`) were regenerated for real this time via
+    `npx supabase gen types typescript --linked` (blocked by an unrelated
+    tool-environment issue during item 109, worked this time) - confirmed
+    the two earlier hand-patched columns (`call_recording_url`, `viewed_at`)
+    exactly matched what the CLI generates, closing that item's one open
+    loose end.
+
+    Verified end-to-end two ways: (1) a direct RPC test (throwaway agent
+    account temporarily linked to a real `agents` row, same repoint-and-
+    revert pattern as items 30/58/103/109) confirmed `fn_get_my_evaluations`
+    returns exactly the caller's own rows with a correctly-joined evaluator
+    name, correctly falling back to email when a test admin had no
+    `full_name` set, and the unread-count query matched exactly; (2) a full
+    live click-through as a throwaway agent (temporarily linked to Muhamed
+    Lepic's real `agents` row, a real evaluation from a real named admin -
+    "Anis Rendić" - inserted, session logged in via the real `/login` form):
+    sidebar correctly showed "Bewertungen" with a "1" badge, clicking
+    through rendered the real evaluation with a "Neu" badge, "Bewertet von
+    Anis Rendić am 18.08.2026, 19:47 Uhr", all 5 phase scores, and the
+    comment; confirmed `viewed_at` was set in the DB after the page
+    rendered, and confirmed the sidebar badge correctly disappeared on the
+    next navigation. **One real environment-flakiness moment during this
+    check, not a code bug**: the RPC call didn't land on the very first
+    couple of page loads (`viewed_at` stayed null) - matches this same
+    session's already-documented sandboxed-browser network flakiness
+    (`[heartbeat] fn_heartbeat failed: TypeError: Failed to fetch`,
+    `net::ERR_NETWORK_CHANGED` in the console) rather than anything in
+    `EvaluationViewTracker` itself; added a `.then(({error}) => ...)` error
+    log on the RPC call as cheap defensive visibility for this class of
+    transient failure (consistent with how other RPC call sites in this
+    app already surface errors), then re-verified and confirmed it fires
+    reliably. Test evaluation, test accounts, and the temporary
+    `agents.profile_id` repoint all cleaned up/reverted after. Typecheck
+    and lint clean on every touched file, full suite green (41/41, the
+    already-documented `fn_refresh_signals` DB-contention flake from item
+    109's own re-run reproduced once more mid-session, unrelated to this
+    change - passed cleanly on the next re-run).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
