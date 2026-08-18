@@ -3,7 +3,6 @@
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { formatSecondsAsHms } from "@/lib/dialer/status";
 import { cn } from "@/lib/utils";
 
 const eur = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
@@ -45,7 +44,7 @@ const T = {
     revenue: "Umsatz",
     sales: "Sales",
     calls: "Anrufe",
-    talk: "Sprechzeit",
+    reached: "Erreicht (geschätzt)",
     cr: "CR",
     wv: "Wiedervorlage",
     bonus: "Bonus",
@@ -58,7 +57,7 @@ const T = {
     revenue: "Promet",
     sales: "Prodaje",
     calls: "Pozivi",
-    talk: "Vrijeme razgovora",
+    reached: "Javilo se (procjena)",
     cr: "Konverzija",
     wv: "Wiedervorlage",
     bonus: "Bonus",
@@ -70,8 +69,20 @@ function bonusLabel(km: number) {
   return km > 0 ? eurCents.format(km).replace("€", "KM") : "-";
 }
 
-function talkLabel(seconds: number | null) {
-  return seconds !== null && seconds > 0 ? formatSecondsAsHms(seconds) : "-";
+// "Javilo se (procjena)" (2026-08-18, Anis: "ne vrijeme razgovora nego
+// 'Javilo se (procjena)' treba") - same reached-calls estimate formula
+// already shipped for the live Dialer table (§14 item 101): talk /
+// (talk+dispo) × totalCalls, computed purely from real dialer_daily_snapshots
+// fields, no CDR dependency. Recomputed here per-day rather than imported
+// from lib/dialer/status.ts since that module's version works off a
+// DialerAgentSummary, not a single day's raw seconds.
+function reachedLabel(entry: DayEntry) {
+  if (entry.talkSeconds === null || entry.dispoSeconds === null || !entry.callsCount) return "-";
+  const handleSeconds = entry.talkSeconds + entry.dispoSeconds;
+  if (handleSeconds <= 0) return "-";
+  const rate = entry.talkSeconds / handleSeconds;
+  const estimate = Math.round(entry.callsCount * rate);
+  return `${estimate} (${pct.format(rate)})`;
 }
 
 export type DayEntry = {
@@ -81,12 +92,15 @@ export type DayEntry = {
   callsCount: number | null;
   dayOff: boolean;
   bonusKm: number;
-  /** Real per-day talk time in seconds, from that day's dialer_daily_snapshots
-   * row (admin/report only - RLS doesn't grant agents read access to that
-   * table, so it stays null on /meine-ergebnisse). Only ever set for days
-   * that actually have a stored snapshot - most days before 2026-08-10
-   * (§14 item 24) won't. */
+  /** Real per-day talk/dispo time in seconds, from that day's
+   * dialer_daily_snapshots row (admin/report only - RLS doesn't grant
+   * agents read access to that table, so both stay null on
+   * /meine-ergebnisse). Only ever set for days that actually have a stored
+   * snapshot - most days before 2026-08-10 (§14 item 24) won't. Used
+   * together to compute the "Javilo se (procjena)" reached-calls estimate,
+   * not shown as raw talk time on their own. */
   talkSeconds: number | null;
+  dispoSeconds: number | null;
   /** Real count of that day's sales_feedback rows (created_at) that had a
    * wiedervorlage_date set - same "count by creation day, not by the
    * scheduled callback day" convention already established in /tim
@@ -133,6 +147,7 @@ export function MonthCalendar({
     dayOff: false,
     bonusKm: 0,
     talkSeconds: null,
+    dispoSeconds: null,
     wiedervorlageCount: 0,
   });
 
@@ -161,7 +176,7 @@ export function MonthCalendar({
                 <th className="px-3 py-2 font-medium">{t.revenue}</th>
                 <th className="px-3 py-2 font-medium">{t.sales}</th>
                 <th className="px-3 py-2 font-medium">{t.calls}</th>
-                <th className="px-3 py-2 font-medium">{t.talk}</th>
+                <th className="px-3 py-2 font-medium">{t.reached}</th>
                 <th className="px-3 py-2 font-medium">{t.cr}</th>
                 <th className="px-3 py-2 font-medium">{t.wv}</th>
                 {showBonus ? <th className="px-3 py-2 font-medium">{t.bonus}</th> : null}
@@ -174,7 +189,7 @@ export function MonthCalendar({
                   <td className="px-3 py-2 tabular-nums">{d.dayOff ? t.off.toLowerCase() : eur.format(d.revenue)}</td>
                   <td className="px-3 py-2 tabular-nums">{d.dayOff ? "-" : d.salesCount}</td>
                   <td className="px-3 py-2 tabular-nums">{d.callsCount ?? "-"}</td>
-                  <td className="px-3 py-2 tabular-nums">{talkLabel(d.talkSeconds)}</td>
+                  <td className="px-3 py-2 tabular-nums">{reachedLabel(d)}</td>
                   <td className="px-3 py-2 tabular-nums">
                     {d.callsCount ? pct.format(d.salesCount / d.callsCount) : "-"}
                   </td>
@@ -252,7 +267,7 @@ export function MonthCalendar({
                 <span className="font-medium tabular-nums">{selectedEntry.callsCount ?? "-"}</span>
               </span>
               <span>
-                {t.talk}: <span className="font-medium tabular-nums">{talkLabel(selectedEntry.talkSeconds)}</span>
+                {t.reached}: <span className="font-medium tabular-nums">{reachedLabel(selectedEntry)}</span>
               </span>
               <span>
                 {t.cr}:{" "}

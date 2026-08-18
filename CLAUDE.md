@@ -6109,6 +6109,35 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     reverted and confirmed (`profile_id` restored, throwaway accounts
     deleted). Typecheck/lint clean, full suite green (41/41).
 
+104. **MonthCalendar's "Sprechzeit" column replaced with the real reached-calls
+    estimate — shipped (2026-08-18), same session.** Anis: *"Monthcalendar
+    extended, ne vrijeme razgovora nego 'Javilo se (procjena)' treba."*
+    Item 103 had added raw per-day talk time, but the actually-useful metric
+    is the same "Javilo se (procjena)"/"Erreicht (geschätzt)" reached-calls
+    estimate already shipped for the live Dialer table (§14 item 101):
+    `talk / (talk+dispo) × totalCalls`.
+
+    `DayEntry` gained `dispoSeconds: number | null` alongside the existing
+    `talkSeconds`; a new `reachedLabel()` helper in
+    `components/team/month-calendar.tsx` recomputes the same formula
+    per-day (own small copy rather than importing `lib/dialer/status.ts`'s
+    version, which works off a `DialerAgentSummary` not a single day's raw
+    seconds) and renders "N (X%)", falling back to "-" when either field is
+    unavailable (days before the snapshot era, or `meine-ergebnisse`'s
+    always-null Sprechzeit/dispo per the RLS boundary already documented in
+    item 103). All three call sites
+    (`admin/team/[agentId]`, `bericht/[agentId]`, `meine-ergebnisse`) updated
+    to also read `dispoTime` from the same already-fetched
+    `dialer_daily_snapshots` row and populate `dispoSecondsByDate` alongside
+    the existing `talkSecondsByDate` map - no new query needed.
+
+    Verified live (throwaway admin test account, deleted after) against
+    `admin/team/[agentId]`'s real data: the column now reads "Erreicht
+    (geschätzt)" showing real values like "57 (52 %)" on 10.08 and "13
+    (100 %)" on 17.08, matching the exact same formula/output already
+    proven correct for the live Dialer table in item 101. Typecheck/lint
+    clean, full suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

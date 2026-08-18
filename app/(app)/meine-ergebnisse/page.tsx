@@ -83,6 +83,7 @@ export default async function MeineErgebnissePage() {
       dayOff: r.day_off,
       bonusKm: 0,
       talkSeconds: null,
+      dispoSeconds: null,
       wiedervorlageCount: wiedervorlageByDate.get(r.date) ?? 0,
     });
   }

@@ -88,10 +88,14 @@ export default async function BerichtAgentPage({ params }: { params: Promise<{ a
   );
 
   const talkSecondsByDate = new Map<string, number>();
+  const dispoSecondsByDate = new Map<string, number>();
   for (const snap of snapshotRows ?? []) {
     const summaries = (snap.agents as DialerAgentSummary[] | null) ?? [];
     const mine = summaries.find((s) => s.agentId === agentId);
-    if (mine) talkSecondsByDate.set(snap.snapshot_date, parseDialerTimeToSeconds(mine.talkTime));
+    if (mine) {
+      talkSecondsByDate.set(snap.snapshot_date, parseDialerTimeToSeconds(mine.talkTime));
+      dispoSecondsByDate.set(snap.snapshot_date, parseDialerTimeToSeconds(mine.dispoTime));
+    }
   }
   const wiedervorlageByDate = new Map<string, number>();
   for (const row of feedbackRows ?? []) {
@@ -112,6 +116,7 @@ export default async function BerichtAgentPage({ params }: { params: Promise<{ a
       dayOff: r.day_off,
       bonusKm: bonusByDate.get(r.date)?.get(agentId) ?? 0,
       talkSeconds: talkSecondsByDate.get(r.date) ?? null,
+      dispoSeconds: dispoSecondsByDate.get(r.date) ?? null,
       wiedervorlageCount: wiedervorlageByDate.get(r.date) ?? 0,
     });
   }
