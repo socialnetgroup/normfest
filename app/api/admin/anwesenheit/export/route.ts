@@ -1,7 +1,7 @@
 import * as XLSX from "xlsx";
 import { NextResponse } from "next/server";
 
-import { datesInMonth, expectedHoursForDate, totalExpectedHours } from "@/lib/attendance";
+import { computeAttendanceSaldo, datesInMonth, expectedHoursForDate } from "@/lib/attendance";
 import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
@@ -60,7 +60,6 @@ export async function GET(request: Request) {
 
   const month = searchParams.get("month") ?? todayStr.slice(0, 7);
   const monthDates = datesInMonth(month);
-  const expectedTotal = totalExpectedHours(monthDates, todayStr);
 
   const [{ data: agents }, { data: rows }] = await Promise.all([
     supabase.from("agents").select("id, full_name").eq("active", true).order("full_name"),
@@ -71,14 +70,16 @@ export async function GET(request: Request) {
       .lte("date", monthDates[monthDates.length - 1]),
   ]);
 
-  const byAgent = new Map<string, { worked: number; lost: number; urlaubTage: number }>();
+  // Real bug fixed 2026-08-18 - see lib/attendance.ts's computeAttendanceSaldo.
+  const entriesByAgent = new Map<string, { date: string; hoursWorked: number; note: string | null }[]>();
+  const lostByAgent = new Map<string, number>();
+  const urlaubByAgent = new Map<string, number>();
   const rowsByAgent = new Map<string, Map<string, { hours_worked: number; lost_hours: number; note: string | null }>>();
   for (const r of rows ?? []) {
-    const entry = byAgent.get(r.agent_id) ?? { worked: 0, lost: 0, urlaubTage: 0 };
-    entry.worked += r.hours_worked;
-    entry.lost += r.lost_hours;
-    if (r.note?.toLowerCase().includes("urlaub")) entry.urlaubTage += 1;
-    byAgent.set(r.agent_id, entry);
+    if (!entriesByAgent.has(r.agent_id)) entriesByAgent.set(r.agent_id, []);
+    entriesByAgent.get(r.agent_id)!.push({ date: r.date, hoursWorked: r.hours_worked, note: r.note });
+    lostByAgent.set(r.agent_id, (lostByAgent.get(r.agent_id) ?? 0) + r.lost_hours);
+    if (r.note?.toLowerCase().includes("urlaub")) urlaubByAgent.set(r.agent_id, (urlaubByAgent.get(r.agent_id) ?? 0) + 1);
 
     if (!rowsByAgent.has(r.agent_id)) rowsByAgent.set(r.agent_id, new Map());
     rowsByAgent.get(r.agent_id)!.set(r.date, { hours_worked: r.hours_worked, lost_hours: r.lost_hours, note: r.note });
@@ -86,14 +87,14 @@ export async function GET(request: Request) {
 
   const overviewAoa = [["Agent", "Odrađeno (h)", "Soll (h)", "Saldo (h)", "Nachzuholen (h)", "Urlaub-Tage"]];
   for (const a of agents ?? []) {
-    const entry = byAgent.get(a.id) ?? { worked: 0, lost: 0, urlaubTage: 0 };
+    const { worked, expected, saldo } = computeAttendanceSaldo(entriesByAgent.get(a.id) ?? [], monthDates, todayStr);
     overviewAoa.push([
       a.full_name,
-      String(entry.worked),
-      String(expectedTotal),
-      String(entry.worked - expectedTotal),
-      String(entry.lost),
-      String(entry.urlaubTage),
+      String(worked),
+      String(expected),
+      String(saldo),
+      String(lostByAgent.get(a.id) ?? 0),
+      String(urlaubByAgent.get(a.id) ?? 0),
     ]);
   }
 

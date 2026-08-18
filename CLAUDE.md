@@ -6202,6 +6202,47 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     token used for a real deficit day. Typecheck/lint clean, full suite
     green (41/41).
 
+107. **Real Saldo bug found + fixed: Urlaub days were counted as full
+    deficit — shipped (2026-08-18).** Anis: *"Nije mi samo jasno zasto
+    merima ima -8 sati saldo?"* Investigated her real `agent_attendance`
+    rows directly before touching any code (not guessed): 10 real Urlaub
+    days (17.-21., 24.-28.08), all correctly logged `hours_worked: 0` per
+    convention - but the Saldo formula
+    (`worked - expected`, `app/(app)/admin/anwesenheit/page.tsx` and
+    `[agentId]/page.tsx`) never excluded Urlaub days from the expected/Soll
+    side, so each already-passed Urlaub day (17. and 18.08 by then) counted
+    as a full 8h deficit - directly contradicting this feature's own
+    original documented design intent ("Urlaub pokriva dnevnu obavezu... no
+    deficit in the balance", §14's original Anwesenheit build) which was
+    apparently never actually implemented. A second, independent bug
+    compounded it: `worked` summed **every** row in the month regardless of
+    date, including a real future-dated pre-filled entry (31.08), while
+    `expected` was correctly capped at today - comparing a partial "Soll so
+    far" against a "worked" total that included days that hadn't happened
+    yet.
+
+    Added `computeAttendanceSaldo()` to `lib/attendance.ts` - the one
+    shared calculation now used by the overview page, the per-agent page,
+    and the Excel export's overview sheet, so the three can't drift apart
+    on this again the way the original duplicated-but-inconsistent logic
+    did. It caps both `worked` and `expected` at `todayStr`, and excludes
+    any day whose note contains "urlaub" (same detection convention already
+    used for the Urlaub-Tage counts) from the expected/Soll total entirely -
+    Soll is now genuinely per-agent (varies with how many Urlaub days they've
+    taken), not one shared column value, so the overview page's summary
+    line was reworded from a single "Soll bisher" figure to an explanation
+    of why Soll differs per row.
+
+    Verified live (throwaway admin test account, deleted after) against
+    Merima's real data: Saldo corrected from the reported **-8h to +0h**
+    (exactly on track, once both bugs were fixed) - the standalone
+    diagnostic script had shown -12h using only the future-date fix, and 0h
+    once Urlaub-exclusion was added too, confirming both fixes were needed
+    and correct together. Confirmed the overview table now shows a real,
+    varying Soll per agent (e.g. Emina Berilo 54h Soll vs. others' 92h,
+    reflecting her own 5 real Urlaub days). Typecheck/lint clean, full
+    suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

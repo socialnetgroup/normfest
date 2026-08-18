@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AttendanceMonthCalendar, type AttendanceDay } from "@/components/attendance/attendance-month-calendar";
-import { datesInMonth, totalExpectedHours } from "@/lib/attendance";
+import { computeAttendanceSaldo, datesInMonth } from "@/lib/attendance";
 import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
@@ -79,11 +79,13 @@ export default async function AgentAnwesenheitPage({ params }: { params: Promise
 
       {months.map((month) => {
         const days = byMonth.get(month)!;
-        const worked = days.reduce((sum, d) => sum + d.hoursWorked, 0);
         const lost = days.reduce((sum, d) => sum + d.lostHours, 0);
         const urlaubTage = days.filter((d) => d.note?.toLowerCase().includes("urlaub")).length;
-        const expected = totalExpectedHours(datesInMonth(month), todayStr);
-        const saldo = worked - expected;
+        const { worked, expected, saldo } = computeAttendanceSaldo(
+          days.map((d) => ({ date: d.date, hoursWorked: d.hoursWorked, note: d.note })),
+          datesInMonth(month),
+          todayStr,
+        );
 
         return (
           <Card key={month}>

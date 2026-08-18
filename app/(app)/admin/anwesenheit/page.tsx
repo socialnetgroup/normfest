@@ -5,7 +5,7 @@ import { Download } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { datesInMonth, totalExpectedHours } from "@/lib/attendance";
+import { computeAttendanceSaldo, datesInMonth } from "@/lib/attendance";
 import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
@@ -39,7 +39,6 @@ export default async function AnwesenheitPage({
   const todayStr = new Date().toISOString().slice(0, 10);
   const month = monthParam ?? todayStr.slice(0, 7);
   const monthDates = datesInMonth(month);
-  const expectedTotal = totalExpectedHours(monthDates, todayStr);
 
   const supabase = await createClient();
   const [{ data: agents }, { data: rows }] = await Promise.all([
@@ -51,13 +50,17 @@ export default async function AnwesenheitPage({
       .lte("date", monthDates[monthDates.length - 1]),
   ]);
 
-  const byAgent = new Map<string, { worked: number; lost: number; urlaubTage: number }>();
+  // Real bug found 2026-08-18 ("zasto merima ima -8 sati saldo?") - see
+  // lib/attendance.ts's computeAttendanceSaldo for the full story. Soll is
+  // now per-agent (Urlaub days reduce it), not one shared column value.
+  const entriesByAgent = new Map<string, { date: string; hoursWorked: number; note: string | null }[]>();
+  const lostByAgent = new Map<string, number>();
+  const urlaubByAgent = new Map<string, number>();
   for (const r of rows ?? []) {
-    const entry = byAgent.get(r.agent_id) ?? { worked: 0, lost: 0, urlaubTage: 0 };
-    entry.worked += r.hours_worked;
-    entry.lost += r.lost_hours;
-    if (r.note?.toLowerCase().includes("urlaub")) entry.urlaubTage += 1;
-    byAgent.set(r.agent_id, entry);
+    if (!entriesByAgent.has(r.agent_id)) entriesByAgent.set(r.agent_id, []);
+    entriesByAgent.get(r.agent_id)!.push({ date: r.date, hoursWorked: r.hours_worked, note: r.note });
+    lostByAgent.set(r.agent_id, (lostByAgent.get(r.agent_id) ?? 0) + r.lost_hours);
+    if (r.note?.toLowerCase().includes("urlaub")) urlaubByAgent.set(r.agent_id, (urlaubByAgent.get(r.agent_id) ?? 0) + 1);
   }
 
   const [year, m] = month.split("-").map(Number);
@@ -101,7 +104,7 @@ export default async function AnwesenheitPage({
         </CardHeader>
         <CardContent>
           <p className="mb-3 text-sm text-muted-foreground">
-            Soll bisher in diesem Monat: <span className="font-medium text-foreground">{hours.format(expectedTotal)} h</span>
+            Soll basiert auf Mo-Do 8h / Fr 6h, abzüglich Urlaub-Tagen - daher pro Agent unterschiedlich.
           </p>
           {!agents || agents.length === 0 ? (
             <p className="text-sm text-muted-foreground">Keine aktiven Agenten.</p>
@@ -120,8 +123,13 @@ export default async function AnwesenheitPage({
                 </thead>
                 <tbody className="divide-y">
                   {agents.map((a) => {
-                    const entry = byAgent.get(a.id) ?? { worked: 0, lost: 0, urlaubTage: 0 };
-                    const saldo = entry.worked - expectedTotal;
+                    const { worked, expected, saldo } = computeAttendanceSaldo(
+                      entriesByAgent.get(a.id) ?? [],
+                      monthDates,
+                      todayStr,
+                    );
+                    const lost = lostByAgent.get(a.id) ?? 0;
+                    const urlaubTage = urlaubByAgent.get(a.id) ?? 0;
                     return (
                       <tr key={a.id}>
                         <td className="px-2 py-2 font-medium">
@@ -129,8 +137,8 @@ export default async function AnwesenheitPage({
                             {a.full_name}
                           </Link>
                         </td>
-                        <td className="px-2 py-2 tabular-nums">{hours.format(entry.worked)} h</td>
-                        <td className="px-2 py-2 tabular-nums text-muted-foreground">{hours.format(expectedTotal)} h</td>
+                        <td className="px-2 py-2 tabular-nums">{hours.format(worked)} h</td>
+                        <td className="px-2 py-2 tabular-nums text-muted-foreground">{hours.format(expected)} h</td>
                         <td
                           className={cn(
                             "px-2 py-2 tabular-nums font-medium",
@@ -141,13 +149,13 @@ export default async function AnwesenheitPage({
                           {hours.format(saldo)} h
                         </td>
                         <td className="px-2 py-2 tabular-nums">
-                          {entry.lost > 0 ? (
-                            <Badge variant="warning">{hours.format(entry.lost)} h</Badge>
+                          {lost > 0 ? (
+                            <Badge variant="warning">{hours.format(lost)} h</Badge>
                           ) : (
                             <span className="text-muted-foreground">-</span>
                           )}
                         </td>
-                        <td className="px-2 py-2 tabular-nums">{entry.urlaubTage || "-"}</td>
+                        <td className="px-2 py-2 tabular-nums">{urlaubTage || "-"}</td>
                       </tr>
                     );
                   })}
