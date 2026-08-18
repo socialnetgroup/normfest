@@ -6274,6 +6274,106 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     passed cleanly on an isolated re-run, confirmed unrelated to this
     change).
 
+109. **QA-Bewertungen "Neue Bewertung": real call picker replaces manual date/
+    duration/reference entry — shipped (2026-08-19).** Anis: "kada se bira
+    novi formular, i agent da izbaci spisak poziva koji se mogu ocijeniti,
+    sa filterom po danu da npr mozemo uci i odabrati pozive koje ocijeniti a
+    koji su se desili jučer" - the create form (§14 item 14, `/admin/
+    qa-bewertungen/neu`) always required typing the call date/duration/
+    reference by hand; now it shows the real `metrike.php` CDR (§14 item 105's
+    investigation - real history from 2026-08-10, 96.5% with a working
+    recording URL) for the selected agent+day, letting the admin browse and
+    pick one real call to pre-fill the form from.
+
+    `lib/dialer/status.ts`'s `fetchDialerCallLog()` extended to also parse
+    `start_time`/`end_time`/`phone_number`/`recording` (previously only
+    `user`/`length_in_sec`/`status`, built for the earlier reachability-
+    estimate work, §14 item 101, which never needed these fields). New
+    `mapExtensionsToAgentIds()` reuses the existing diacritic-normalized
+    `matchDialerAgent()` matching to resolve each CDR row's raw extension to
+    a real `agents` row for a given past day (extensions are stable per
+    agent). `/admin/qa-bewertungen/neu` now resolves `agentId`/`datum` from
+    `searchParams` (defaults: first active agent, yesterday), fetches the
+    real CDR for that day server-side, filters to the selected agent's own
+    extension, and hands the list to a new client component,
+    `components/qa-call-picker.tsx` (`QaCallPicker`) - an Agent+Datum
+    `<form method="get">` (server re-fetches on submit, same pattern as
+    `/dialer`'s Verlauf date picker) plus a real call table (Uhrzeit/Dauer/
+    Telefonnummer/Status-Badge/🎧-Aufnahme-Link/Auswählen) with local
+    `useState` tracking the picked call - no page reload needed for the pick
+    itself.
+
+    `AgentEvaluationForm` (`components/agent-evaluation-form.tsx`) gained a
+    `prefill`/`initialAgentId` pair (create-mode only, named distinctly from
+    the existing edit-mode `initial` prop so the two flows can never be
+    conflated) - picking a call sets `call_date`/`call_duration_minutes`
+    (rounded from `lengthInSec`)/`call_reference` (a real, human-readable
+    "phone um HH:MM Uhr (STATUS)" string) and a new `call_recording_url`
+    field, rendered as a "🎧 Aufnahme dieses Anrufs anhören" link right on
+    the form so the admin can listen while scoring. `QaCallPicker` remounts
+    the form via a `key` tied to the selected call so switching picks
+    correctly re-initializes state. Manual entry (no call picked) is
+    unchanged - purely additive, still the fallback for calls before the
+    CDR's real history start or a dialer outage.
+
+    New `agent_evaluations.call_recording_url text` column (migration
+    `20260819010000_agent_evaluations_call_recording.sql`) persists the
+    picked recording alongside the score; `[id]/bearbeiten` and `[id]`
+    updated to select/display it (the edit page's select string needed the
+    explicit new column; the detail page already used `select("*")`).
+
+    **A second, related gap closed the same day, foundation for the
+    still-pending agent-facing "Bewertungen" tab (task c):** `agent_
+    evaluations` has been fully admin-only (write AND read) since it
+    shipped - but the whole point of a coaching evaluation is for the agent
+    to actually see it. Migration `20260819020000_agent_evaluations_agent_
+    visibility.sql` adds `viewed_at timestamptz` + an additive
+    `agent_evaluations_select_own` SELECT policy (RLS policies for the same
+    command OR together, so the existing admin `for all` policy is
+    untouched) scoped via `agents.profile_id = auth.uid()` - the "other
+    direction" join vs. `sales_feedback.agent_id` (a profile id), since
+    `agent_evaluations.agent_id` is a real `agents.id` (§4.11's key-space
+    distinction, hit repeatedly this project - items 30/58/83/95/103).
+    `fn_mark_evaluation_viewed(p_id)` (security definer, same single-purpose
+    shape as `fn_dismiss_signal`/`fn_set_wiedervorlage_done`) sets
+    `viewed_at = coalesce(viewed_at, now())` scoped to the caller's own
+    agent row - first call wins, later calls are a no-op, never overwritten.
+
+    `lib/supabase/types.ts` for both new columns was hand-patched (Supabase
+    CLI type generation was blocked by an unrelated tool-environment issue
+    this session) by replicating the exact pattern of sibling nullable
+    `text`/`timestamptz` columns already in the same table - not yet
+    re-confirmed against a real `supabase gen types` run; do that the next
+    time the CLI is available, purely to double-check the manual patch, not
+    because anything is currently broken (typecheck is clean against it).
+
+    Verified end-to-end via two paths: (1) a throwaway agent-role account
+    temporarily linked to a real `agents` row (same repoint-and-revert
+    pattern as items 30/58/103) confirmed the new SELECT policy - the linked
+    account sees its own evaluation, a second unrelated throwaway agent sees
+    zero rows, `fn_mark_evaluation_viewed` correctly sets `viewed_at` once
+    and is idempotent on a second call 1.2s later (coalesce holds), and a
+    non-owner calling it on someone else's row is a silent no-op, not an
+    error; (2) a full live click-through as a throwaway admin (created,
+    used, deleted) on the real `/admin/qa-bewertungen/neu` page: selected
+    Alan Sačić + 2026-08-17, confirmed the real 70-call CDR list rendered
+    (times/durations/statuses/real recording links), picked a real 09:04
+    call (92s, status NI), confirmed the form correctly pre-filled
+    (`call_date=2026-08-17`, `call_duration_minutes=2`,
+    `call_reference="27323066 um 09:04 Uhr (NI)"`), scored all 5 phases at
+    2/2, submitted, and confirmed on the resulting detail page that the
+    date/duration/reference/all-5-scores/10-of-10-total and the "🎧
+    Aufnahme anhören" link all persisted correctly end-to-end through the
+    real submit path - not just the prefill step. Test evaluation and test
+    admin account deleted after. **Real, unrelated dev-environment issue
+    caught and fixed along the way**: the local dev server's `.next` cache
+    had gone stale/corrupted (referencing a since-renamed export from an
+    earlier session's dialer work), throwing a 500 on every route including
+    `/login` - fixed with `rm -rf .next` + restart, same class of issue
+    already documented once before (item 94/98's cache-corruption note).
+    Typecheck and lint clean on every touched file, full suite green
+    (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

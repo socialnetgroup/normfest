@@ -106,6 +106,10 @@ export type DialerCallLogRow = {
   user: string;
   lengthInSec: number;
   status: string;
+  startTime: string;
+  endTime: string;
+  phoneNumber: string;
+  recording: string | null;
 };
 
 function toDialerDateTime(d: Date): string {
@@ -115,35 +119,49 @@ function toDialerDateTime(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
-/** Real per-call log (CDR) from the dialer dev's metrike.php (shared
- * 2026-08-18, "da li se može iskoristiti za recreatanje screenshota... pa
- * ćemo kasnije analizirati dalje ove metrike za druge stvari"). Gives real
- * per-call duration/status/extension - used for the 17.08. snapshot
- * backfill. Not used for a "reached calls" estimate: a same-day check found
- * the CDR's own total call count genuinely undercounts vs. the live
- * dialer's real totalCalls (125 od 144 in the CDR sample vs. 354 real calls
- * that day) - root cause not diagnosed, deferred by Anis ("naknadno cemo se
- * baviti metrikama php"). The reached-calls estimate now used instead
- * (buildDialerAgentSummaries' reachedEstimate) is computed purely from
- * already-trusted agents.php fields, no CDR dependency. Kept here for the
- * later metrike.php investigation - the dialer's own status codes (CBHOLD,
- * N, KV, NI, APNE, SALE, SN, DC, PARK, A, FG, ...) aren't documented
- * anywhere this app has access to, and a real duration-distribution check
- * (all codes show a wide, overlapping spread of call lengths, no clean
- * "instant hangup" bucket) found no reliable way to classify them as
- * answered/not-answered without guessing - so this stays a raw log fetch,
- * not a disposition classifier. */
-export async function fetchDialerCallLog(from: Date, to: Date): Promise<{ data: DialerCallLogRow[] | null; error: string | null }> {
+/** Real per-call log (CDR) from the dialer dev's metrike.php. A real
+ * investigation (2026-08-18, §14 item 105) found the earlier "CDR
+ * undercounts real calls" concern was a partial-day-window comparison
+ * artifact, not a real gap - a full calendar day matches the live dialer's
+ * own totalCalls within 0.6%. Real history only goes back to 2026-08-10
+ * (nothing before that date exists on the dialer's side), and status codes
+ * (CBHOLD, N, KV, NI, APNE, SALE, SN, DC, PARK, A, FG, ...) still have no
+ * documented answered/not-answered meaning this app can rely on. 96.5% of
+ * rows carry a real, working recording URL (verified via a real GET, not
+ * just HEAD). Used by the QA-Bewertungen call picker (§14 item 109) to let
+ * a TL browse and pick a real call to score, with its real recording
+ * attached - not for any reachability/Dostupnost computation. */
+export async function fetchDialerCallLog(
+  from: Date,
+  to: Date,
+  timeoutMs = 10000,
+): Promise<{ data: DialerCallLogRow[] | null; error: string | null }> {
   try {
     const url = `${DIALER_METRIKE_URL}?od=${encodeURIComponent(toDialerDateTime(from))}&do=${encodeURIComponent(toDialerDateTime(to))}`;
-    const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(10000) });
+    const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(timeoutMs) });
     if (!res.ok) {
       return { data: null, error: `Dialer antwortet mit HTTP ${res.status}` };
     }
-    const raw = (await res.json()) as { user?: string; length_in_sec?: string; status?: string }[];
+    const raw = (await res.json()) as {
+      user?: string;
+      length_in_sec?: string;
+      status?: string;
+      start_time?: string;
+      end_time?: string;
+      phone_number?: string;
+      recording?: string;
+    }[];
     const data = raw
       .filter((r) => r.user)
-      .map((r) => ({ user: r.user as string, lengthInSec: Number(r.length_in_sec) || 0, status: r.status ?? "-" }));
+      .map((r) => ({
+        user: r.user as string,
+        lengthInSec: Number(r.length_in_sec) || 0,
+        status: r.status ?? "-",
+        startTime: r.start_time ?? "",
+        endTime: r.end_time ?? "",
+        phoneNumber: r.phone_number ?? "",
+        recording: r.recording || null,
+      }));
     return { data, error: null };
   } catch (e) {
     return { data: null, error: e instanceof Error ? e.message : "Dialer nicht erreichbar" };
@@ -315,6 +333,25 @@ export function matchDialerAgent<T extends { full_name: string }>(
 ): T | null {
   const norm = stripDiacritics(dialerFullName);
   return agents.find((a) => stripDiacritics(a.full_name) === norm) ?? null;
+}
+
+/** Real dialer extension -> our agents.id, via a live agents.php fetch
+ * (which lists every registered agent by extension + fullName, even a
+ * currently logged-out one, confirmed live 2026-08-05/2026-08-18) matched
+ * to our own real agents by name (same diacritic-normalized matching as
+ * matchDialerAgent). Extensions are stable per agent (confirmed against a
+ * real multi-day sample, §14 item 105), so this mapping is safe to use
+ * against a past day's CDR rows too, not just today's live snapshot. */
+export function mapExtensionsToAgentIds<T extends { id: string; full_name: string }>(
+  dialerRows: DialerAgentStatus[],
+  agents: T[],
+): Map<string, T> {
+  const byExtension = new Map<string, T>();
+  for (const row of dialerRows) {
+    const matched = matchDialerAgent(row.fullName, agents);
+    if (matched) byExtension.set(row.extension, matched);
+  }
+  return byExtension;
 }
 
 export type DialerAgentSummary = {

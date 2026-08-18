@@ -23,6 +23,7 @@ type EvaluationRow = Pick<
   | "call_date"
   | "call_duration_minutes"
   | "call_reference"
+  | "call_recording_url"
   | "comment"
   | "f1_score"
   | "f1_note"
@@ -36,6 +37,17 @@ type EvaluationRow = Pick<
   | "f5_note"
 >;
 
+/** Create-mode prefill from a real picked CDR call (§14 item 109's call
+ * picker on /admin/qa-bewertungen/neu) - distinct from `initial` (edit mode,
+ * carries a real row id and switches the submit to an update). Never both
+ * at once; `initial` always wins if somehow both are passed. */
+export type EvaluationPrefill = {
+  call_date: string;
+  call_duration_minutes: number | null;
+  call_reference: string | null;
+  call_recording_url: string | null;
+};
+
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -44,17 +56,29 @@ export function AgentEvaluationForm({
   agents,
   evaluatedBy,
   initial,
+  prefill,
+  initialAgentId,
 }: {
   agents: Agent[];
   evaluatedBy: string;
   initial?: EvaluationRow;
+  /** Real picked-call prefill for create mode - see EvaluationPrefill's own
+   * note. Ignored if `initial` is set. */
+  prefill?: EvaluationPrefill;
+  /** Which agent to default the "Mitarbeiter" select to in create mode
+   * (e.g. the agent already selected in the call picker above this form) -
+   * ignored if `initial` is set. */
+  initialAgentId?: string;
 }) {
   const router = useRouter();
   const isEdit = !!initial;
-  const [agentId, setAgentId] = useState(initial?.agent_id ?? agents[0]?.id ?? "");
-  const [callDate, setCallDate] = useState(initial?.call_date ?? todayIso());
-  const [callDuration, setCallDuration] = useState(initial?.call_duration_minutes?.toString() ?? "");
-  const [callReference, setCallReference] = useState(initial?.call_reference ?? "");
+  const [agentId, setAgentId] = useState(initial?.agent_id ?? initialAgentId ?? agents[0]?.id ?? "");
+  const [callDate, setCallDate] = useState(initial?.call_date ?? prefill?.call_date ?? todayIso());
+  const [callDuration, setCallDuration] = useState(
+    (initial?.call_duration_minutes ?? prefill?.call_duration_minutes)?.toString() ?? "",
+  );
+  const [callReference, setCallReference] = useState(initial?.call_reference ?? prefill?.call_reference ?? "");
+  const [callRecordingUrl] = useState(initial?.call_recording_url ?? prefill?.call_recording_url ?? null);
   const [scores, setScores] = useState<Record<string, number>>(
     Object.fromEntries(
       CALL_QUALITY_PHASES.map((p) => [p.key, initial ? ((initial[`${p.key}_score` as keyof EvaluationRow] as number) ?? 0) : 0]),
@@ -85,6 +109,7 @@ export function AgentEvaluationForm({
       call_date: callDate,
       call_duration_minutes: callDuration ? Number(callDuration) : null,
       call_reference: callReference || null,
+      call_recording_url: callRecordingUrl,
       total_score: totalScore,
       comment: comment || null,
       f1_score: scores.f1 ?? 0,
@@ -155,6 +180,19 @@ export function AgentEvaluationForm({
             placeholder="Kundenname, Lead-Code, o.ä."
           />
         </div>
+        {callRecordingUrl ? (
+          <div className="flex flex-col gap-1 sm:col-span-2">
+            <Label>Aufnahme</Label>
+            <a
+              href={callRecordingUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-primary hover:underline"
+            >
+              🎧 Aufnahme dieses Anrufs anhören
+            </a>
+          </div>
+        ) : null}
       </div>
 
       <div className="flex flex-col gap-3 border-t pt-4">

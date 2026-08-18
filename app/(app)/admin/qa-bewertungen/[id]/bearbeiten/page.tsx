@@ -16,7 +16,7 @@ export default async function BewertungBearbeitenPage({ params }: { params: Prom
     supabase
       .from("agent_evaluations")
       .select(
-        `id, agent_id, call_date, call_duration_minutes, call_reference, comment,
+        `id, agent_id, call_date, call_duration_minutes, call_reference, call_recording_url, comment,
         f1_score, f1_note, f2_score, f2_note, f3_score, f3_note, f4_score, f4_note, f5_score, f5_note`,
       )
       .eq("id", id)

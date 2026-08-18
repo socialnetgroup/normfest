@@ -190,6 +190,7 @@ export type Database = {
           call_date: string
           call_duration_minutes: number | null
           call_reference: string | null
+          call_recording_url: string | null
           comment: string | null
           created_at: string
           evaluated_by: string | null
@@ -205,12 +206,14 @@ export type Database = {
           f5_score: number
           id: string
           total_score: number
+          viewed_at: string | null
         }
         Insert: {
           agent_id: string
           call_date: string
           call_duration_minutes?: number | null
           call_reference?: string | null
+          call_recording_url?: string | null
           comment?: string | null
           created_at?: string
           evaluated_by?: string | null
@@ -226,12 +229,14 @@ export type Database = {
           f5_score: number
           id?: string
           total_score: number
+          viewed_at?: string | null
         }
         Update: {
           agent_id?: string
           call_date?: string
           call_duration_minutes?: number | null
           call_reference?: string | null
+          call_recording_url?: string | null
           comment?: string | null
           created_at?: string
           evaluated_by?: string | null
@@ -247,6 +252,7 @@ export type Database = {
           f5_score?: number
           id?: string
           total_score?: number
+          viewed_at?: string | null
         }
         Relationships: [
           {

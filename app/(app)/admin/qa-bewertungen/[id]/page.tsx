@@ -46,6 +46,19 @@ export default async function BewertungDetailPage({ params }: { params: Promise<
             Anruf vom {formatDate(evaluation.call_date)}
             {evaluation.call_duration_minutes ? ` · ${evaluation.call_duration_minutes} Min.` : ""}
             {evaluation.call_reference ? ` · ${evaluation.call_reference}` : ""}
+            {evaluation.call_recording_url ? (
+              <>
+                {" · "}
+                <a
+                  href={evaluation.call_recording_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline"
+                >
+                  🎧 Aufnahme anhören
+                </a>
+              </>
+            ) : null}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
