@@ -22,8 +22,14 @@ export type AttendanceDay = {
   note: string | null;
 };
 
+// Anis, 2026-08-18: "Godisnji odmor u Anwesenheit da bude narandzaste boje...
+// da se odmah zna" - a Urlaub day (same note-text detection already used
+// for the Urlaub-Tage counts on the overview/per-agent pages) should read
+// as its own distinct orange, not the same red used for a real missing-hours
+// deficit, since it isn't one (a Urlaub day covers its own Soll, §14).
 function dayStatusClass(expected: number, entry: AttendanceDay | undefined) {
   if (expected === 0) return "bg-muted/10 text-muted-foreground/50"; // weekend
+  if (entry?.note?.toLowerCase().includes("urlaub")) return "bg-orange-500/15 text-orange-600 dark:text-orange-400";
   if (!entry || entry.hoursWorked === 0) return "bg-destructive/10 text-destructive";
   if (entry.hoursWorked < expected) return "bg-warning/15 text-warning-foreground";
   return "bg-success/15 text-success-foreground";
@@ -118,7 +124,9 @@ export function AttendanceMonthCalendar({ agentId, month, days }: { agentId: str
               )}
             >
               <span className="tabular-nums">{Number(date.slice(-2))}</span>
-              {byDate.get(date)?.hoursWorked ? (
+              {byDate.get(date)?.note?.toLowerCase().includes("urlaub") ? (
+                <span className="text-[10px] leading-none font-medium">Urlaub</span>
+              ) : byDate.get(date)?.hoursWorked ? (
                 <span className="tabular-nums">{hoursFmt.format(byDate.get(date)!.hoursWorked)}</span>
               ) : null}
             </button>

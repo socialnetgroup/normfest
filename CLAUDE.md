@@ -6138,6 +6138,70 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     proven correct for the live Dialer table in item 101. Typecheck/lint
     clean, full suite green (41/41).
 
+105. **Real `metrike.php` CDR investigation, deferred since item 100/101 — done
+    (2026-08-18).** Anis: *"Hajde sada analiziraj... Pa da odatle vidimo šta i
+    kako možemo dalje."* Fetched and analyzed a real ~1-week request
+    (2,808 real call rows) directly rather than guessing. Real findings,
+    reported back to Anis, no code changed:
+    - **The earlier "125 od 144 vs. real 354" mismatch (§14 item 99/100) was
+      a methodology artifact, not a real CDR gap** - comparing a full
+      calendar day (00:00-00:00) instead of a partial afternoon window gives
+      **958 CDR rows vs. 952 real stored `totalCalls`** for 2026-08-10 (a
+      99.4% match, confirmed against the real stored `dialer_daily_snapshots`
+      row for that date).
+    - **CDR history only starts 2026-08-10** - confirmed by querying
+      06.-09.08 directly (0 rows each), while today (18.08) already had 606
+      rows mid-day. No archive before that date exists on the dialer's side.
+    - **Status codes still have no clean answered/not-answered signal** -
+      duration histograms per status code (N, CBHOLD, NI, A, APNE, KV, PARK,
+      SN, DC) all show a wide spread from instant to 60+s, confirming the
+      earlier finding rather than overturning it.
+    - **A real `SALE` disposition exists** - 8 real rows in the sampled week,
+      all from one agent/campaign, avg 189s - a real, explicit sale signal
+      from the dialer itself, a possible future input for the already-known
+      `sales_feedback`-vs-dialer discrepancy question (§14 item 19).
+    - **96.5% of rows carry a real, working recording URL** - spot-verified
+      several via a real `GET` (not just `HEAD`, which returned a misleading
+      small content-length): file sizes correctly scale with call duration
+      (e.g. a 168s call → 334KB MP3). This is real, already-accessible audio
+      - the still-blocked QA-Anrufe/M9 feature (§13) was waiting on an ASR
+      *provider* choice for transcription, not on recording access, which
+      turns out to already be solved.
+    - Data integrity spot-checked clean: `start_time`/`end_time` vs.
+      `length_in_sec` matched exactly across a 1,000-row sample; call volume
+      by hour matches real Normfest working hours (08:00-16:xx).
+
+    No feature built this pass - purely an investigation to inform what to
+    build next (precise full-day Dostupnost, QA-Anrufe's real next step being
+    an ASR choice, or a SALE-vs-sales_feedback reconciliation report) -
+    options reported to Anis, no decision made yet.
+
+106. **Anwesenheit: Urlaub days get their own orange color + "Urlaub" label on
+    the tile — shipped (2026-08-18).** Anis: *"Godisnji odmor u Anwesenheit
+    da bude narandzaste boje - da dugmici kod Merime npr nije crveno nego
+    narandzaste kocke da se odmah zna."* then, mid-turn: *"on the tile
+    should be written Urlaub as well... so its logical and seen."*
+    `components/attendance/attendance-month-calendar.tsx`'s `dayStatusClass()`
+    previously classed any `hoursWorked === 0` day (including a real
+    Urlaub day, which is legitimately logged that way) the same as a real
+    missing-hours deficit - both rendered red. Added a check ahead of the
+    deficit case (`entry?.note?.toLowerCase().includes("urlaub")`, the exact
+    same detection convention already used for the Urlaub-Tage counts on
+    both the overview and per-agent pages) that renders `bg-orange-500/15
+    text-orange-600 dark:text-orange-400` instead - a plain Tailwind orange,
+    not a new semantic design token, since this is a one-off distinction
+    scoped to this one calendar. Each Urlaub tile's cell also now shows the
+    word "Urlaub" itself instead of the hour count, so it reads at a glance
+    without needing to click into the day.
+
+    Verified live (throwaway admin test account, deleted after) against a
+    real agent's real 5 logged Urlaub days (03.-07.08.2026): all five tiles
+    render "Urlaub" text and, confirmed via direct `getComputedStyle()`
+    (not just a class-name check), a genuinely distinct orange hue
+    (`lab(57.1, 64.3, 89.9)`) - clearly separated from the red destructive
+    token used for a real deficit day. Typecheck/lint clean, full suite
+    green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
