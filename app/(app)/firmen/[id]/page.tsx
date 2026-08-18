@@ -20,11 +20,14 @@ import { SignalDismissButton } from "@/components/signal-dismiss-button";
 import { StammdatenCard } from "@/components/stammdaten-card";
 import { getCurrentUser } from "@/lib/auth";
 import { groupFeedbackRows } from "@/lib/feedback-grouping";
-import { signalTypeLabel, signalTypeVariant } from "@/lib/signals";
+import { selectDiverseSignals, signalTypeLabel, signalTypeVariant } from "@/lib/signals";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 
 const MAX_SIGNALS_SHOWN = 8;
+// A single high-volume type (cross_sell) shouldn't be able to claim every
+// slot - Anis (2026-08-19), noticed seasonal signals disappearing.
+const MAX_SIGNALS_PER_TYPE = 3;
 
 const ratingFmt = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 1 });
 
@@ -328,7 +331,7 @@ export default async function CompanyProfilePage({
           </CardHeader>
           <CardContent>
             <ul className="flex flex-col divide-y">
-              {signals.slice(0, MAX_SIGNALS_SHOWN).map((s) => (
+              {selectDiverseSignals(signals, MAX_SIGNALS_SHOWN, MAX_SIGNALS_PER_TYPE).map((s) => (
                 <li
                   key={s.id}
                   className={cn(

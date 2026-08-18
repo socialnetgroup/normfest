@@ -6805,6 +6805,65 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     window turns out to be short and older calls need to stay reviewable
     here).
 
+119. **Seasonal signals disappeared + real per-type crowding fix — shipped
+    (2026-08-19), Anis: "es gibt keine Saissonalen signale mehr bei den
+    agenten... würde ich anders organisieren, dass pro typ 3-4 angezeigt
+    werden."** Checked the real data before guessing: `seasonal_push` had
+    genuinely **0 rows anywhere in the database** - not a display/crowding
+    issue. Root cause: `products.season` windows (§13 M4's backfill) are
+    `3,4,5,6,7` / `9,10,11,12,1,2` / `3,4,9,10,11` / `10,11,12,1,2` - none
+    of the four include month **8** (August, the current month), so
+    `fn_refresh_signals()`'s month-window filter matched nothing regardless
+    of affinity. Confirmed with Anis: the AC-service window (`3,4,5,6,7`,
+    63 real products) stopping right before August was a real gap, not
+    intentional - August is peak heat/AC-repair season, not outside it.
+    Extended those 63 products' `season` to `3,4,5,6,7,8`.
+
+    Re-running `fn_refresh_signals()` after the extension surfaced a real,
+    **separate** bug: every one of 1,742 matched companies got **all 63**
+    AC-service products as individual `seasonal_push` rows (avg = max = 63
+    rows/company, 109,744 total) - the query fires one signal per matching
+    PRODUCT in an affinity-matched category with no per-company cap, the
+    same shape of problem `cross_sell` had before its 15-row cap
+    (§14 item 68). Fixed with the identical `row_number() over (partition
+    by company_id order by score desc, product_id)` pattern, capped at 5
+    per company, applied to both `seasonal_push` and `new_product_match`
+    (migration `20260819070000_fn_refresh_signals_cap_seasonal.sql`, full
+    body re-derived from the CURRENT `20260814020000` function definition,
+    not a stale prior copy - the exact mistake already made once this same
+    day on `fn_merge_duplicate_products`, §14 item 117, deliberately not
+    repeated). Verified: `seasonal_push` 109,744 → 8,710 rows (exactly
+    5/company), idempotent across two consecutive real re-runs (68-69s
+    each, well inside the 150s budget).
+
+    Anis's own suggested fix ("pro typ 3-4 anzeigen") is real and
+    independent of the above - `cross_sell`'s 201,832 rows (mostly score
+    1-3) could still crowd a low-score type like `seasonal_push` (score
+    1.5-2) out of any flat top-N display, tier or no tier. Added
+    `selectDiverseSignals()` (`lib/signals.ts`): caps how many rows of any
+    single `type` survive a top-N slice, preserving the caller's own
+    priority order within each type. Wired into
+    `/firmen/[id]`'s Signale list (`MAX_SIGNALS_PER_TYPE = 3` alongside the
+    existing `MAX_SIGNALS_SHOWN = 8`) and, at the SQL level (this is a
+    team/gebiet-wide feed, not per-company), into
+    `fn_dashboard_top_signals()` (`p_max_per_type int default 3` param,
+    `row_number() over (partition by type order by score desc)` capped
+    before the final `order by score desc limit p_limit` - migration
+    `20260819060000_fn_dashboard_top_signals_diversity.sql`).
+
+    **Real, expected consequence, not a bug:** the Dashboard's global
+    Top-8 still doesn't show `seasonal_push` even after both fixes -
+    `revenue_trend_risk`/`declining_volume` (score 5) and
+    `replenishment_due`/`dormant_winback` (score 4) genuinely outscore it
+    (1.5-2) across the whole book, so a global "top" feed correctly
+    prioritizes higher-severity signals over it. The per-company
+    Firmenprofil list is where it was actually missing and is now fixed -
+    verified live (throwaway admin test account, deleted after) on a real
+    company (Edwin Lugo Kfz-Meisterbetrieb, real AC-service affinity from
+    enrichment): Signale now shows 3 real `Saisonartikel` rows alongside 3
+    real `Cross-Sell` rows, instead of cross_sell alone filling the list.
+    Full suite green (41/41) after both migrations, typecheck/lint clean.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

@@ -1927,7 +1927,7 @@ export type Database = {
       }
       fn_dashboard_signals_count: { Args: never; Returns: number }
       fn_dashboard_top_signals: {
-        Args: { p_limit?: number }
+        Args: { p_limit?: number; p_max_per_type?: number }
         Returns: {
           company_id: string
           company_name: string
