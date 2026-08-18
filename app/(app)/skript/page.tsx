@@ -31,7 +31,7 @@ const TABLE_SPECS: Record<
   },
   "5. Abschlusstechniken": {
     headers: ["Technik", "Beispiel"],
-    rowCount: 5,
+    rowCount: 4,
   },
   "6. Verkaufsvokabular - Wortersatz": {
     headers: ["VERMEIDEN", "VERWENDEN", "Beispiel"],

@@ -315,13 +315,6 @@ export function AppSidebar({
                 Admin
               </div>
               <NavItem
-                href="/admin/reviews"
-                label="Offene Reviews"
-                icon={ListChecks}
-                active={isActive(pathname, "/admin/reviews")}
-                onNavigate={closeMobile}
-              />
-              <NavItem
                 href="/dialer"
                 label="Dialer"
                 icon={Phone}
@@ -354,6 +347,13 @@ export function AppSidebar({
                 label="Assistent-Fragen"
                 icon={Sparkles}
                 active={isActive(pathname, "/admin/assistent-fragen")}
+                onNavigate={closeMobile}
+              />
+              <NavItem
+                href="/admin/reviews"
+                label="Offene Reviews"
+                icon={ListChecks}
+                active={isActive(pathname, "/admin/reviews")}
                 onNavigate={closeMobile}
               />
               <button

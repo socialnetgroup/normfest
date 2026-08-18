@@ -6611,6 +6611,130 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     Status and Zeit im Status - identical shape to what report@ already
     had. Typecheck/lint clean, full suite green (41/41).
 
+115. **Skript content updated from real field feedback (Alan) + a real
+    dedup-table regression fixed in the process — shipped (2026-08-19).**
+    Anis relayed a real batch of Alan's own field-tested phrasing and asked
+    to "analysiere dies und ändere ab, wo es geändert werden soll... Nur
+    diese teile abändern die zum text passen" - each piece was matched
+    against the real current objection_cards/kb_chunks content (not
+    guessed) before touching anything:
+    - 4 objection responses updated (cleaned-up but otherwise close to
+      Alan's own wording) in both `objection_cards` (the rendered source,
+      §14 item 37) and the duplicate "4. Kundeneinwände" `kb_chunks` table
+      (unrendered in the UI per that item's own dedup filter, but still
+      searchable by the AI assistant's `search_kb` tool - kept in sync
+      rather than silently drifting, per §3.2.6): "Schicken Sie mir was per
+      Mail.", "Kein Interesse.", "Zu teuer.", "Wir haben sowas probiert,
+      war nicht gut.".
+    - "Wir haben schon einen Lieferanten." deliberately left unchanged -
+      Alan's message quoted this response verbatim with a trailing
+      explanatory note, correctly read as an endorsement, not an edit
+      request.
+    - "3.1 Aktiver Kunde" OPENING line replaced with Alan's real, warmer
+      phrasing ("...weil Sie zu meinen Lieblingskunden gehören...").
+    - "3.3 Neuer Lead" gained a new "NÄCHSTER SCHRITT BEI NEUKUNDEN:" block
+      (Alan's real next-step script for a qualified new lead) right before
+      "Regel für Kaltakquise".
+    - "5. Abschlusstechniken" lost its "Zusammenfassung + Abschluss"
+      row/example per Anis's explicit "rausnehmen" - `app/(app)/skript/
+      page.tsx`'s `TABLE_SPECS` fixed `rowCount` for that heading updated
+      5→4 in lockstep (this table uses a fixed expected row count, not a
+      sentinel-based end-of-table detection, so leaving it at 5 after
+      removing a real row would have silently pulled the next unrelated
+      line into the table as a bogus final row).
+
+    **Two real bugs found and fixed while applying this, not just
+    eyeballed as correct from the diff:**
+    1. The "3.3 Neuer Lead" insertion used a plain (non-global) `.replace()`
+       matching on the substring "Regel für Kaltakquise" - since that exact
+       string appears both in the real heading below AND, after the first
+       successful run, at the tail of the newly-inserted block itself, a
+       second script run duplicated the whole insertion. Caught immediately
+       by re-querying the real stored chunk content after each run (never
+       trusted a "no error" console log as proof), fixed by matching the
+       full insert-block text (not a substring likely to recur) before
+       writing it again, and the accidental duplicate was removed from the
+       real stored row. The one-off update script was deleted afterward
+       rather than left lying around as a footgun for a future run.
+    2. `objection_cards.objection`/`response_de` are stored WITH their own
+       literal wrapping quote characters (confirmed by reading the real
+       rows directly, not assumed) - `{o.response_de}` renders with no
+       quote-stripping on `/skript`, so a plain unquoted string would have
+       shown up on the page without its matching quote marks, visually
+       inconsistent with every other card. Caught before writing, not
+       after.
+
+    Verified live end-to-end (throwaway admin test account, deleted after):
+    the full `/skript` page rendered every change correctly - all 4 updated
+    objection cards, the unchanged 5th, the new Aktiver-Kunde opening, the
+    new Neuer-Lead next-step block (confirmed appearing exactly once, not
+    duplicated), and the Abschlusstechniken table correctly showing 4 rows
+    with the "NACH DER ABSCHLUSSFRAGE - STILLE!" section still rendering
+    correctly right after it (not swallowed into the table). Typecheck/lint
+    clean, full suite green (41/41).
+
+116. **"Offene Reviews" moved to the end of the admin nav — shipped
+    (2026-08-19).** Anis: "Move offene reviews to the end of the admin
+    list." Moved in `components/app-sidebar.tsx` from first to last among
+    the plain nav items (after Assistent-Fragen, before the Settings
+    submenu toggle - the submenu control itself isn't a plain list item, so
+    "end of the list" reads as just before it). Typecheck/lint clean.
+
+117. **Katalog-Dedup: all 7 real 100%-similarity candidates merged (webshop
+    kept) — done (2026-08-19), a real gap in `fn_merge_duplicate_products`
+    found and fixed along the way.** Anis: "alle katalog dedup - Ähnlichkeit
+    100% zusammenführen und webshop behalten." Dry-run first (per this
+    project's own discipline): all 7 real pending 100%-similarity
+    candidates were clean catalog_pdf-vs-webshop pairs of the genuinely
+    same product (e.g. "Ersatzschloss" 7716-950-015 vs 7715-911-2,
+    "Benzin-Additiv OT 100" 2897-371 vs 100-2897-371) - none ambiguous,
+    safe to merge automatically per the explicit instruction.
+
+    Ran via `fn_merge_duplicate_products` (a throwaway admin account signed
+    in through the anon client, since the RPC's `fn_is_admin()` check needs
+    a real `auth.uid()` - service-role calls have none). **6 of 7 merged
+    cleanly; the 7th ("Geomet® Sechskantschrauben DIN 931") failed with
+    "duplicate key value violates unique constraint idx_signals_dedup"** -
+    a real, previously-undiscovered gap: `fn_merge_duplicate_products`
+    already handles this exact class of collision for `product_relations`
+    (delete the would-be-duplicate row before repointing) but never applied
+    the same fix to `signals`/`signal_dismissals`, which carry an identical
+    `(company_id, type, coalesce(product_id, zero-uuid))` dedup unique
+    index - repointing a `signals` row for the removed product straight
+    into an existing row for the kept product violated that constraint.
+
+    **Real regression caught and fixed while writing the fix, not after
+    shipping it:** the first migration attempt (`20260819040000`) copied
+    the function body from the *original* 2026-07-25 version instead of the
+    already-fixed 2026-07-27 version (`20260727010000_fix_fn_merge_
+    duplicate_products_self_ref.sql`, which added a real self-reference
+    guard for `product_relations` after an earlier live failure) - silently
+    reverting that fix. Caught immediately: retrying the 7th merge failed a
+    *second* time with a different, real error ("violates check constraint
+    product_relations_check"), the exact symptom the 07-27 fix exists to
+    prevent. Same class of mistake this project has hit before (§14 items
+    30/80/103's "diff against the CURRENT definition, not a convenient
+    prior copy"). Rewrote the migration body starting from the real current
+    (07-27) version with the signals/signal_dismissals fix layered on top.
+
+    **A second, tooling-level mistake surfaced fixing the first one:**
+    editing the already-applied `20260819040000` migration file's content
+    in place and re-running `db push` was silently a no-op ("Remote
+    database is up to date") - Supabase's migration history tracks by
+    filename, not content, so the DB kept running the first (buggy)
+    version despite the file on disk being correct. Fixed properly: deleted
+    the file, ran `supabase migration repair --status reverted
+    20260819040000` to un-record it, and shipped the real fix as a new,
+    later-timestamped file (`20260819050000`) instead of trying to mutate
+    history in place.
+
+    All 7 candidates confirmed merged (`status='merged'`) after the fix;
+    verified directly against `products` (not just the RPC's own "no
+    error" return) that every removed catalog_pdf SKU is genuinely gone and
+    every kept webshop SKU still exists. Full suite green (41/41)
+    afterward, confirming the signals/product_relations changes didn't
+    regress anything already covered by the RLS/logic test suite.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
