@@ -17,7 +17,6 @@ import {
   ChevronDown,
   Upload,
   Wand2,
-  Headphones,
   Phone,
   MessageSquare,
   ClipboardCheck,
@@ -326,7 +325,6 @@ export function AppSidebar({
                 href="/dialer"
                 label="Dialer"
                 icon={Phone}
-                badge="Bald"
                 active={isActive(pathname, "/dialer")}
                 onNavigate={closeMobile}
               />
@@ -349,14 +347,6 @@ export function AppSidebar({
                 label="QA-Bewertungen"
                 icon={ClipboardCheck}
                 active={isActive(pathname, "/admin/qa-bewertungen")}
-                onNavigate={closeMobile}
-              />
-              <NavItem
-                href="/admin/qa-anrufe"
-                label="QA-Anrufe"
-                icon={Headphones}
-                active={isActive(pathname, "/admin/qa-anrufe")}
-                badge="Bald"
                 onNavigate={closeMobile}
               />
               <NavItem

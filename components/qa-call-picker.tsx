@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { AgentEvaluationForm, type EvaluationPrefill } from "@/components/agent-evaluation-form";
+import { AudioPlayButton } from "@/components/audio-play-button";
 import type { DialerCallLogRow } from "@/lib/dialer/status";
 
 type Agent = { id: string; full_name: string; gebiet: string };
@@ -146,15 +147,7 @@ export function QaCallPicker({
                       </td>
                       <td className="px-3 py-2">
                         {call.recording ? (
-                          <a
-                            href={call.recording}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-primary hover:underline"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            🎧
-                          </a>
+                          <AudioPlayButton url={call.recording} label={`Anruf um ${formatCallTime(call.startTime)}`} />
                         ) : (
                           <span className="text-muted-foreground">-</span>
                         )}

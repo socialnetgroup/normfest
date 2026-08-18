@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { AudioPlayButton } from "@/components/audio-play-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -183,14 +184,10 @@ export function AgentEvaluationForm({
         {callRecordingUrl ? (
           <div className="flex flex-col gap-1 sm:col-span-2">
             <Label>Aufnahme</Label>
-            <a
-              href={callRecordingUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm text-primary hover:underline"
-            >
-              🎧 Aufnahme dieses Anrufs anhören
-            </a>
+            <div className="flex items-center gap-2">
+              <AudioPlayButton url={callRecordingUrl} size="icon-sm" label="Aufnahme dieses Anrufs" />
+              <span className="text-sm text-muted-foreground">Aufnahme dieses Anrufs abspielen</span>
+            </div>
           </div>
         ) : null}
       </div>

@@ -1,5 +1,4 @@
-import { Headphones } from "lucide-react";
-
+import { AudioPlayButton } from "@/components/audio-play-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EvaluationViewTracker } from "@/components/evaluation-view-tracker";
@@ -86,25 +85,19 @@ export default async function BewertungenPage() {
                       <CardTitle>Anruf vom {formatDate(evaluation.call_date)}</CardTitle>
                       {isUnread ? <Badge variant="warning">Neu</Badge> : null}
                     </div>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Bewertet von {evaluation.evaluated_by_name} am {dateTimeFmt.format(new Date(evaluation.created_at))} Uhr
-                      {evaluation.call_duration_minutes ? ` · ${evaluation.call_duration_minutes} Min.` : ""}
-                      {evaluation.call_reference ? ` · ${evaluation.call_reference}` : ""}
+                    <div className="mt-1 flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
+                      <span>
+                        Bewertet von {evaluation.evaluated_by_name} am {dateTimeFmt.format(new Date(evaluation.created_at))} Uhr
+                        {evaluation.call_duration_minutes ? ` · ${evaluation.call_duration_minutes} Min.` : ""}
+                        {evaluation.call_reference ? ` · ${evaluation.call_reference}` : ""}
+                      </span>
                       {evaluation.call_recording_url ? (
-                        <>
-                          {" · "}
-                          <a
-                            href={evaluation.call_recording_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-primary hover:underline"
-                          >
-                            <Headphones className="size-3.5" />
-                            Aufnahme anhören
-                          </a>
-                        </>
+                        <span className="flex items-center gap-1">
+                          <AudioPlayButton url={evaluation.call_recording_url} size="icon-xs" label="Aufnahme" />
+                          Aufnahme
+                        </span>
                       ) : null}
-                    </p>
+                    </div>
                   </div>
                   <Badge
                     variant={evaluation.total_score >= 8 ? "success" : evaluation.total_score >= 5 ? "secondary" : "warning"}

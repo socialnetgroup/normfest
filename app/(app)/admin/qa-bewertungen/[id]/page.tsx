@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Pencil } from "lucide-react";
 
+import { AudioPlayButton } from "@/components/audio-play-button";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { EvaluationDeleteButton } from "@/components/evaluation-delete-button";
@@ -42,24 +43,19 @@ export default async function BewertungDetailPage({ params }: { params: Promise<
           <h1 className="font-heading text-2xl font-semibold tracking-tight">
             {evaluation.agents?.full_name ?? "Unbekannt"}
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Anruf vom {formatDate(evaluation.call_date)}
-            {evaluation.call_duration_minutes ? ` · ${evaluation.call_duration_minutes} Min.` : ""}
-            {evaluation.call_reference ? ` · ${evaluation.call_reference}` : ""}
+          <div className="mt-1 flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
+            <span>
+              Anruf vom {formatDate(evaluation.call_date)}
+              {evaluation.call_duration_minutes ? ` · ${evaluation.call_duration_minutes} Min.` : ""}
+              {evaluation.call_reference ? ` · ${evaluation.call_reference}` : ""}
+            </span>
             {evaluation.call_recording_url ? (
-              <>
-                {" · "}
-                <a
-                  href={evaluation.call_recording_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline"
-                >
-                  🎧 Aufnahme anhören
-                </a>
-              </>
+              <span className="flex items-center gap-1">
+                <AudioPlayButton url={evaluation.call_recording_url} size="icon-xs" label="Aufnahme" />
+                Aufnahme
+              </span>
             ) : null}
-          </p>
+          </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <Badge

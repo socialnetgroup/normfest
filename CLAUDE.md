@@ -6480,6 +6480,85 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     empty-state message's literal quotes, fixed with `&quot;`), full suite
     green (41/41).
 
+112. **Inline recording playback (real play/pause, not a silent download) —
+    shipped (2026-08-19).** Anis: "make the call 'play' in the tool, and
+    instead of the headphone... a pause icon... nothing happens when
+    clicking on the headphones." Root cause: every "🎧" recording link was a
+    plain `<a href target="_blank">` - whether that plays audibly or
+    silently downloads the MP3 depends entirely on the dialer server's
+    `Content-Type` header, which this app doesn't control - so in practice
+    "nothing happened" from the TL's point of view.
+
+    New `lib/audio-player.ts`: a module-level singleton `HTMLAudioElement`
+    + a tiny pub/sub store, not one `<audio>` per row - deliberate, since
+    the call picker alone can render 70+ recording buttons on one page and
+    only one call should ever be audible at a time (starting a new one
+    correctly stops whatever was playing, the same way any real player
+    behaves). New `components/audio-play-button.tsx` (`AudioPlayButton`)
+    subscribes via `useSyncExternalStore` (same pattern already used for
+    the sidebar's collapsed state) and renders Headphones/Pause/spinner
+    depending on whether this row's URL is the one currently playing.
+
+    Replaced the old plain link in all four places a recording URL is
+    shown, so behavior can't drift between them: the call picker table
+    (`components/qa-call-picker.tsx`), the evaluation form's "Aufnahme"
+    field (`components/agent-evaluation-form.tsx`), the admin detail page
+    (`app/(app)/admin/qa-bewertungen/[id]/page.tsx`), and the agent-facing
+    `/bewertungen` page (item 110).
+
+    **Real bug found and fixed during live verification, not just eyeballed
+    as "should work":** the first version's `getAudioPlayerSnapshot()`
+    returned a fresh `{ currentUrl, isLoading }` object literal on every
+    call - `useSyncExternalStore` requires a referentially stable snapshot
+    when nothing has actually changed, so a new object every render made
+    React think the store changed every time, which re-triggered the
+    render, which called `getSnapshot` again - "Maximum update depth
+    exceeded", and the whole route crashed with "This page couldn't load."
+    Caught live (not by code review - `tsc`/eslint have no way to catch
+    this class of bug) via the browser console, not assumed fixed from the
+    diff alone. Fixed by caching the snapshot object and only replacing it
+    inside `notify()`, when the underlying values actually change.
+
+    Verified live end-to-end (throwaway admin test account, deleted after)
+    against Alan Sačić's real 2026-08-17 call log, after the fix: the page
+    renders cleanly (no crash), all 70 buttons show the correct headphones
+    icon and "abspielen" (play) label; clicking one flips it to a pause
+    icon and "pausieren" label; clicking a *different* row's button
+    correctly stops the first (its icon reverts to headphones) and starts
+    the new one - the "only one plays at a time" singleton requirement
+    holds; clicking the same (now-playing) button again correctly stops it
+    and reverts to "abspielen". **One thing not verifiable in this
+    environment, flagged honestly rather than assumed**: real audible
+    playback itself - the sandboxed preview browser could not confirm
+    whether the actual MP3 bytes from the real dialer server
+    (`95.179.153.33`) played through speakers, only that the app's own
+    play/pause state and icon logic are correct and that a real network
+    request to the real recording URL was issued (confirmed via the
+    Performance API). Worth a real live check by Anis on an actual
+    connection.
+
+113. **Dialer "Bald" badge removed + QA-Anrufe hidden from nav — shipped
+    (2026-08-19).** Anis: "Beim Dialer das 'Bald' entfernen. Außerdem
+    'QA-Anrufe' ganz ausblenden (im hintergrund speichern). Momentan decken
+    wir bewertungen 'händisch' ab." The Dialer nav item (`components/
+    app-sidebar.tsx`) has carried real, shipped features since §13/§14 items
+    13/24/98 (Live-Status, Verlauf, Status im Tool) - the "Bald" (Bald =
+    "coming soon") badge was stale, left over from when the page was still
+    a softphone concept preview (§14 item 57 already removed the in-page
+    concept content; the nav badge was simply missed). QA-Anrufe (§13 M9)
+    is still genuinely blocked on an ASR-provider choice and Anis confirmed
+    the team is covering call-quality evaluation manually via the real
+    QA-Bewertungen call picker (items 109/111/112) instead - removed the
+    nav entry entirely rather than leave a dead-end "Bald" link with
+    nothing behind it; the placeholder route/page itself is untouched
+    (still exists, not deleted - "im hintergrund speichern"), just no
+    longer reachable from the sidebar. `Headphones` icon import dropped
+    from `app-sidebar.tsx` once its only remaining use (the QA-Anrufe nav
+    item) was removed. Verified live: sidebar's Admin section now reads
+    Offene Reviews / Dialer (no badge) / Team / Anwesenheit / QA-Bewertungen
+    / Assistent-Fragen - QA-Anrufe confirmed absent. Typecheck/lint clean,
+    full suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
