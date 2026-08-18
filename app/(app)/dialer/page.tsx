@@ -168,6 +168,7 @@ export default async function DialerPage({
   // already gated for HR-adjacency reasons, and Anis explicitly asked for
   // full parity here rather than a trimmed-down version).
   const canView = profile?.role === "admin" || profile?.role === "report";
+  const isAdmin = profile?.role === "admin";
   const isReport = profile?.role === "report";
   const locale: "de" | "bs" = isReport ? "bs" : "de";
   const t = T[locale];
@@ -178,7 +179,17 @@ export default async function DialerPage({
   let snapshotDates: string[] = [];
   let selectedSnapshotRows: DialerAgentSummary[] | null = null;
   let selectedSnapshotCapturedAt: string | null = null;
+  let selectedSnapshotReconstructed = false;
   let appStatusRows: { agentId: string; name: string; status: LoginStatus; path: string | null }[] = [];
+  let snapshotLogRows: {
+    id: string;
+    attempted_at: string;
+    snapshot_date: string;
+    success: boolean;
+    error: string | null;
+    agent_count: number | null;
+    attempts_used: number;
+  }[] = [];
 
   if (canView) {
     const supabase = await createClient();
@@ -242,10 +253,26 @@ export default async function DialerPage({
         return order[a.status] - order[b.status] || a.name.localeCompare(b.name);
       });
 
+    // Snapshot-Versuche (2026-08-18, nach der stvarnoj 17.08. rupi): admin-
+    // only Verlauf svakog cron-poziva (uspjeh ili neuspjeh), da se buduće
+    // rupe mogu odmah dijagnosticirati u alatu, bez pristupa Vercel logovima.
+    if (isAdmin) {
+      const { data: logRows } = await supabase
+        .from("dialer_snapshot_log")
+        .select("id, attempted_at, snapshot_date, success, error, agent_count, attempts_used")
+        .order("attempted_at", { ascending: false })
+        .limit(14);
+      snapshotLogRows = logRows ?? [];
+    }
+
     const selectedDate = datumParam && snapshotDates.includes(datumParam) ? datumParam : (snapshotDates[0] ?? null);
     if (selectedDate) {
       const [{ data: snapshot }, { data: snapshotPerfRows }, { data: snapshotSoldRows }] = await Promise.all([
-        supabase.from("dialer_daily_snapshots").select("agents, captured_at").eq("snapshot_date", selectedDate).single(),
+        supabase
+          .from("dialer_daily_snapshots")
+          .select("agents, captured_at, reconstructed")
+          .eq("snapshot_date", selectedDate)
+          .single(),
         supabase.from("agent_daily_performance").select("agent_id, sales_count").eq("date", selectedDate),
         supabase
           .from("sales_feedback")
@@ -277,6 +304,7 @@ export default async function DialerPage({
         ? refreshSalesInSummaries(frozenRows, snapshotSalesByAgentId, snapshotPositionsByAgentId)
         : null;
       selectedSnapshotCapturedAt = snapshot?.captured_at ?? null;
+      selectedSnapshotReconstructed = snapshot?.reconstructed ?? false;
     }
   }
 
@@ -401,12 +429,86 @@ export default async function DialerPage({
                       </span>
                     ) : null}
                   </form>
-                  <DialerStatusTable rows={selectedSnapshotRows ?? []} locale={locale} agentHref={agentHref} />
+                  {selectedSnapshotReconstructed ? (
+                    <p className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
+                      {locale === "bs"
+                        ? 'Rekonstruisano naknadno iz arhive poziva (nedostajao pravi snimak za taj dan) - samo Pozivi, Vrijeme razgovora, Prodaje i Pozicije su stvarni; Zauzetost, Ø vrijeme obrade i raspodjela vremena su označeni sa "-" (nisu dostupni iz tog izvora).'
+                        : 'Nachträglich aus dem Anruf-Archiv rekonstruiert (echter Snapshot fehlte an dem Tag) - nur Anrufe, Sprechzeit, Sales und Positionen sind real; Auslastung, Ø Bearbeitungszeit und Zeitverteilung sind mit "-" markiert (aus dieser Quelle nicht verfügbar).'}
+                    </p>
+                  ) : null}
+                  <DialerStatusTable
+                    rows={selectedSnapshotRows ?? []}
+                    locale={locale}
+                    agentHref={agentHref}
+                    reconstructed={selectedSnapshotReconstructed}
+                  />
                 </div>
               )}
             </CardContent>
           </Card>
         </div>
+      ) : null}
+
+      {isAdmin ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <History className="size-4 text-primary" />
+              Snapshot-Versuche
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Jeder Cron-Aufruf des täglichen Snapshots (Erfolg oder Fehler) - damit eine künftige Lücke direkt hier
+              diagnostizierbar ist, ohne Vercel-Zugriff.
+            </p>
+          </CardHeader>
+          <CardContent>
+            {snapshotLogRows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Noch keine Versuche protokolliert.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-left text-xs text-muted-foreground">
+                    <tr>
+                      <th className="px-2 py-2 font-medium">Zeit</th>
+                      <th className="px-2 py-2 font-medium">Für</th>
+                      <th className="px-2 py-2 font-medium">Status</th>
+                      <th className="px-2 py-2 font-medium">Agenten</th>
+                      <th className="px-2 py-2 font-medium">Versuche</th>
+                      <th className="px-2 py-2 font-medium">Fehler</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {snapshotLogRows.map((row) => (
+                      <tr key={row.id}>
+                        <td className="px-2 py-2 tabular-nums">
+                          {new Date(row.attempted_at).toLocaleString("de-DE", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            timeZone: "Europe/Sarajevo",
+                          })}{" "}
+                          Uhr
+                        </td>
+                        <td className="px-2 py-2 tabular-nums">
+                          {dateLabelFormat.de.format(new Date(`${row.snapshot_date}T00:00:00`))}
+                        </td>
+                        <td className="px-2 py-2">
+                          <Badge variant={row.success ? "success" : "destructive"}>
+                            {row.success ? "Erfolg" : "Fehler"}
+                          </Badge>
+                        </td>
+                        <td className="px-2 py-2 tabular-nums">{row.agent_count ?? "-"}</td>
+                        <td className="px-2 py-2 tabular-nums">{row.attempts_used}</td>
+                        <td className="px-2 py-2 text-destructive">{row.error ?? "-"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       ) : null}
     </div>
   );

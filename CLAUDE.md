@@ -5751,6 +5751,83 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     real `sales_feedback` volume) with correctly-empty "-" for July/June (before real
     feedback activity started). Typecheck/lint clean, full suite green (41/41).
 
+98. **Dialer Tages-Snapshot cron hardened + real 17.08. gap backfilled — shipped
+    (2026-08-18).** Anis noticed 17.08. was missing from the dialer snapshot history
+    ("Snapshot dialer didnt work for yesterday, 17.08.?"). Investigated: confirmed the
+    gap was real (10.-14.08. present, 15./16.08. correctly skipped as weekend per §14
+    item 84, but 17.08. - a real weekday - had no row at all despite the cron firing on
+    schedule). This environment can't reach Vercel's own function/cron logs, so the exact
+    root cause couldn't be confirmed - Anis separately checked and confirmed `CRON_SECRET`
+    is correctly set in Vercel, ruling out that hypothesis. Asked to harden regardless
+    ("ojačaj svakako").
+
+    **Three-layer hardening in `app/api/cron/dialer-snapshot/route.ts`:**
+    1. `fetchDialerWithRetry()` retries the dialer fetch itself up to 3× (3s/6s backoff)
+       before giving up - guards against transient network hiccups talking to
+       `socialnet.dialer.ba`.
+    2. New second cron entry in `vercel.json` (`0 17 * * 1-5`, an hour after the existing
+       `0 16 * * 1-5`) as a safety net against a whole-invocation failure (deploy in
+       flight, cold start, etc.) - safe because the route always upserts on
+       `snapshot_date`, so a second successful run just refreshes the same day with
+       fresher data rather than duplicating anything. Flagged to Anis: unverified whether
+       Vercel's plan tier allows 2 cron entries for the same project - will surface itself
+       if not.
+    3. New `dialer_snapshot_log` table (migration `20260818030000_dialer_snapshot_log.sql`,
+       admin-only RLS) - every invocation, success or failure, writes exactly one row
+       (`snapshot_date`, `success`, `error`, `agent_count`, `attempts_used`). New
+       "Snapshot-Versuche" card on `/dialer` (admin-only, last 14 attempts) surfaces this
+       directly in-app, closing the real diagnostic gap hit today - a future miss is now
+       checkable without needing Vercel dashboard access at all.
+
+    **Real 17.08. gap backfilled from a genuine historical source**, not left empty. Anis,
+    separately: the dialer dev shared `metrike.php` (a real, date-ranged CDR endpoint -
+    per-call records: extension, duration, disposition status, recording URL) - "da li se
+    može iskoristiti za recreatanje screenshota za početak, pa ćemo kasnije analizirati
+    dalje ove metrike za druge stvari." Investigated the endpoint directly before building
+    anything: real data (727 real call records for 17.08. across all 10 real agent
+    extensions, no pagination truncation), confirmed it gives real, computable per-agent
+    **Anrufe** (call count) and **Sprechzeit** (summed call duration) for a past date - but
+    NOT pause/dispo/wait/occupancy, since those need continuous state polling (what
+    `agents.php`'s live snapshot captures), which a CDR inherently doesn't carry.
+
+    New `dialer_daily_snapshots.reconstructed boolean` column (migration
+    `20260818040000_dialer_snapshot_reconstructed_flag.sql`) marks a backfilled row as
+    honestly partial rather than silently presenting missing metrics as real zeros - same
+    "never silently mixed" provenance discipline as everywhere else in this app (§3.2.6).
+    One-off script (not committed, matching this project's established pattern for pure
+    data-migration scripts) fetched the real CDR for 17.08., matched each call's extension
+    to a real agent via a live `agents.php` pull (extension→name mapping, same
+    diacritic-normalized matching `lib/dialer/status.ts` already uses), computed real
+    `totalCalls`/`talkTime` per agent, pulled real `realSales`/`salePositions` from
+    `sales_feedback` for that date (same self-correcting mechanism `refreshSalesInSummaries`
+    already uses live), and left every genuinely-unavailable field as `"-"` (never a
+    fabricated `00:00:00`) before upserting with `reconstructed: true`.
+
+    `/dialer`'s Verlauf card now shows a real warning banner when the selected snapshot is
+    reconstructed, explaining exactly which numbers are real and which aren't.
+
+    **Real accuracy bug caught before shipping, not assumed away:** the table's `Gesamt`
+    (totals) row recomputes Auslastung/Ø Bearbeitungszeit/time-breakdowns fresh from the
+    raw per-row time strings via `computeDialerTotals()` - since `"-"` parses to `0`
+    seconds (`parseDialerTimeToSeconds`'s own existing guard), the reconstructed row's
+    real talk time divided by a now-zero denominator produced a genuinely misleading
+    **100% Auslastung** in the Gesamt row, even though every per-row cell correctly showed
+    `"-"`. Fixed with a new `reconstructed` prop on `DialerStatusTable` - when true, the
+    Gesamt row's derived-only cells (Anrufe/Std., Verkäufe/Std., Ø Bearbeitungszeit,
+    Auslastung, and every time-breakdown column except the real summed Sprechzeit) render
+    `"-"` too, instead of a fabricated aggregate.
+
+    Verified live end-to-end (throwaway admin test account, deleted after): manually
+    triggered the real cron route (`curl` with the real `CRON_SECRET`), confirmed a
+    `dialer_snapshot_log` row was written (`success: true, attempts_used: 1`) and rendered
+    correctly in the new "Snapshot-Versuche" card; ran the 17.08. backfill for real (dry-run
+    first, matched all 10 real agents with plausible real call counts/talk times),
+    confirmed `/dialer?datum=2026-08-17` shows the warning banner, correct real per-row
+    values (e.g. Alan Sačić: 72 Anrufe, 00:55:19 Sprechzeit, both real), `"-"` for every
+    unavailable field, and confirmed the Gesamt row no longer shows a fabricated 100%
+    Auslastung after the fix (real Anrufe/Sprechzeit/Sales/Positionen sums, `"-"` for
+    everything else). Typecheck/lint clean, full suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

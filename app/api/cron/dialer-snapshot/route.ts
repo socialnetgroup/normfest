@@ -10,6 +10,35 @@ import { createAdminClient } from "@/lib/supabase/admin";
 // Live-Status numbers reset for the next day. Not user-invoked - secured via
 // CRON_SECRET rather than a user session, same pattern Vercel's own docs
 // recommend for cron routes.
+//
+// Hardened 2026-08-18 after a real, unexplained gap (17.08. missing, no
+// Vercel log access from this environment to diagnose why) - Anis: "ojačaj
+// svakako". Three layers:
+//  1. Retry the dialer fetch itself (transient network hiccups talking to
+//     socialnet.dialer.ba) before giving up.
+//  2. A second daily cron entry an hour later (vercel.json) as a safety net
+//     against a whole-invocation failure (deploy in flight, cold start,
+//     etc.) - safe because this route always upserts on snapshot_date, so a
+//     second successful run just refreshes the same day with fresher data.
+//  3. Every invocation - success or failure - writes a row to
+//     dialer_snapshot_log, so a future gap is diagnosable directly from the
+//     DB instead of needing Vercel dashboard access this environment doesn't
+//     have.
+async function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchDialerWithRetry(maxAttempts = 3) {
+  let lastError: string | null = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const { data, error } = await fetchDialerAgentStatuses();
+    if (!error && data) return { data, error: null, attemptsUsed: attempt };
+    lastError = error;
+    if (attempt < maxAttempts) await sleep(attempt * 3000);
+  }
+  return { data: null, error: lastError, attemptsUsed: maxAttempts };
+}
+
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -19,18 +48,24 @@ export async function GET(request: Request) {
   const admin = createAdminClient();
   const todayStr = new Date().toISOString().slice(0, 10);
 
-  const [{ data: dialerRows, error: fetchError }, { data: agents }, { data: perfRows }, { data: soldRows }] =
-    await Promise.all([
-      fetchDialerAgentStatuses(),
-      admin.from("agents").select("id, full_name, profile_id").eq("active", true),
-      admin.from("agent_daily_performance").select("agent_id, sales_count").eq("date", todayStr),
-      // salePositions (2026-08-18): real line-item count, separate from the
-      // now-batch-aware sales_count above - see lib/dialer/status.ts.
-      admin.from("sales_feedback").select("agent_id").eq("outcome", "sold").gte("created_at", `${todayStr}T00:00:00Z`),
-    ]);
+  async function logAttempt(success: boolean, error: string | null, agentCount: number | null, attemptsUsed: number) {
+    await admin
+      .from("dialer_snapshot_log")
+      .insert({ snapshot_date: todayStr, success, error, agent_count: agentCount, attempts_used: attemptsUsed });
+  }
+
+  const { data: dialerRows, error: fetchError, attemptsUsed } = await fetchDialerWithRetry();
+  const [{ data: agents }, { data: perfRows }, { data: soldRows }] = await Promise.all([
+    admin.from("agents").select("id, full_name, profile_id").eq("active", true),
+    admin.from("agent_daily_performance").select("agent_id, sales_count").eq("date", todayStr),
+    // salePositions (2026-08-18): real line-item count, separate from the
+    // now-batch-aware sales_count above - see lib/dialer/status.ts.
+    admin.from("sales_feedback").select("agent_id").eq("outcome", "sold").gte("created_at", `${todayStr}T00:00:00Z`),
+  ]);
 
   if (fetchError || !dialerRows) {
-    return NextResponse.json({ error: fetchError ?? "no dialer data" }, { status: 502 });
+    await logAttempt(false, fetchError ?? "no dialer data", null, attemptsUsed);
+    return NextResponse.json({ error: fetchError ?? "no dialer data", attemptsUsed }, { status: 502 });
   }
 
   const salesByAgentId = new Map((perfRows ?? []).map((r) => [r.agent_id, r.sales_count]));
@@ -50,6 +85,7 @@ export async function GET(request: Request) {
     .upsert({ snapshot_date: todayStr, captured_at: new Date().toISOString(), agents: summaries }, { onConflict: "snapshot_date" });
 
   if (upsertError) {
+    await logAttempt(false, upsertError.message, summaries.length, attemptsUsed);
     return NextResponse.json({ error: upsertError.message }, { status: 500 });
   }
 
@@ -77,9 +113,11 @@ export async function GET(request: Request) {
       .from("agent_daily_performance")
       .upsert(callsRows, { onConflict: "agent_id,date" });
     if (callsError) {
+      await logAttempt(false, callsError.message, summaries.length, attemptsUsed);
       return NextResponse.json({ error: callsError.message }, { status: 500 });
     }
   }
 
-  return NextResponse.json({ snapshot_date: todayStr, agent_count: summaries.length, calls_synced: callsRows.length });
+  await logAttempt(true, null, summaries.length, attemptsUsed);
+  return NextResponse.json({ snapshot_date: todayStr, agent_count: summaries.length, calls_synced: callsRows.length, attemptsUsed });
 }

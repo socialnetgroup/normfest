@@ -722,19 +722,52 @@ export type Database = {
           agents: Json
           captured_at: string
           id: string
+          reconstructed: boolean
           snapshot_date: string
         }
         Insert: {
           agents: Json
           captured_at?: string
           id?: string
+          reconstructed?: boolean
           snapshot_date: string
         }
         Update: {
           agents?: Json
           captured_at?: string
           id?: string
+          reconstructed?: boolean
           snapshot_date?: string
+        }
+        Relationships: []
+      }
+      dialer_snapshot_log: {
+        Row: {
+          agent_count: number | null
+          attempted_at: string
+          attempts_used: number
+          error: string | null
+          id: string
+          snapshot_date: string
+          success: boolean
+        }
+        Insert: {
+          agent_count?: number | null
+          attempted_at?: string
+          attempts_used?: number
+          error?: string | null
+          id?: string
+          snapshot_date: string
+          success: boolean
+        }
+        Update: {
+          agent_count?: number | null
+          attempted_at?: string
+          attempts_used?: number
+          error?: string | null
+          id?: string
+          snapshot_date?: string
+          success?: boolean
         }
         Relationships: []
       }

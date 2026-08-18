@@ -1,0 +1,14 @@
+-- Anis (2026-08-18): the dialer dev shared a real historical call-log
+-- endpoint (metrike.php, date-ranged CDR: caller, extension, duration,
+-- status, recording URL) - "da li se može iskoristiti za recreatanje
+-- screenshota za početak" (can it recreate the missing 17.08. snapshot,
+-- deeper analysis of the endpoint deferred to later). It can genuinely
+-- recreate real Anrufe (call count) and Sprechzeit (talk time) per agent
+-- for a past day, but NOT pause/dispo/wait/occupancy - those require
+-- continuous state polling (what agents.php gives live), which a CDR
+-- doesn't carry. A backfilled row is therefore honestly partial, not a
+-- full recreation - this flag lets the UI say so instead of silently
+-- presenting "-"/0 time-breakdown fields as if they were real captured
+-- zeros, same "never silently mixed" provenance discipline as everywhere
+-- else in this app (§3.2.6).
+alter table dialer_daily_snapshots add column reconstructed boolean not null default false;

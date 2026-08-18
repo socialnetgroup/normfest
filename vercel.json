@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/dialer-snapshot",
       "schedule": "0 16 * * 1-5"
+    },
+    {
+      "path": "/api/cron/dialer-snapshot",
+      "schedule": "0 17 * * 1-5"
     }
   ]
 }
