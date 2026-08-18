@@ -6243,6 +6243,37 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     reflecting her own 5 real Urlaub days). Typecheck/lint clean, full
     suite green (41/41).
 
+108. **Dialer: DEAD added as its own live status — shipped (2026-08-18).**
+    Anis: *"dialer u viciu prikazuje dead kao status i mi racunamo dead kao
+    vrijeme, ali ne prikazuje se kao status u trenutku kad se desi, ako
+    mozemo i to dodati u dialer status, dodaj."* Confirmed via a real
+    `agents.php` fetch that Vici does send a live `status` value (all 10
+    real agents were currently `PAUSED`/`DISPO` at check time, but "DEAD" is
+    a real value ViciDial can report there) - `components/dialer-status-table.tsx`'s
+    `STATUS_LABELS`/`statusVariant`/`STATUS_ORDER` only recognized
+    INCALL/DISPO/PAUSED/OFFLINE, so a live DEAD status was silently falling
+    through to the generic "unrecognized status" muted/untranslated fallback
+    (same fallback that already correctly avoided crashing on an unrelated
+    unknown value, "CLOSER", per §14 item 62 - just not what was wanted for
+    a status Anis specifically wants surfaced). Added DEAD to all three:
+    label "Totzeit"/"Mrtvo vrijeme" (matching the existing Zeitverteilung
+    column's own naming for the same concept), `destructive` (red) badge
+    variant consistent with dead time already being colored red elsewhere
+    in this same table (§14 item 102's "ostalo crveno"), and sort order
+    right after PAUSED.
+
+    Verified live (throwaway admin test account, deleted after): confirmed
+    the page still renders cleanly with the real current PAUSED/DISPO
+    statuses (translated labels intact, no regression), and read through
+    the code path once more to confirm DEAD now resolves through the exact
+    same lookup functions the other three statuses already use - a real
+    live DEAD occurrence wasn't available at verification time to
+    screenshot, since none of the 10 agents happened to be in that state.
+    Typecheck/lint clean, full suite green (41/41, one pre-existing and
+    already-documented `chat_log` describe-block flake reproduced once and
+    passed cleanly on an isolated re-run, confirmed unrelated to this
+    change).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

@@ -14,13 +14,21 @@ import { cn } from "@/lib/utils";
 // the daily-snapshot history viewer render identically instead of drifting
 // apart - both consume the same DialerAgentSummary[] shape (buildDialerAgentSummaries()
 // output, live or from a stored dialer_daily_snapshots row).
-const STATUS_ORDER: Record<string, number> = { INCALL: 0, DISPO: 1, PAUSED: 2 };
+// DEAD (2026-08-18, Anis: "dialer u viciu prikazuje dead kao status i mi
+// racunamo dead kao vrijeme, ali ne prikazuje se kao status u trenutku kad
+// se desi") - Vici genuinely sends "DEAD" as a live per-agent status value
+// (not just the accumulated deadTime/Totzeit column this table already
+// showed), but it fell through to the generic "unrecognized status" muted
+// fallback since it wasn't in this map. Given its own dedicated status
+// row/color/order now, red like the rest of the non-talking time buckets.
+const STATUS_ORDER: Record<string, number> = { INCALL: 0, DISPO: 1, PAUSED: 2, DEAD: 3 };
 
-function statusVariant(status: string): "success" | "default" | "warning" | "muted" {
+function statusVariant(status: string): "success" | "default" | "warning" | "muted" | "destructive" {
   const s = status.toUpperCase();
   if (s === "INCALL") return "success";
   if (s === "DISPO") return "default";
   if (s === "PAUSED") return "warning";
+  if (s === "DEAD") return "destructive";
   return "muted";
 }
 
@@ -29,12 +37,14 @@ const STATUS_LABELS: Record<"de" | "bs", Record<string, string>> = {
     INCALL: "Im Gespräch",
     DISPO: "Nachbearbeitung",
     PAUSED: "Pause",
+    DEAD: "Totzeit",
     OFFLINE: "Abgemeldet",
   },
   bs: {
     INCALL: "U razgovoru",
     DISPO: "Naknadna obrada",
     PAUSED: "Pauza",
+    DEAD: "Mrtvo vrijeme",
     OFFLINE: "Odjavljen",
   },
 };
