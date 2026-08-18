@@ -19,18 +19,31 @@ export async function GET(request: Request) {
   const admin = createAdminClient();
   const todayStr = new Date().toISOString().slice(0, 10);
 
-  const [{ data: dialerRows, error: fetchError }, { data: agents }, { data: perfRows }] = await Promise.all([
-    fetchDialerAgentStatuses(),
-    admin.from("agents").select("id, full_name").eq("active", true),
-    admin.from("agent_daily_performance").select("agent_id, sales_count").eq("date", todayStr),
-  ]);
+  const [{ data: dialerRows, error: fetchError }, { data: agents }, { data: perfRows }, { data: soldRows }] =
+    await Promise.all([
+      fetchDialerAgentStatuses(),
+      admin.from("agents").select("id, full_name, profile_id").eq("active", true),
+      admin.from("agent_daily_performance").select("agent_id, sales_count").eq("date", todayStr),
+      // salePositions (2026-08-18): real line-item count, separate from the
+      // now-batch-aware sales_count above - see lib/dialer/status.ts.
+      admin.from("sales_feedback").select("agent_id").eq("outcome", "sold").gte("created_at", `${todayStr}T00:00:00Z`),
+    ]);
 
   if (fetchError || !dialerRows) {
     return NextResponse.json({ error: fetchError ?? "no dialer data" }, { status: 502 });
   }
 
   const salesByAgentId = new Map((perfRows ?? []).map((r) => [r.agent_id, r.sales_count]));
-  const summaries = buildDialerAgentSummaries(dialerRows, agents ?? [], salesByAgentId);
+  const agentIdByProfileId = new Map(
+    (agents ?? []).filter((a) => a.profile_id).map((a) => [a.profile_id as string, a.id]),
+  );
+  const positionsByAgentId = new Map<string, number>();
+  for (const row of soldRows ?? []) {
+    const agentId = agentIdByProfileId.get(row.agent_id);
+    if (!agentId) continue;
+    positionsByAgentId.set(agentId, (positionsByAgentId.get(agentId) ?? 0) + 1);
+  }
+  const summaries = buildDialerAgentSummaries(dialerRows, agents ?? [], salesByAgentId, positionsByAgentId);
 
   const { error: upsertError } = await admin
     .from("dialer_daily_snapshots")

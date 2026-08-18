@@ -187,12 +187,19 @@ export default async function DialerPage({
       { data: dialerData, error: fetchError },
       { data: agentRows },
       { data: perfRows },
+      { data: todaySoldRows },
       { data: snapshotRows },
       { data: loginStatusRows },
     ] = await Promise.all([
       fetchDialerAgentStatuses(),
-      supabase.from("agents").select("id, full_name").eq("active", true),
+      supabase.from("agents").select("id, full_name, profile_id").eq("active", true),
       supabase.from("agent_daily_performance").select("agent_id, sales_count").eq("date", todayStr),
+      // Anis, 2026-08-18: "to bi trebalo biti 1 prodaja 6 pozicija... u
+      // dialeru oboje prikazati" - sales_count (above) is now the real
+      // distinct-sale count (§20260818010000's fn_log_sales_feedback fix);
+      // this is the separate real line-item ("Pozicije") count, a plain row
+      // count that doesn't need batch-deduping the way sales_count does.
+      supabase.from("sales_feedback").select("agent_id").eq("outcome", "sold").gte("created_at", `${todayStr}T00:00:00Z`),
       // Verlauf (2026-08-08): "posto nemamo logove" stopgap (§14 item 24) had
       // no viewer built yet - just capture. Anis: "How to get that?" -> "sure,
       // viewer page now", "do it in dialer menu" (same page, not a new nav item).
@@ -204,7 +211,17 @@ export default async function DialerPage({
     dialerError = fetchError;
     const agents = agentRows ?? [];
     const salesByAgentId = new Map((perfRows ?? []).map((r) => [r.agent_id, r.sales_count]));
-    liveRows = dialerData ? buildDialerAgentSummaries(dialerData, agents, salesByAgentId) : null;
+    // sales_feedback.agent_id is a PROFILE id (auth.uid()), not agents.id -
+    // same key-space mismatch already hit and fixed elsewhere in this app
+    // (§14 item 30/83) - convert via agents.profile_id before counting.
+    const agentIdByProfileId = new Map(agents.filter((a) => a.profile_id).map((a) => [a.profile_id as string, a.id]));
+    const positionsByAgentId = new Map<string, number>();
+    for (const row of todaySoldRows ?? []) {
+      const agentId = agentIdByProfileId.get(row.agent_id);
+      if (!agentId) continue;
+      positionsByAgentId.set(agentId, (positionsByAgentId.get(agentId) ?? 0) + 1);
+    }
+    liveRows = dialerData ? buildDialerAgentSummaries(dialerData, agents, salesByAgentId, positionsByAgentId) : null;
     snapshotDates = (snapshotRows ?? []).map((r) => r.snapshot_date);
 
     const now = new Date();
@@ -227,9 +244,15 @@ export default async function DialerPage({
 
     const selectedDate = datumParam && snapshotDates.includes(datumParam) ? datumParam : (snapshotDates[0] ?? null);
     if (selectedDate) {
-      const [{ data: snapshot }, { data: snapshotPerfRows }] = await Promise.all([
+      const [{ data: snapshot }, { data: snapshotPerfRows }, { data: snapshotSoldRows }] = await Promise.all([
         supabase.from("dialer_daily_snapshots").select("agents, captured_at").eq("snapshot_date", selectedDate).single(),
         supabase.from("agent_daily_performance").select("agent_id, sales_count").eq("date", selectedDate),
+        supabase
+          .from("sales_feedback")
+          .select("agent_id")
+          .eq("outcome", "sold")
+          .gte("created_at", `${selectedDate}T00:00:00Z`)
+          .lt("created_at", `${selectedDate}T23:59:59.999Z`),
       ]);
       const frozenRows = (snapshot?.agents as DialerAgentSummary[] | undefined) ?? null;
       // Anis, 2026-08-11: "sales match... everywhere" - realSales/conversion/
@@ -240,9 +263,19 @@ export default async function DialerPage({
       // them against the CURRENT agent_daily_performance for that date on
       // every view - dialer-sourced fields (calls, occupancy, time
       // breakdowns) stay frozen, since those are a genuine point-in-time
-      // capture that can't be "corrected" after the fact.
+      // capture that can't be "corrected" after the fact. salePositions
+      // (2026-08-18) is refreshed the same way, from real sales_feedback
+      // rows for that date, for the same self-correcting reason.
       const snapshotSalesByAgentId = new Map((snapshotPerfRows ?? []).map((r) => [r.agent_id, r.sales_count]));
-      selectedSnapshotRows = frozenRows ? refreshSalesInSummaries(frozenRows, snapshotSalesByAgentId) : null;
+      const snapshotPositionsByAgentId = new Map<string, number>();
+      for (const row of snapshotSoldRows ?? []) {
+        const agentId = agentIdByProfileId.get(row.agent_id);
+        if (!agentId) continue;
+        snapshotPositionsByAgentId.set(agentId, (snapshotPositionsByAgentId.get(agentId) ?? 0) + 1);
+      }
+      selectedSnapshotRows = frozenRows
+        ? refreshSalesInSummaries(frozenRows, snapshotSalesByAgentId, snapshotPositionsByAgentId)
+        : null;
       selectedSnapshotCapturedAt = snapshot?.captured_at ?? null;
     }
   }

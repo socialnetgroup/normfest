@@ -133,6 +133,7 @@ export function formatSecondsAsHms(totalSeconds: number): string {
 export function refreshSalesInSummaries(
   summaries: DialerAgentSummary[],
   salesByAgentId: Map<string, number>,
+  positionsByAgentId: Map<string, number> = new Map(),
 ): DialerAgentSummary[] {
   return summaries.map((s) => {
     const realSales = salesByAgentId.get(s.agentId) ?? 0;
@@ -140,6 +141,7 @@ export function refreshSalesInSummaries(
     return {
       ...s,
       realSales,
+      salePositions: positionsByAgentId.get(s.agentId) ?? s.salePositions ?? 0,
       conversion: s.totalCalls > 0 ? realSales / s.totalCalls : 0,
       salesPerHour: totalHours > 0 ? realSales / totalHours : 0,
     };
@@ -150,6 +152,7 @@ export type DialerAgentTotals = {
   totalCalls: number;
   callsPerHour: number;
   realSales: number;
+  salePositions: number;
   conversion: number;
   salesPerHour: number;
   ahtSeconds: number;
@@ -177,6 +180,7 @@ export type DialerAgentTotals = {
 export function computeDialerTotals(summaries: DialerAgentSummary[]): DialerAgentTotals {
   let totalCalls = 0;
   let realSales = 0;
+  let salePositions = 0;
   let talkSec = 0;
   let waitSec = 0;
   let dispoSec = 0;
@@ -189,6 +193,7 @@ export function computeDialerTotals(summaries: DialerAgentSummary[]): DialerAgen
   for (const s of summaries) {
     totalCalls += s.totalCalls;
     realSales += s.realSales;
+    salePositions += s.salePositions;
     talkSec += parseDialerTimeToSeconds(s.talkTime);
     waitSec += parseDialerTimeToSeconds(s.waitTime);
     dispoSec += parseDialerTimeToSeconds(s.dispoTime);
@@ -207,6 +212,7 @@ export function computeDialerTotals(summaries: DialerAgentSummary[]): DialerAgen
     totalCalls,
     callsPerHour: totalHours > 0 ? totalCalls / totalHours : 0,
     realSales,
+    salePositions,
     conversion: totalCalls > 0 ? realSales / totalCalls : 0,
     salesPerHour: totalHours > 0 ? realSales / totalHours : 0,
     ahtSeconds: totalCalls > 0 ? (talkSec + dispoSec) / totalCalls : 0,
@@ -250,6 +256,14 @@ export type DialerAgentSummary = {
   timeInStatus: string;
   totalCalls: number;
   realSales: number;
+  /** Real line-item ("position") count from today's sold sales_feedback
+   * rows, separate from realSales (real distinct sale count). Added
+   * 2026-08-18, Anis: "to bi trebalo biti 1 prodaja 6 pozicija... u dialeru
+   * oboje prikazati" - a multi-position sale (§14 item 69/80) is one real
+   * sale (realSales) with several line items (salePositions); both are
+   * shown separately in the Dialer table now instead of one number that
+   * used to conflate them. */
+  salePositions: number;
   conversion: number;
   callsPerHour: number;
   salesPerHour: number;
@@ -275,12 +289,14 @@ export function buildDialerAgentSummaries(
   dialerRows: DialerAgentStatus[],
   agents: { id: string; full_name: string }[],
   salesByAgentId: Map<string, number>,
+  positionsByAgentId: Map<string, number> = new Map(),
 ): DialerAgentSummary[] {
   return dialerRows
     .map((row) => ({ row, matched: matchDialerAgent(row.fullName, agents) }))
     .filter((r): r is { row: DialerAgentStatus; matched: (typeof agents)[number] } => r.matched !== null)
     .map(({ row, matched }) => {
       const realSales = salesByAgentId.get(matched.id) ?? 0;
+      const salePositions = positionsByAgentId.get(matched.id) ?? 0;
       const conversion = row.totalCalls > 0 ? realSales / row.totalCalls : 0;
 
       const talkSec = parseDialerTimeToSeconds(row.talkTime);
@@ -308,6 +324,7 @@ export function buildDialerAgentSummaries(
         timeInStatus: row.timeInStatus,
         totalCalls: row.totalCalls,
         realSales,
+        salePositions,
         conversion,
         callsPerHour: totalHours > 0 ? row.totalCalls / totalHours : 0,
         salesPerHour: totalHours > 0 ? realSales / totalHours : 0,

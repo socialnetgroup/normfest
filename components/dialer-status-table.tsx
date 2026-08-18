@@ -40,7 +40,7 @@ const COLUMN_GROUPS: Record<"de" | "bs", { label: string; span: number }[]> = {
   de: [
     { label: "Agent", span: 3 },
     { label: "Volumen", span: 2 },
-    { label: "Ergebnis", span: 3 },
+    { label: "Ergebnis", span: 4 },
     { label: "Effizienz", span: 2 },
     { label: "Zeitverteilung", span: 5 },
     { label: "Aktivität", span: 3 },
@@ -48,13 +48,17 @@ const COLUMN_GROUPS: Record<"de" | "bs", { label: string; span: number }[]> = {
   bs: [
     { label: "Agent", span: 3 },
     { label: "Obim", span: 2 },
-    { label: "Rezultat", span: 3 },
+    { label: "Rezultat", span: 4 },
     { label: "Efikasnost", span: 2 },
     { label: "Raspodjela vremena", span: 5 },
     { label: "Aktivnost", span: 3 },
   ],
 };
 
+// "Positionen"/"Pozicije" added 2026-08-18 (Anis: "to bi trebalo biti 1
+// prodaja 6 pozicija... u dialeru oboje prikazati") right after Sales/
+// Prodaje - the real distinct-sale count and the real line-item count are
+// now two separate numbers instead of one column conflating them.
 const COLUMN_HEADERS: Record<"de" | "bs", string[]> = {
   de: [
     "Agent",
@@ -63,6 +67,7 @@ const COLUMN_HEADERS: Record<"de" | "bs", string[]> = {
     "Anrufe",
     "Anrufe/Std.",
     "Sales",
+    "Positionen",
     "Konversion",
     "Verkäufe/Std.",
     "Ø Bearbeitungszeit",
@@ -83,6 +88,7 @@ const COLUMN_HEADERS: Record<"de" | "bs", string[]> = {
     "Pozivi",
     "Pozivi/h",
     "Prodaje",
+    "Pozicije",
     "Konverzija",
     "Prodaje/h",
     "Ø vrijeme obrade",
@@ -165,16 +171,17 @@ export function DialerStatusTable({
             <th className="border-l px-2 py-2 font-medium">{headers[5]}</th>
             <th className="px-2 py-2 font-medium">{headers[6]}</th>
             <th className="px-2 py-2 font-medium">{headers[7]}</th>
-            <th className="border-l px-2 py-2 font-medium">{headers[8]}</th>
-            <th className="px-2 py-2 font-medium">{headers[9]}</th>
-            <th className="border-l px-2 py-2 font-medium">{headers[10]}</th>
-            <th className="px-2 py-2 font-medium">{headers[11]}</th>
+            <th className="px-2 py-2 font-medium">{headers[8]}</th>
+            <th className="border-l px-2 py-2 font-medium">{headers[9]}</th>
+            <th className="px-2 py-2 font-medium">{headers[10]}</th>
+            <th className="border-l px-2 py-2 font-medium">{headers[11]}</th>
             <th className="px-2 py-2 font-medium">{headers[12]}</th>
             <th className="px-2 py-2 font-medium">{headers[13]}</th>
             <th className="px-2 py-2 font-medium">{headers[14]}</th>
-            <th className="border-l px-2 py-2 font-medium">{headers[15]}</th>
-            <th className="px-2 py-2 font-medium">{headers[16]}</th>
+            <th className="px-2 py-2 font-medium">{headers[15]}</th>
+            <th className="border-l px-2 py-2 font-medium">{headers[16]}</th>
             <th className="px-2 py-2 font-medium">{headers[17]}</th>
+            <th className="px-2 py-2 font-medium">{headers[18]}</th>
           </tr>
         </thead>
         <tbody className="divide-y">
@@ -192,6 +199,7 @@ export function DialerStatusTable({
               <td className="border-l px-2 py-2 tabular-nums">{a.totalCalls}</td>
               <td className="px-2 py-2 tabular-nums">{rate.format(a.callsPerHour)}</td>
               <td className="border-l px-2 py-2 tabular-nums">{a.realSales}</td>
+              <td className="px-2 py-2 tabular-nums text-muted-foreground">{a.salePositions}</td>
               <td className="px-2 py-2 tabular-nums">{pct.format(a.conversion)}</td>
               <td className="px-2 py-2 tabular-nums">{rate.format(a.salesPerHour)}</td>
               <td className="border-l px-2 py-2 tabular-nums">{formatSecondsAsHms(a.ahtSeconds)}</td>
@@ -230,6 +238,7 @@ export function DialerStatusTable({
             <td className="border-l px-2 py-2 tabular-nums">{totals.totalCalls}</td>
             <td className="px-2 py-2 tabular-nums">{rate.format(totals.callsPerHour)}</td>
             <td className="border-l px-2 py-2 tabular-nums">{totals.realSales}</td>
+            <td className="px-2 py-2 tabular-nums text-muted-foreground">{totals.salePositions}</td>
             <td className="px-2 py-2 tabular-nums">{pct.format(totals.conversion)}</td>
             <td className="px-2 py-2 tabular-nums">{rate.format(totals.salesPerHour)}</td>
             <td className="border-l px-2 py-2 tabular-nums">{formatSecondsAsHms(totals.ahtSeconds)}</td>

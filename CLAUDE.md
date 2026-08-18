@@ -5617,6 +5617,83 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     `/bericht/[agentId]`; sidebar confirmed exactly 3 nav items (Izvještaj/Dialer/Tim).
     Typecheck/lint clean on all 4 touched files, full suite green (41/41).
 
+95. **Real root-cause fix: `agent_daily_performance.sales_count` was counting
+    POSITIONS, not real sales — shipped (2026-08-18).** Anis, looking at the Dialer's
+    "Prodaje" column: "Dialer prikazuje Prodaje (sve pozicije), to bi trebalo biti 1
+    prodaja 6 pozicija danas kod Maje, možemo li to razdvojiti. U dialeru oboje
+    prikazati." Investigated rather than just adding a second number to the UI:
+    `fn_log_sales_feedback` has always incremented `agent_daily_performance.sales_count`
+    by 1 PER ROW inserted - correct back when one row always meant one real sale, but the
+    multi-position "Weitere Position" feature (§14 item 69/80, 2026-08-14) writes N rows
+    sharing one `batch_id` for what is genuinely ONE real sale with N line items. Since
+    then, `sales_count` has silently counted line items everywhere it's read - Rangliste,
+    Team/Tim pages, Dashboard KPIs, and the Dialer's own "Sales" column (§14 item 27
+    specifically re-sourced it to this field to match "the same real source as
+    Rangliste/Team Dashboard" - that intent is what's actually restored here, not just a
+    display tweak).
+
+    Migration `20260818010000_fix_batch_sales_count.sql`: `fn_log_sales_feedback` now
+    only increments `sales_count` for the FIRST sold+valued row of a batch (earliest
+    `created_at`, tie-broken by `id`, among that batch's sold+valued rows - a
+    single-position sale has no batch_id and is always its own "first", so unaffected).
+    `revenue` keeps summing every row unconditionally, since the real total money is
+    correctly the sum of all positions - only the COUNT was wrong. `fn_update_
+    sales_feedback`/`fn_delete_sales_feedback` updated in lockstep so revenue and
+    sales_count reversal/reapplication stay correct once a row's sales_count contribution
+    is no longer simply "1 per sold row" (decoupled: revenue reversal always fires for
+    any sold+valued row, sales_count reversal only fires if that row currently "counts"
+    for its batch, computed the same earliest-row way). Signatures unchanged from the
+    current versions - body-only fix, no overload risk. **Known, accepted limitation**
+    (rare vs. new inserts): if the specific row that "counts" for a batch is edited away
+    from sold or deleted, no sibling automatically takes over the +1 - the batch's
+    sales_count contribution is simply lost rather than cascading to the next-earliest
+    sibling. Flagged plainly, not silently pretended away; out of scope for today's fix.
+
+    **Retroactive correction, scoped conservatively after checking the real data first:**
+    a first attempt filtered by `source_file = 'app'` (rows only ever written by live
+    calls, never touched by a Team Dashboard Excel import) found 0 rows to fix - checking
+    why revealed every agent's real row for today already carried `source_file = '08 2026
+    - Team Dashboard.xlsx'`, even Maja's clearly-live-inflated one. Root cause: the Excel
+    file pre-fills a template row for every day of the month including today (same
+    pattern as the already-documented `2026-08-31` stray-future-date anomaly, §14 item
+    92) - `fn_log_sales_feedback`'s additive `on conflict` never touches `source_file`, so
+    a row created by that Excel-seeded placeholder keeps its Excel label even after live
+    calls add real numbers on top of it. Confirmed live: every agent with zero real
+    activity today showed `revenue=0, sales_count=0` despite the Excel `source_file` -
+    proving today's baseline really is 0/0 and every non-zero value present is 100%
+    attributable to live `fn_log_sales_feedback` calls, so recomputing from real
+    `sales_feedback` for TODAY is safe regardless of the label. **Scoped the correction to
+    today only** - past days may already carry a TL-reconciled Excel figure from a later
+    re-import that could legitimately differ from a raw recount, and touching those
+    without checking each one individually risked overwriting a real, separate source of
+    truth (§14 item 19's already-documented reconciliation gap). One-off script (not
+    committed, same pattern as §14 item 81) corrected 4 real rows for 2026-08-18: Maja
+    Biso 6→1, another agent 7→2, two more 3→1 and 2→1.
+
+    **`/dialer`'s "show both" ask**, shipped alongside: `DialerAgentSummary` gained a
+    `salePositions` field (`lib/dialer/status.ts`) - a plain `count(*)` of today's real
+    sold `sales_feedback` rows per agent (no batch-dedup needed, that's exactly what the
+    now-fixed `sales_count`/`realSales` already represents). `buildDialerAgentSummaries`/
+    `refreshSalesInSummaries`/`computeDialerTotals` all extended to carry it through; the
+    live page, the Verlauf snapshot viewer (self-corrected per-date the same way
+    `realSales` already was, §14 item 62/24), and the cron snapshot route all compute and
+    pass it. **Real key-space bug caught before it shipped:** `sales_feedback.agent_id` is
+    a PROFILE id (`auth.uid()`), not `agents.id` - the same mismatch already hit and fixed
+    twice before in this project (§14 items 30/83). Fixed by joining through
+    `agents.profile_id` in all three call sites (page, snapshot section, cron route) before
+    building the positions map. `components/dialer-status-table.tsx` gained a new
+    "Positionen"/"Pozicije" column right after Sales/Prodaje (Ergebnis/Rezultat group span
+    3→4), rendered in a muted tone since it's the secondary of the two numbers.
+
+    Verified live end-to-end (throwaway admin test account, deleted after): the corrected
+    Dialer table showed Sales/Positionen as two genuinely different numbers per agent
+    (e.g. Muhamed Lepic 2/7, Maja Biso 2/8 - both grew further after the retroactive fix
+    since real agents kept logging new feedback live during verification, confirming new
+    submissions are correctly batch-aware going forward too), with Positionen always ≥
+    Sales as expected; the historical Verlauf snapshot (2026-08-14) also rendered both
+    columns correctly, self-corrected from real `sales_feedback` for that past date (e.g.
+    Merima Zulfic 5/12). Typecheck/lint clean, full suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
