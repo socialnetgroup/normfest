@@ -11,7 +11,9 @@ import { computeBonusByDate, type BonusThreshold } from "@/lib/team/bonus";
 import {
   buildDialerAgentSummaries,
   computeDialerTotals,
+  estimateReachability,
   fetchDialerAgentStatuses,
+  fetchDialerCallLog,
   formatSecondsAsHms,
 } from "@/lib/dialer/status";
 
@@ -19,7 +21,16 @@ const eur = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR",
 const eurCents = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", minimumFractionDigits: 2 });
 const pct = new Intl.NumberFormat("de-DE", { style: "percent", minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const pct1 = new Intl.NumberFormat("de-DE", { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 });
-const minutesFmt = new Intl.NumberFormat("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+// Anis, 2026-08-18: "Prosječno vrijeme obrade ipak format mm:ss" - reverted
+// from the earlier decimal-minutes format ("2,4 min") back to a real mm:ss
+// clock format, same spirit as formatSecondsAsHms but without the hour
+// segment (AHT is realistically always well under an hour).
+function formatSecondsAsMmSs(totalSeconds: number): string {
+  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) return "00:00";
+  const m = Math.floor(totalSeconds / 60);
+  const s = Math.floor(totalSeconds % 60);
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
 const num = (n: number) => n.toLocaleString("de-DE");
 
 const ONLINE_THRESHOLD_MS = 90_000;
@@ -81,6 +92,7 @@ export default async function BerichtPage() {
     { data: bonusSettingsRows },
     { data: coverageStats },
     { data: loginStatusRows },
+    { data: todaySoldRows },
   ] = await Promise.all([
     supabase.rpc("fn_report_stats"),
     supabase.from("sales_feedback").select("id", { count: "exact", head: true }),
@@ -108,7 +120,7 @@ export default async function BerichtPage() {
     supabase
       .from("agent_daily_performance")
       .select("agent_id, date, revenue, sales_count, calls_count, day_off"),
-    supabase.from("agents").select("id, full_name, gebiet").eq("active", true),
+    supabase.from("agents").select("id, full_name, gebiet, profile_id").eq("active", true),
     supabase
       .from("settings")
       .select("key, value")
@@ -121,6 +133,11 @@ export default async function BerichtPage() {
     // Tool" (fn_get_agent_login_status, prošireno za report@ u migraciji
     // 20260817030000).
     supabase.rpc("fn_get_agent_login_status"),
+    // Anis, 2026-08-18: "Konverzija TILE... ne prikazuje broj %" - realSales za
+    // ovaj Dialer blok se ranije nije uopšte prosljeđivao (prazna Map), pa je
+    // Konverzija uvijek bila 0%. Isti pravi izvor kao /dialer's Live-Status
+    // (sales_feedback za danas, agent_id je PROFILE id, konvertuje se ispod).
+    supabase.from("sales_feedback").select("agent_id").eq("outcome", "sold").gte("created_at", todayStart.toISOString()),
   ]);
 
   const stats = reportStatsRows?.[0] ?? {
@@ -285,9 +302,38 @@ export default async function BerichtPage() {
   }
 
   const { data: dialerRows, error: dialerError } = await fetchDialerAgentStatuses();
+  const salesByAgentIdToday = new Map(
+    (perfRows ?? []).filter((r) => r.date === todayStr).map((r) => [r.agent_id, r.sales_count]),
+  );
+  // sales_feedback.agent_id is a PROFILE id (auth.uid()), not agents.id -
+  // same key-space mismatch already hit and fixed elsewhere in this app
+  // (§14 items 30/83/95) - convert via agents.profile_id before counting.
+  const agentIdByProfileIdToday = new Map(
+    (allAgents ?? []).filter((a) => a.profile_id).map((a) => [a.profile_id as string, a.id]),
+  );
+  const positionsByAgentIdToday = new Map<string, number>();
+  for (const row of todaySoldRows ?? []) {
+    const agentId = agentIdByProfileIdToday.get(row.agent_id);
+    if (!agentId) continue;
+    positionsByAgentIdToday.set(agentId, (positionsByAgentIdToday.get(agentId) ?? 0) + 1);
+  }
   const dialerTotals =
-    !dialerError && dialerRows ? computeDialerTotals(buildDialerAgentSummaries(dialerRows, allAgents ?? [], new Map())) : null;
+    !dialerError && dialerRows
+      ? computeDialerTotals(
+          buildDialerAgentSummaries(dialerRows, allAgents ?? [], salesByAgentIdToday, positionsByAgentIdToday),
+        )
+      : null;
   const talkShare = dialerTotals && dialerTotals.totalSeconds > 0 ? dialerTotals.talkSeconds / dialerTotals.totalSeconds : null;
+
+  // "Erreichbarkeit" (2026-08-18, Anis: "Koliko se ljudi javilo... ako imamo
+  // pravi izvor u metrikama.php iskoristi, ako ne, sintetički broj za sada")
+  // - checked the real dialer status codes first: duration per code has a
+  // wide, overlapping spread with no clean "instant no-answer" bucket, so
+  // there's no reliable way yet to classify answered/not from them (see
+  // fetchDialerCallLog's own note) - this stays a labeled ESTIMATE
+  // (duration >= 5s) until the dialer dev can explain the real codes.
+  const { data: callLogRows } = await fetchDialerCallLog(todayStart, now);
+  const reachability = callLogRows ? estimateReachability(callLogRows) : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -332,7 +378,7 @@ export default async function BerichtPage() {
           {dialerError || !dialerTotals ? (
             <p className="text-sm text-muted-foreground">Dialer podaci trenutno nisu dostupni.</p>
           ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
               <StatTile label="Pozivi ukupno" value={num(dialerTotals.totalCalls)} accent="secondary" />
               <StatTile
                 label="Vrijeme razgovora"
@@ -342,11 +388,26 @@ export default async function BerichtPage() {
               />
               <StatTile
                 label="Prosječno vrijeme obrade"
-                value={`${minutesFmt.format(dialerTotals.ahtSeconds / 60)} min`}
+                value={formatSecondsAsMmSs(dialerTotals.ahtSeconds)}
                 accent="secondary"
               />
               <StatTile label="Zauzetost" value={pct.format(dialerTotals.occupancy)} accent="secondary" />
-              <StatTile label="Konverzija (Prodaje/Pozivi)" value={pct.format(dialerTotals.conversion)} accent="success" />
+              <StatTile
+                label="Konverzija (Prodaje/Pozivi)"
+                value={pct.format(dialerTotals.conversion)}
+                sub={`Prodaja: ${num(dialerTotals.realSales)} · Pozicija: ${num(dialerTotals.salePositions)}`}
+                accent="success"
+              />
+              <StatTile
+                label="Dostupnost (procijenjeno)"
+                value={reachability ? pct.format(reachability.rate) : "-"}
+                sub={
+                  reachability
+                    ? `${num(reachability.reachedEstimate)} od ${num(reachability.totalCalls)} - procjena, stvarni status-kodovi još nisu dokumentovani`
+                    : "Poziv-log trenutno nije dostupan"
+                }
+                accent="warning"
+              />
             </div>
           )}
         </CardContent>
@@ -442,12 +503,21 @@ export default async function BerichtPage() {
                     <th className="px-2 py-2 font-medium">Nekontaktirano ovaj mjesec ({dayOfMonth}. dan)</th>
                     <th className="px-2 py-2 font-medium">Nekontaktirano (2+ mj.)</th>
                     <th className="px-2 py-2 font-medium">Nekontaktirano (3+ mj.)</th>
-                    <th className="px-2 py-2 font-medium">Udio (3+ mj.)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
                   {coverage.map((row) => {
-                    const rowPct = row.total > 0 ? row.notContactedLast3Months / row.total : 0;
+                    const cell = (n: number) => {
+                      const p = row.total > 0 ? n / row.total : 0;
+                      return (
+                        <td className="px-2 py-2 tabular-nums">
+                          {n}{" "}
+                          <span className={cn(p >= 0.4 ? "font-medium text-warning-foreground" : "text-muted-foreground")}>
+                            ({Math.round(p * 100)}%)
+                          </span>
+                        </td>
+                      );
+                    };
                     return (
                       <tr key={row.label} className={row.label === "Nedodijeljeno" ? "opacity-60" : undefined}>
                         <td className="px-2 py-2 font-medium">
@@ -460,19 +530,9 @@ export default async function BerichtPage() {
                           )}
                         </td>
                         <td className="px-2 py-2 tabular-nums">{row.total}</td>
-                        <td className="px-2 py-2 tabular-nums">{row.notContactedThisMonth}</td>
-                        <td className="px-2 py-2 tabular-nums">{row.notContactedLast2Months}</td>
-                        <td className="px-2 py-2 tabular-nums">{row.notContactedLast3Months}</td>
-                        <td className="px-2 py-2">
-                          <span
-                            className={cn(
-                              "tabular-nums",
-                              rowPct >= 0.4 ? "font-medium text-warning-foreground" : "text-muted-foreground",
-                            )}
-                          >
-                            {Math.round(rowPct * 100)}%
-                          </span>
-                        </td>
+                        {cell(row.notContactedThisMonth)}
+                        {cell(row.notContactedLast2Months)}
+                        {cell(row.notContactedLast3Months)}
                       </tr>
                     );
                   })}

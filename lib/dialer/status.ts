@@ -7,6 +7,7 @@
 // live status mirror inside this app so admin doesn't need a separate tab
 // open to see who's on a call right now.
 const DIALER_AGENTS_URL = "http://socialnet.dialer.ba/agents.php";
+const DIALER_METRIKE_URL = "http://socialnet.dialer.ba/metrike.php";
 
 export type DialerAgentStatus = {
   extension: string;
@@ -91,6 +92,66 @@ export async function fetchDialerAgentStatuses(): Promise<{
   } catch (e) {
     return { data: null, error: e instanceof Error ? e.message : "Dialer nicht erreichbar" };
   }
+}
+
+export type DialerCallLogRow = {
+  user: string;
+  lengthInSec: number;
+  status: string;
+};
+
+function toDialerDateTime(d: Date): string {
+  // Dialer expects local "YYYY-MM-DD HH:MM:SS", not ISO/UTC - matches the
+  // real format the dev's own example URL used (od=2026-08-06 11:30:00).
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+/** Real per-call log (CDR) from the dialer dev's metrike.php (shared
+ * 2026-08-18, "da li se može iskoristiti za recreatanje screenshota... pa
+ * ćemo kasnije analizirati dalje ove metrike za druge stvari"). Gives real
+ * per-call duration/status/extension - used both for the 17.08. snapshot
+ * backfill and for a same-day "reachability" estimate (see
+ * estimateReachability below). The dialer's own status codes (CBHOLD, N,
+ * KV, NI, APNE, SALE, SN, DC, PARK, A, FG, ...) aren't documented anywhere
+ * this app has access to, and a real duration-distribution check (all
+ * codes show a wide, overlapping spread of call lengths, no clean
+ * "instant hangup" bucket) found no reliable way to classify them as
+ * answered/not-answered without guessing - so this stays a raw log
+ * fetch, not a disposition classifier. */
+export async function fetchDialerCallLog(from: Date, to: Date): Promise<{ data: DialerCallLogRow[] | null; error: string | null }> {
+  try {
+    const url = `${DIALER_METRIKE_URL}?od=${encodeURIComponent(toDialerDateTime(from))}&do=${encodeURIComponent(toDialerDateTime(to))}`;
+    const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(10000) });
+    if (!res.ok) {
+      return { data: null, error: `Dialer antwortet mit HTTP ${res.status}` };
+    }
+    const raw = (await res.json()) as { user?: string; length_in_sec?: string; status?: string }[];
+    const data = raw
+      .filter((r) => r.user)
+      .map((r) => ({ user: r.user as string, lengthInSec: Number(r.length_in_sec) || 0, status: r.status ?? "-" }));
+    return { data, error: null };
+  } catch (e) {
+    return { data: null, error: e instanceof Error ? e.message : "Dialer nicht erreichbar" };
+  }
+}
+
+/** Synthetic "Erreichbarkeit" estimate (2026-08-18, Anis: "Koliko se ljudi
+ * javilo... ako imamo u metrikama.php pravi izvor... iskoristi, ako ne, za
+ * sada sam izračunao sintetički broj") - since the real dialer status
+ * codes aren't documented (see fetchDialerCallLog's own note), this is
+ * explicitly a proxy, not a real disposition-based answer rate: a call is
+ * counted as "reached" when its real duration is at least thresholdSec,
+ * long enough to rule out an instant auto-drop/no-answer/voicemail-beep
+ * while still counting a real, brief "kein Interesse" hangup as a reached
+ * person. Always label this in the UI as an estimate. */
+export function estimateReachability(
+  rows: DialerCallLogRow[],
+  thresholdSec = 5,
+): { totalCalls: number; reachedEstimate: number; rate: number } {
+  const totalCalls = rows.length;
+  const reachedEstimate = rows.filter((r) => r.lengthInSec >= thresholdSec).length;
+  return { totalCalls, reachedEstimate, rate: totalCalls > 0 ? reachedEstimate / totalCalls : 0 };
 }
 
 /** Dialer time fields come as "HH:MM:SS" (talk/pause/wait/dispo/dead) or

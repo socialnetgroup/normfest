@@ -60,8 +60,10 @@ export default async function TimPage() {
       // Anis, 2026-08-18: "Feedback po Agentu dodati u TIM" - sales_feedback.agent_id
       // is a PROFILE id (auth.uid()), not agents.id (same key-space distinction
       // already hit multiple times elsewhere in this app) - converted via
-      // agents.profile_id below before grouping by month.
-      supabase.from("sales_feedback").select("agent_id, created_at"),
+      // agents.profile_id below before grouping by month. wiedervorlage_date
+      // added same day ("TIM dio proširit... Wiedervorlage") to also count
+      // real callback entries per agent per month, from the same query.
+      supabase.from("sales_feedback").select("agent_id, created_at, wiedervorlage_date"),
     ]);
 
   if (error) {
@@ -101,7 +103,16 @@ export default async function TimPage() {
     string,
     Map<
       string,
-      { agentId: string; name: string; revenue: number; sales: number; calls: number; feedback: number; bonusKm: number }
+      {
+        agentId: string;
+        name: string;
+        revenue: number;
+        sales: number;
+        calls: number;
+        feedback: number;
+        wiedervorlage: number;
+        bonusKm: number;
+      }
     >
   >();
   for (const row of rows) {
@@ -110,8 +121,16 @@ export default async function TimPage() {
     const month = row.date.slice(0, 7);
     if (!byMonth.has(month)) byMonth.set(month, new Map());
     const agentMap = byMonth.get(month)!;
-    const entry =
-      agentMap.get(row.agent_id) ?? { agentId: row.agent_id, name: agentName, revenue: 0, sales: 0, calls: 0, feedback: 0, bonusKm: 0 };
+    const entry = agentMap.get(row.agent_id) ?? {
+      agentId: row.agent_id,
+      name: agentName,
+      revenue: 0,
+      sales: 0,
+      calls: 0,
+      feedback: 0,
+      wiedervorlage: 0,
+      bonusKm: 0,
+    };
     entry.revenue += row.revenue;
     entry.sales += row.sales_count;
     entry.calls += row.calls_count ?? 0;
@@ -128,7 +147,9 @@ export default async function TimPage() {
     const month = row.created_at.slice(0, 7);
     const agentMap = byMonth.get(month);
     const entry = agentMap?.get(agentId);
-    if (entry) entry.feedback += 1;
+    if (!entry) continue;
+    entry.feedback += 1;
+    if (row.wiedervorlage_date) entry.wiedervorlage += 1;
   }
 
   const months = [...byMonth.keys()].sort().reverse();
@@ -226,6 +247,7 @@ export default async function TimPage() {
           const teamRevenue = sorted.reduce((sum, [, v]) => sum + v.revenue, 0);
           const teamSales = sorted.reduce((sum, [, v]) => sum + v.sales, 0);
           const teamFeedback = sorted.reduce((sum, [, v]) => sum + v.feedback, 0);
+          const teamWiedervorlage = sorted.reduce((sum, [, v]) => sum + v.wiedervorlage, 0);
           const teamBonusKm = sorted.reduce((sum, [, v]) => sum + v.bonusKm, 0);
 
           return (
@@ -244,6 +266,9 @@ export default async function TimPage() {
                   <span>
                     Timski feedback: <span className="font-medium text-foreground">{teamFeedback}</span>
                   </span>
+                  <span>
+                    Wiedervorlage: <span className="font-medium text-foreground">{teamWiedervorlage}</span>
+                  </span>
                   {bonusVisible ? (
                     <span>
                       Timski bonus:{" "}
@@ -261,6 +286,7 @@ export default async function TimPage() {
                         <th className="px-3 py-2 font-medium">Promet</th>
                         <th className="px-3 py-2 font-medium">Prodaje</th>
                         <th className="px-3 py-2 font-medium">Feedback</th>
+                        <th className="px-3 py-2 font-medium">Wiedervorlage</th>
                         <th className="px-3 py-2 font-medium">Pozivi</th>
                         <th className="px-3 py-2 font-medium">Konverzija (Prodaje/Pozivi)</th>
                         {bonusVisible ? <th className="px-3 py-2 font-medium">Bonus (KM)</th> : null}
@@ -277,6 +303,7 @@ export default async function TimPage() {
                           <td className="px-3 py-2">{eur.format(v.revenue)}</td>
                           <td className="px-3 py-2">{v.sales}</td>
                           <td className="px-3 py-2">{v.feedback > 0 ? v.feedback : "-"}</td>
+                          <td className="px-3 py-2">{v.wiedervorlage > 0 ? v.wiedervorlage : "-"}</td>
                           <td className="px-3 py-2">{v.calls > 0 ? v.calls : "-"}</td>
                           <td className="px-3 py-2">{v.calls > 0 ? pct.format(v.sales / v.calls) : "-"}</td>
                           {bonusVisible ? (

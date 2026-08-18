@@ -5828,6 +5828,60 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     Auslastung after the fix (real Anrufe/Sprechzeit/Sales/Positionen sums, `"-"` for
     everything else). Typecheck/lint clean, full suite green (41/41).
 
+99. **Real fix: Bericht's Konverzija tile always showed 0% + new Dostupnost estimate tile +
+    Tim/Pokrivenost table follow-ups — shipped (2026-08-18).** Anis: "Konverzija TILE na
+    izvjestaj ne prikazuje broj %." Root cause: `dialerTotals` on `/bericht` was computed
+    via `buildDialerAgentSummaries(dialerRows, allAgents ?? [], new Map())` - an EMPTY map
+    for `salesByAgentId` and no `positionsByAgentId` at all, so `realSales` was always 0 for
+    every agent and Konverzija was always `0/totalCalls = 0%`. Fixed by wiring the same real
+    sources `/dialer`'s own Live-Status table already uses: `agent_daily_performance.
+    sales_count` for today (already fetched into `perfRows`, just needed filtering to
+    `todayStr`) and today's `sales_feedback` sold rows (new query, converted from
+    `profiles.id` to `agents.id` via `agents.profile_id`, same key-space fix applied
+    repeatedly elsewhere in this app). Konverzija tile also gained a sub-line ("Prodaja: X ·
+    Pozicija: Y") per Anis's own request.
+
+    **New "Dostupnost" (reachability) tile**, Anis: "Koliko se ljudi javilo... ako imamo u
+    metrikama.php pravi izvor tih podataka na osnovu statusa poziva, iskoristi, ako ne, za
+    sada sintetički broj." Investigated the real status codes first rather than guessing:
+    pulled the full 17.08. CDR and computed avg/min/max call duration per status code - every
+    code (`CBHOLD`, `N`, `KV`, `NI`, `APNE`, `SALE`, `SN`, `DC`, `PARK`, `A`, `FG`) shows a
+    wide, overlapping duration spread with no clean "instant no-answer" bucket, so there's no
+    reliable way yet to classify answered/not-answered from them without the dialer dev's own
+    code legend. Shipped the honest fallback instead: `estimateReachability()`
+    (`lib/dialer/status.ts`) counts a call as "reached" when its real duration is ≥5s (long
+    enough to rule out an instant drop, short enough not to exclude a real brief "kein
+    Interesse" hangup) - labeled "Dostupnost (procijenjeno)" with a sub-line spelling out it's
+    an estimate pending real status-code definitions. New `fetchDialerCallLog()` fetches
+    today's `metrike.php` CDR for this (one same-day fetch, fast - a full-month range was
+    tested separately and timed out at 46s+/0 bytes, confirming per-day is the right scope
+    for a live page load).
+
+    **`/tim` gained a real per-agent "Wiedervorlage" column** alongside the earlier Feedback
+    one - same `sales_feedback` query (now also selecting `wiedervorlage_date`), counted per
+    month/agent when the date is set, regardless of done-status.
+
+    **"Pokrivenost kontakata po agentu" / "Kontakt-Abdeckung nach Agent" (both `/bericht` and
+    admin Dashboard) restructured** - Anis: "svaki mjesec u zagradi dodati % za svaki mjesec,
+    pa izbaciti poseban red kod 3 mjeseca. Primijeniti na tu tabelu i u adminu i u reportu."
+    The standalone "Udio (3+ mj.)"/"Anteil (3+ Mon.)" column is gone; each of the three
+    Nekontaktirano/Nicht-kontaktiert columns now shows its own count with `(X%)` inline
+    (same ≥40% warning-color threshold as before, now applied per-column instead of only the
+    3-month one). Identical change applied to both `app/(app)/page.tsx` and
+    `app/(app)/bericht/page.tsx` so the two tables stay in lockstep as intended.
+
+    **Also reverted the AHT tile format same day** - Anis: "Prosječno vrijeme obrade ipak
+    format mm:ss" (after item 97's earlier decimal-minutes change) - new local
+    `formatSecondsAsMmSs()` replaces the `minutesFmt` decimal approach.
+
+    Verified live end-to-end (throwaway admin test account, deleted after): Konverzija showed
+    a real non-zero % with the correct sub-line; Dostupnost showed a real "80%, 223 od 278"
+    with the honest estimate caveat; `/tim`'s Wiedervorlage column showed real per-agent
+    August counts (e.g. Emina Berilo 88, matching real open/closed Wiedervorlage entries);
+    both Pokrivenost tables (admin + report) showed identical real per-column percentages
+    with the old standalone column gone; AHT tile showed "02:21" (mm:ss). Typecheck/lint
+    clean, full suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

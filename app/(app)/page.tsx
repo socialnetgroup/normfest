@@ -517,12 +517,21 @@ export default async function DashboardPage() {
                     <th className="px-2 py-2 font-medium">Nicht kontaktiert diesen Monat ({dayOfMonth}. Tag)</th>
                     <th className="px-2 py-2 font-medium">Nicht kontaktiert (2+ Mon.)</th>
                     <th className="px-2 py-2 font-medium">Nicht kontaktiert (3+ Mon.)</th>
-                    <th className="px-2 py-2 font-medium">Anteil (3+ Mon.)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
                   {coverage.map((row) => {
-                    const pct = row.total > 0 ? row.notContactedLast3Months / row.total : 0;
+                    const cell = (n: number) => {
+                      const p = row.total > 0 ? n / row.total : 0;
+                      return (
+                        <td className="px-2 py-2 tabular-nums">
+                          {n}{" "}
+                          <span className={cn(p >= 0.4 ? "font-medium text-warning-foreground" : "text-muted-foreground")}>
+                            ({Math.round(p * 100)}%)
+                          </span>
+                        </td>
+                      );
+                    };
                     return (
                       <tr key={row.label} className={row.label === "Nicht zugeordnet" ? "opacity-60" : undefined}>
                         <td className="px-2 py-2 font-medium">
@@ -535,19 +544,9 @@ export default async function DashboardPage() {
                           )}
                         </td>
                         <td className="px-2 py-2 tabular-nums">{row.total}</td>
-                        <td className="px-2 py-2 tabular-nums">{row.notContactedThisMonth}</td>
-                        <td className="px-2 py-2 tabular-nums">{row.notContactedLast2Months}</td>
-                        <td className="px-2 py-2 tabular-nums">{row.notContactedLast3Months}</td>
-                        <td className="px-2 py-2">
-                          <span
-                            className={cn(
-                              "tabular-nums",
-                              pct >= 0.4 ? "font-medium text-warning-foreground" : "text-muted-foreground",
-                            )}
-                          >
-                            {Math.round(pct * 100)}%
-                          </span>
-                        </td>
+                        {cell(row.notContactedThisMonth)}
+                        {cell(row.notContactedLast2Months)}
+                        {cell(row.notContactedLast3Months)}
                       </tr>
                     );
                   })}
