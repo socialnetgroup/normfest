@@ -12,9 +12,7 @@ import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 import {
   buildDialerAgentSummaries,
-  computeReachedCallsByAgent,
   fetchDialerAgentStatuses,
-  fetchDialerCallLog,
   refreshSalesInSummaries,
   type DialerAgentSummary,
   type LoginStatus,
@@ -203,7 +201,6 @@ export default async function DialerPage({
       { data: todaySoldRows },
       { data: snapshotRows },
       { data: loginStatusRows },
-      { data: callLogRows },
     ] = await Promise.all([
       fetchDialerAgentStatuses(),
       supabase.from("agents").select("id, full_name, profile_id").eq("active", true),
@@ -221,12 +218,6 @@ export default async function DialerPage({
       // "Status im Tool" - our own in-app heartbeat, same RPC/threshold the
       // Dashboard's Rangliste used to compute this with before it moved here.
       supabase.rpc("fn_get_agent_login_status"),
-      // "Dostupnost" (2026-08-18, "proširiti OBIM - dostupnost... i
-      // generalno u admin dialer view") - real per-agent reachability
-      // estimate from today's call log, see estimateReachability's own
-      // note on why this is a duration-based proxy, not a real
-      // disposition rate.
-      fetchDialerCallLog(new Date(`${todayStr}T00:00:00`), new Date()),
     ]);
     dialerError = fetchError;
     const agents = agentRows ?? [];
@@ -241,12 +232,11 @@ export default async function DialerPage({
       if (!agentId) continue;
       positionsByAgentId.set(agentId, (positionsByAgentId.get(agentId) ?? 0) + 1);
     }
-    const reachedCallsByAgentId = dialerData
-      ? computeReachedCallsByAgent(callLogRows ?? [], dialerData, agents)
-      : new Map<string, number>();
-    liveRows = dialerData
-      ? buildDialerAgentSummaries(dialerData, agents, salesByAgentId, positionsByAgentId, reachedCallsByAgentId)
-      : null;
+    // "Javilo se (procjena)" (2026-08-18, "proširiti OBIM - dostupnost", then
+    // revised to a reached-calls estimate from AHT - see buildDialerAgentSummaries'
+    // own note) is now computed inside buildDialerAgentSummaries directly from
+    // real agents.php fields - no separate CDR fetch needed for it anymore.
+    liveRows = dialerData ? buildDialerAgentSummaries(dialerData, agents, salesByAgentId, positionsByAgentId) : null;
     snapshotDates = (snapshotRows ?? []).map((r) => r.snapshot_date);
 
     const now = new Date();

@@ -5942,6 +5942,59 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     "65s" with the honest synthetic-metric caveat. Typecheck/lint clean, full suite
     green (41/41), `visibility_mode` confirmed still `'gebiet'` afterward.
 
+101. **"Javilo se (procjena)" - reached-calls estimate replaces the interim
+    Ø-Sprechzeit tile, real formula confirmed with Anis — shipped
+    (2026-08-18), same day as item 100.** Anis, on the interim "Ø
+    Sprechzeit/Poziv" tile from item 100: *"Ne treba mi ovo, nego umjesto
+    ovog da izracunas koliko se ljudi javilo na pozive. npr od danasnjih
+    poziva total, koliko se javilo tj sa koliko su pricali na osnovu
+    AHT-a."* Since agents.php gives no real per-call answered/not-answered
+    signal (only daily aggregates per agent - Pozivi, Sprechzeit,
+    Nachbearbeitung/dispo), and at least 3 materially different formulas
+    were plausible, confirmed the exact one via `AskUserQuestion` before
+    building - a wrong formula here would put a misleading number on a page
+    leadership looks at. Anis picked: **talk / (talk+dispo) × totalCalls**
+    - the share of real handling time that was actual talking, applied to
+    the total call count. Computed purely from already-trusted agents.php
+    fields (talkTime/dispoTime/totalCalls), no `metrike.php` CDR dependency
+    at all - closes the exact mismatch problem from item 100 rather than
+    working around it.
+
+    `lib/dialer/status.ts`: removed the now-fully-replaced
+    `estimateReachability`/`computeReachedCallsByAgent` functions and the
+    CDR-based `reachedCalls`/`reachRate` fields; `DialerAgentSummary` and
+    `DialerAgentTotals` gained `reachedEstimate`/`reachedRate` computed
+    directly in `buildDialerAgentSummaries`/`computeDialerTotals` (same
+    "recompute from summed fields, don't average per-row rates" pattern
+    already used for every other Gesamt/Ukupno total). A `dispoTime === "-"`
+    guard (the sentinel a backfilled/reconstructed snapshot row uses for
+    unavailable fields, §14 item 98) keeps a reconstructed row from showing
+    a false 100% instead of "-". `fetchDialerCallLog`/`DialerCallLogRow`
+    stay defined (documented, kept for the still-deferred `metrike.php`
+    root-cause investigation) but their call sites in `/dialer`'s page and
+    the daily-snapshot cron route were removed entirely - the new formula
+    needs no CDR fetch, so both hot paths lost a real HTTP call and a
+    source of latency/timeout risk for a metric that's since fully
+    superseded.
+
+    `components/dialer-status-table.tsx`: the OBIM-group column (key
+    renamed `reachedEstimate`, was `reachRate`) now renders "N (X%)" -
+    de "Erreicht (geschätzt)", bs "Javilo se (procjena)" - in both the
+    per-agent row and the Gesamt/Ukupno foot row, masked to "-" on a
+    reconstructed snapshot's Gesamt row via the existing `alwaysReal`
+    mechanism (not set on this column, same as AHT/Auslastung).
+    `app/(app)/bericht/page.tsx`'s tile was renamed to match, showing the
+    real count with a "X% od N poziva" sub-line.
+
+    Verified live end-to-end with fresh throwaway admin+report test
+    accounts (both deleted after): admin's full `/dialer` table showed real
+    per-agent values matching a hand-computed check (Maja Biso: talk
+    01:01:40=3700s, dispo 01:01:16=3676s, 3700/7376=50,2% × 48 calls = 24,
+    exactly matching the rendered "24 (50,2 %)"); report's compact table
+    showed the same real values plus a team-wide Ukupno row (210, 47,3%)
+    that matched the Bericht tile exactly (210, 47%). Typecheck/lint clean,
+    full suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

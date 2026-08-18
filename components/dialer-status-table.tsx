@@ -5,7 +5,6 @@ import { Badge } from "@/components/ui/badge";
 import {
   computeDialerTotals,
   formatSecondsAsHms,
-  parseDialerTimeToSeconds,
   type DialerAgentSummary,
   type DialerAgentTotals,
 } from "@/lib/dialer/status";
@@ -108,7 +107,7 @@ function buildColumns(
           vrijemeStatus: "Vrijeme u statusu",
           pozivi: "Pozivi",
           poziviH: "Pozivi/h",
-          dostupnost: "Ø Sprechzeit/Poziv",
+          dostupnost: "Javilo se (procjena)",
           prodaje: "Prodaje",
           pozicije: "Pozicije",
           konverzija: "Konverzija",
@@ -131,7 +130,7 @@ function buildColumns(
           vrijemeStatus: "Zeit im Status",
           pozivi: "Anrufe",
           poziviH: "Anrufe/Std.",
-          dostupnost: "Ø Sprechzeit/Anruf",
+          dostupnost: "Erreicht (geschätzt)",
           prodaje: "Sales",
           pozicije: "Positionen",
           konverzija: "Konversion",
@@ -201,25 +200,35 @@ function buildColumns(
       foot: (tt) => rate.format(tt.callsPerHour),
     },
     {
-      // Anis, 2026-08-18: the CDR-based % (reachedCalls/CDR-own-total) came
-      // out as "125 od 144" while the real dialer reported 354 real calls
-      // that same day - metrike.php's CDR genuinely undercounts vs. the
-      // live totalCalls counter (root cause deferred, "naknadno cemo se
-      // baviti metrikama php"). Replaced with a fully real, CDR-free proxy
-      // per his own suggestion: average real talk time per real call
-      // (both totalCalls and talkTime already come from agents.php, same
-      // trusted source as every other column here) - "kolicinu poziva i
-      // trajanje poziva i sprechzeit pa sinteticki izracunati".
-      key: "reachRate",
+      // Anis, 2026-08-18: first cut showed an average-talk-time-per-call
+      // proxy here (a CDR-free fix for the earlier "125 od 144 vs. real 354
+      // calls" mismatch) - then asked to go further and estimate an actual
+      // reached-calls COUNT instead: "koliko se ljudi javilo... sa koliko su
+      // pricali na osnovu AHT-a". Confirmed the exact formula with him
+      // (AskUserQuestion): the share of real handling time that was actual
+      // talking (talk / (talk+dispo)) applied to totalCalls - computed
+      // purely from already-trusted agents.php fields, no CDR needed. "-"
+      // dispoTime means a backfilled/reconstructed row where this can't be
+      // computed (see the file's own reconstructed-snapshot note).
+      key: "reachedEstimate",
       group: "obim",
       header: t.dostupnost,
       cell: (a) => {
-        if (a.totalCalls <= 0) return "-";
-        const avgSec = parseDialerTimeToSeconds(a.talkTime) / a.totalCalls;
-        return `${Math.round(avgSec)}s`;
+        if (a.totalCalls <= 0 || a.dispoTime === "-") return "-";
+        return (
+          <>
+            {a.reachedEstimate} <span className="text-muted-foreground">({pct.format(a.reachedRate)})</span>
+          </>
+        );
       },
-      foot: (tt) => (tt.totalCalls > 0 ? `${Math.round(tt.talkSeconds / tt.totalCalls)}s` : "-"),
-      alwaysReal: true,
+      foot: (tt) =>
+        tt.totalCalls > 0 ? (
+          <>
+            {tt.reachedEstimate} <span className="font-normal text-muted-foreground">({pct.format(tt.reachedRate)})</span>
+          </>
+        ) : (
+          "-"
+        ),
     },
     {
       key: "realSales",

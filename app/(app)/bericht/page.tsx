@@ -323,19 +323,18 @@ export default async function BerichtPage() {
       : null;
   const talkShare = dialerTotals && dialerTotals.totalSeconds > 0 ? dialerTotals.talkSeconds / dialerTotals.totalSeconds : null;
 
-  // "Dostupnost" (2026-08-18, Anis: "Koliko se ljudi javilo... ako imamo
-  // pravi izvor u metrikama.php iskoristi, ako ne, sintetički broj za
-  // sada"). First cut used metrike.php's own CDR total as the denominator
-  // (reachedEstimate/CDR-total) - Anis caught a real mismatch the same day:
-  // "tamo pise 125 od 144, ali danas je bilo 354 poziva" - the CDR
-  // genuinely undercounts vs. the real dialer totalCalls counter (root
-  // cause deferred, "naknadno cemo se baviti metrikama php"). Replaced with
-  // his own suggested fallback: a fully real, CDR-free synthetic proxy from
-  // totalCalls + talkTime (both already trusted, same agents.php source as
-  // every other tile here) - "kolicinu poziva i trajanje poziva i
-  // sprechzeit pa sinteticki izracunati".
-  const avgTalkSecPerCall =
-    dialerTotals && dialerTotals.totalCalls > 0 ? dialerTotals.talkSeconds / dialerTotals.totalCalls : null;
+  // "Javilo se (procjena)" (2026-08-18, Anis: "Koliko se ljudi javilo... ako
+  // imamo pravi izvor u metrikama.php iskoristi, ako ne, sintetički broj za
+  // sada"). First cut used metrike.php's own CDR total as the denominator -
+  // Anis caught a real mismatch the same day: "tamo pise 125 od 144, ali
+  // danas je bilo 354 poziva" - the CDR genuinely undercounts vs. the real
+  // dialer totalCalls counter (root cause deferred, "naknadno cemo se
+  // baviti metrikama php"). A same-day follow-up ("umjesto ovog... koliko se
+  // javilo... sa koliko su pricali na osnovu AHT-a") replaced the interim
+  // avg-talk-time tile with a real reached-calls COUNT - confirmed the exact
+  // formula via AskUserQuestion: talk / (talk+dispo) × totalCalls, computed
+  // purely from already-trusted agents.php fields (see
+  // lib/dialer/status.ts's computeDialerTotals for the shared computation).
 
   return (
     <div className="flex flex-col gap-6">
@@ -401,9 +400,13 @@ export default async function BerichtPage() {
                 accent="success"
               />
               <StatTile
-                label="Ø Sprechzeit/Poziv"
-                value={avgTalkSecPerCall !== null ? `${Math.round(avgTalkSecPerCall)}s` : "-"}
-                sub="Sintetički izračunato iz stvarnih Pozivi/Sprechzeit - pravi status-kodovi za Dostupnost još nisu dokumentovani"
+                label="Javilo se (procjena)"
+                value={dialerTotals && dialerTotals.totalCalls > 0 ? num(dialerTotals.reachedEstimate) : "-"}
+                sub={
+                  dialerTotals && dialerTotals.totalCalls > 0
+                    ? `${pct.format(dialerTotals.reachedRate)} od ${num(dialerTotals.totalCalls)} poziva - procjena iz Pozivi/Sprechzeit/Nachbearbeitung`
+                    : undefined
+                }
                 accent="warning"
               />
             </div>

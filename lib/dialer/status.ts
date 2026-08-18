@@ -118,15 +118,21 @@ function toDialerDateTime(d: Date): string {
 /** Real per-call log (CDR) from the dialer dev's metrike.php (shared
  * 2026-08-18, "da li se može iskoristiti za recreatanje screenshota... pa
  * ćemo kasnije analizirati dalje ove metrike za druge stvari"). Gives real
- * per-call duration/status/extension - used both for the 17.08. snapshot
- * backfill and for a same-day "reachability" estimate (see
- * estimateReachability below). The dialer's own status codes (CBHOLD, N,
- * KV, NI, APNE, SALE, SN, DC, PARK, A, FG, ...) aren't documented anywhere
- * this app has access to, and a real duration-distribution check (all
- * codes show a wide, overlapping spread of call lengths, no clean
+ * per-call duration/status/extension - used for the 17.08. snapshot
+ * backfill. Not used for a "reached calls" estimate: a same-day check found
+ * the CDR's own total call count genuinely undercounts vs. the live
+ * dialer's real totalCalls (125 od 144 in the CDR sample vs. 354 real calls
+ * that day) - root cause not diagnosed, deferred by Anis ("naknadno cemo se
+ * baviti metrikama php"). The reached-calls estimate now used instead
+ * (buildDialerAgentSummaries' reachedEstimate) is computed purely from
+ * already-trusted agents.php fields, no CDR dependency. Kept here for the
+ * later metrike.php investigation - the dialer's own status codes (CBHOLD,
+ * N, KV, NI, APNE, SALE, SN, DC, PARK, A, FG, ...) aren't documented
+ * anywhere this app has access to, and a real duration-distribution check
+ * (all codes show a wide, overlapping spread of call lengths, no clean
  * "instant hangup" bucket) found no reliable way to classify them as
- * answered/not-answered without guessing - so this stays a raw log
- * fetch, not a disposition classifier. */
+ * answered/not-answered without guessing - so this stays a raw log fetch,
+ * not a disposition classifier. */
 export async function fetchDialerCallLog(from: Date, to: Date): Promise<{ data: DialerCallLogRow[] | null; error: string | null }> {
   try {
     const url = `${DIALER_METRIKE_URL}?od=${encodeURIComponent(toDialerDateTime(from))}&do=${encodeURIComponent(toDialerDateTime(to))}`;
@@ -142,53 +148,6 @@ export async function fetchDialerCallLog(from: Date, to: Date): Promise<{ data: 
   } catch (e) {
     return { data: null, error: e instanceof Error ? e.message : "Dialer nicht erreichbar" };
   }
-}
-
-/** Synthetic "Erreichbarkeit" estimate (2026-08-18, Anis: "Koliko se ljudi
- * javilo... ako imamo u metrikama.php pravi izvor... iskoristi, ako ne, za
- * sada sam izračunao sintetički broj") - since the real dialer status
- * codes aren't documented (see fetchDialerCallLog's own note), this is
- * explicitly a proxy, not a real disposition-based answer rate: a call is
- * counted as "reached" when its real duration is at least thresholdSec,
- * long enough to rule out an instant auto-drop/no-answer/voicemail-beep
- * while still counting a real, brief "kein Interesse" hangup as a reached
- * person. Always label this in the UI as an estimate. */
-export function estimateReachability(
-  rows: DialerCallLogRow[],
-  thresholdSec = 5,
-): { totalCalls: number; reachedEstimate: number; rate: number } {
-  const totalCalls = rows.length;
-  const reachedEstimate = rows.filter((r) => r.lengthInSec >= thresholdSec).length;
-  return { totalCalls, reachedEstimate, rate: totalCalls > 0 ? reachedEstimate / totalCalls : 0 };
-}
-
-/** Per-agent version of estimateReachability (2026-08-18, "proširiti OBIM -
- * Koliko se ljudi javilo... dostupnost" per-row, not just a team total).
- * The CDR only carries the dialer extension (row.user), not our agent id -
- * dialerRows (agents.php, already fetched for the same page) carries BOTH
- * the extension AND the real full_name together, so it's reused here purely
- * as an extension→agent lookup (same matchDialerAgent diacritic-normalized
- * matching already used everywhere else in this file), not for its live
- * status fields. */
-export function computeReachedCallsByAgent(
-  callLogRows: DialerCallLogRow[],
-  dialerRows: DialerAgentStatus[],
-  agents: { id: string; full_name: string }[],
-  thresholdSec = 5,
-): Map<string, number> {
-  const agentIdByExtension = new Map<string, string>();
-  for (const row of dialerRows) {
-    const matched = matchDialerAgent(row.fullName, agents);
-    if (matched) agentIdByExtension.set(row.extension, matched.id);
-  }
-  const reachedByAgentId = new Map<string, number>();
-  for (const row of callLogRows) {
-    if (row.lengthInSec < thresholdSec) continue;
-    const agentId = agentIdByExtension.get(row.user);
-    if (!agentId) continue;
-    reachedByAgentId.set(agentId, (reachedByAgentId.get(agentId) ?? 0) + 1);
-  }
-  return reachedByAgentId;
 }
 
 /** Dialer time fields come as "HH:MM:SS" (talk/pause/wait/dispo/dead) or
@@ -249,8 +208,8 @@ export function refreshSalesInSummaries(
 export type DialerAgentTotals = {
   totalCalls: number;
   callsPerHour: number;
-  reachedCalls: number;
-  reachRate: number;
+  reachedEstimate: number;
+  reachedRate: number;
   realSales: number;
   salePositions: number;
   conversion: number;
@@ -279,7 +238,6 @@ export type DialerAgentTotals = {
  * can see the summary as well." */
 export function computeDialerTotals(summaries: DialerAgentSummary[]): DialerAgentTotals {
   let totalCalls = 0;
-  let reachedCalls = 0;
   let realSales = 0;
   let salePositions = 0;
   let talkSec = 0;
@@ -293,7 +251,6 @@ export function computeDialerTotals(summaries: DialerAgentSummary[]): DialerAgen
 
   for (const s of summaries) {
     totalCalls += s.totalCalls;
-    reachedCalls += s.reachedCalls ?? 0;
     realSales += s.realSales;
     salePositions += s.salePositions;
     talkSec += parseDialerTimeToSeconds(s.talkTime);
@@ -309,12 +266,19 @@ export function computeDialerTotals(summaries: DialerAgentSummary[]): DialerAgen
   const totalHours = totalSec / 3600;
   const availableSec = talkSec + dispoSec + waitSec + deadSec;
   const activeInactiveSec = activeSec + inactiveSec;
+  // Reached-calls estimate (2026-08-18, Anis's own chosen formula after the
+  // CDR-total mismatch above): assume the share of real handling time
+  // (talk+dispo) that was actual talking also applies to the share of
+  // total calls that were genuinely reached - talk/(talk+dispo) × totalCalls.
+  // Computed purely from already-trusted agents.php fields, no CDR needed.
+  const handleSec = talkSec + dispoSec;
+  const reachedRate = handleSec > 0 ? talkSec / handleSec : 0;
 
   return {
     totalCalls,
     callsPerHour: totalHours > 0 ? totalCalls / totalHours : 0,
-    reachedCalls,
-    reachRate: totalCalls > 0 ? reachedCalls / totalCalls : 0,
+    reachedEstimate: Math.round(totalCalls * reachedRate),
+    reachedRate,
     realSales,
     salePositions,
     conversion: totalCalls > 0 ? realSales / totalCalls : 0,
@@ -368,12 +332,14 @@ export type DialerAgentSummary = {
    * shown separately in the Dialer table now instead of one number that
    * used to conflate them. */
   salePositions: number;
-  /** Real reached-calls estimate (2026-08-18, "proširiti OBIM - dostupnost")
-   * from computeReachedCallsByAgent - see estimateReachability's own note on
-   * why this is a duration-based proxy, not a real disposition rate. `?? 0`
-   * at every read site since historical snapshots captured before this field
-   * existed won't have it. */
-  reachedCalls: number;
+  /** Reached-calls estimate (2026-08-18, "proširiti OBIM - dostupnost", then
+   * revised same day after the CDR mismatch: "koliko su pricali na osnovu
+   * AHT-a") - talk/(talk+dispo) × totalCalls, computed purely from
+   * already-trusted agents.php fields (see computeDialerTotals's own note).
+   * `?? 0` at every read site since historical snapshots captured before
+   * this field existed won't have it. */
+  reachedEstimate: number;
+  reachedRate: number;
   conversion: number;
   callsPerHour: number;
   salesPerHour: number;
@@ -400,7 +366,6 @@ export function buildDialerAgentSummaries(
   agents: { id: string; full_name: string }[],
   salesByAgentId: Map<string, number>,
   positionsByAgentId: Map<string, number> = new Map(),
-  reachedCallsByAgentId: Map<string, number> = new Map(),
 ): DialerAgentSummary[] {
   return dialerRows
     .map((row) => ({ row, matched: matchDialerAgent(row.fullName, agents) }))
@@ -408,7 +373,6 @@ export function buildDialerAgentSummaries(
     .map(({ row, matched }) => {
       const realSales = salesByAgentId.get(matched.id) ?? 0;
       const salePositions = positionsByAgentId.get(matched.id) ?? 0;
-      const reachedCalls = reachedCallsByAgentId.get(matched.id) ?? 0;
       const conversion = row.totalCalls > 0 ? realSales / row.totalCalls : 0;
 
       const talkSec = parseDialerTimeToSeconds(row.talkTime);
@@ -418,6 +382,12 @@ export function buildDialerAgentSummaries(
       const deadSec = parseDialerTimeToSeconds(row.deadTime);
       const totalSec = parseDialerTimeToSeconds(row.totalTime);
       const totalHours = totalSec / 3600;
+      // Reached-calls estimate - see computeDialerTotals's own note. "-"
+      // dispoTime (reconstructed/backfilled rows, §14 item 98) means the
+      // handling split isn't real for this row - handled below by keeping
+      // reachedRate at 0 rather than a false 100%.
+      const handleSec = talkSec + dispoSec;
+      const reachedRate = row.dispoTime !== "-" && handleSec > 0 ? talkSec / handleSec : 0;
       // Available time = everything except pause (standard call-center
       // formula: Occupancy = Handle Time / (Login Time - Break Time)).
       // First cut used talk+dispo+wait as the denominator, which excluded
@@ -437,7 +407,8 @@ export function buildDialerAgentSummaries(
         totalCalls: row.totalCalls,
         realSales,
         salePositions,
-        reachedCalls,
+        reachedEstimate: Math.round(row.totalCalls * reachedRate),
+        reachedRate,
         conversion,
         callsPerHour: totalHours > 0 ? row.totalCalls / totalHours : 0,
         salesPerHour: totalHours > 0 ? realSales / totalHours : 0,

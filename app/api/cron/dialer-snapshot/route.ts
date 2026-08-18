@@ -1,11 +1,6 @@
 import { NextResponse } from "next/server";
 
-import {
-  buildDialerAgentSummaries,
-  computeReachedCallsByAgent,
-  fetchDialerAgentStatuses,
-  fetchDialerCallLog,
-} from "@/lib/dialer/status";
+import { buildDialerAgentSummaries, fetchDialerAgentStatuses } from "@/lib/dialer/status";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 // Daily dialer snapshot (Anis, 2026-08-06): "posto nemamo logove, da li te
@@ -60,17 +55,12 @@ export async function GET(request: Request) {
   }
 
   const { data: dialerRows, error: fetchError, attemptsUsed } = await fetchDialerWithRetry();
-  const [{ data: agents }, { data: perfRows }, { data: soldRows }, { data: callLogRows }] = await Promise.all([
+  const [{ data: agents }, { data: perfRows }, { data: soldRows }] = await Promise.all([
     admin.from("agents").select("id, full_name, profile_id").eq("active", true),
     admin.from("agent_daily_performance").select("agent_id, sales_count").eq("date", todayStr),
     // salePositions (2026-08-18): real line-item count, separate from the
     // now-batch-aware sales_count above - see lib/dialer/status.ts.
     admin.from("sales_feedback").select("agent_id").eq("outcome", "sold").gte("created_at", `${todayStr}T00:00:00Z`),
-    // reachedCalls (2026-08-18, "dostupnost... generalno u admin dialer
-    // view") - stored in the daily snapshot too, same real duration-based
-    // estimate the live table uses, so Verlauf history carries it going
-    // forward (old snapshots simply don't have the field, defaulting to 0).
-    fetchDialerCallLog(new Date(`${todayStr}T00:00:00`), new Date()),
   ]);
 
   if (fetchError || !dialerRows) {
@@ -88,8 +78,10 @@ export async function GET(request: Request) {
     if (!agentId) continue;
     positionsByAgentId.set(agentId, (positionsByAgentId.get(agentId) ?? 0) + 1);
   }
-  const reachedCallsByAgentId = computeReachedCallsByAgent(callLogRows ?? [], dialerRows, agents ?? []);
-  const summaries = buildDialerAgentSummaries(dialerRows, agents ?? [], salesByAgentId, positionsByAgentId, reachedCallsByAgentId);
+  // Javilo se (procjena) (2026-08-18) is now computed inside
+  // buildDialerAgentSummaries directly from real agents.php fields - no
+  // separate CDR fetch needed for the daily snapshot either.
+  const summaries = buildDialerAgentSummaries(dialerRows, agents ?? [], salesByAgentId, positionsByAgentId);
 
   const { error: upsertError } = await admin
     .from("dialer_daily_snapshots")
