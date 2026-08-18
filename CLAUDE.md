@@ -5694,6 +5694,27 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     columns correctly, self-corrected from real `sales_feedback` for that past date (e.g.
     Merima Zulfic 5/12). Typecheck/lint clean, full suite green (41/41).
 
+96. **New `/admin/assistent-fragen` page — shipped (2026-08-18).** Anis: "Mogu li dobiti
+    listing pitanja u AI Asistentu i ko je napravio." `chat_log` has always been
+    private-per-agent with an admin-read-all exception (§10 M7: "admin can still see
+    everything for cost/QA oversight") - the RLS policy already supported this, no
+    migration needed, just the first UI that actually surfaces it. New admin-only page
+    lists every `role='user'` row (the real questions, not the assistant's answers or
+    tool calls) with the asking agent's name and a local (`Europe/Sarajevo`) timestamp,
+    filterable by agent and a Von/Bis date range, paginated at 30/page - same filter-form/
+    pagination pattern as `/feedback`. Deliberately scoped to just questions + author, not
+    a full transcript viewer (answers/tool_calls stay out of scope, matching the literal
+    ask). New sidebar nav item ("Assistent-Fragen", `Sparkles` icon) under Admin, next to
+    QA-Anrufe.
+
+    Verified live end-to-end (throwaway admin test account, deleted after): the real 46
+    stored questions rendered correctly with real agent names/content (e.g. Alan Sačić:
+    "Was kann ich heute verkaufen", Anis's own test messages), paginated correctly (Seite
+    1/2); filtering by a real agent (`?agent=<profiles.id>`, note this is a `profiles.id`,
+    not `agents.id` - same key-space distinction as `sales_feedback.agent_id`) correctly
+    narrowed to that agent's own 15 real questions. Typecheck/lint clean, full suite green
+    (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

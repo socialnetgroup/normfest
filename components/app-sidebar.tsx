@@ -344,6 +344,13 @@ export function AppSidebar({
                 badge="Bald"
                 onNavigate={closeMobile}
               />
+              <NavItem
+                href="/admin/assistent-fragen"
+                label="Assistent-Fragen"
+                icon={Sparkles}
+                active={isActive(pathname, "/admin/assistent-fragen")}
+                onNavigate={closeMobile}
+              />
               <button
                 type="button"
                 onClick={() => setSettingsOpen((v) => !v)}
