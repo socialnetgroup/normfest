@@ -5882,6 +5882,66 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     with the old standalone column gone; AHT tile showed "02:21" (mm:ss). Typecheck/lint
     clean, full suite green (41/41).
 
+100. **Dialer/Report table restructured (compact variant + merged in-tool status column)
+    + real CDR-vs-real-totalCalls mismatch fixed with a synthetic metric — shipped
+    (2026-08-18).** Anis, one message: *"DIALER UŽIVO STATUS za REPORT samo (u adminu
+    ostaviti puni prikaz): proširiti OBIM - dostupnost tkz. (dodati i generalno u admin
+    dialer view); obrisati: vrijeme obrade (ostaviti zauzetost %), Raspodjela vremena
+    kompletno obrisati za Report view; Aktivnost ostaviti; status u alatu dodati poslije
+    statusa u dialeru i istu tabelu."* Confirmed feasibility first (`"Prvo mi javi da li
+    je ovo sve moguce mergati u jednu tabelu"`), Anis: "Tako je, kreni."
+
+    `components/dialer-status-table.tsx` rewritten from a fragile positional `headers[N]`
+    array to a data-driven `ColumnDef[]` (`{key, group, header, cell, foot, alwaysReal}`),
+    with group headers/spans now derived by iterating the real column list instead of a
+    separately-hardcoded array (the two could previously drift). New `variant?:
+    "full"|"compact"` prop: `"compact"` (report role) drops the `Ø Bearbeitungszeit`
+    column and the entire `ZEITVERTEILUNG` group; `"full"` (admin, default) is unchanged.
+    New `appStatusByAgentId?: Map<agentId, {label, badgeVariant}>` prop merges a "Status
+    u alatu" column right after "Status" when passed - only wired for report's
+    Live-Status table (not Verlauf, which has no live in-tool status to show for a past
+    day). `/dialer/page.tsx`: the standalone "Status im Tool" card is now `isAdmin`-only
+    (report no longer sees it as a separate card, its data is folded into the merged
+    column instead); `variant={isReport ? "compact" : "full"}` passed to both the
+    Live-Status and Verlauf table instances.
+
+    **Real bug found and fixed the same pass, not guessed:** Anis, reviewing the first
+    cut of the OBIM "Dostupnost" tile (a CDR-status-based reachability %, built earlier
+    the same day per §14 item 99): *"Pogledaj opet Dostupnost od 87%. tamo pise 125 od
+    144, ali danas je bilo 354 poziva. Pa mozes li to nekako syncat?"* - the CDR
+    (`metrike.php`) call count for that day (144) was far below the real live dialer's
+    own `totalCalls` (354), a real, unexplained undercount (root cause not diagnosed -
+    Anis explicitly deferred: *"Naknadno cemo se baviti metrikama php"*). Per his own
+    suggested fallback (*"Za početak mozda samo kolicinu poziva i trajanje poziva vidjeti
+    i sprechzeit pa sinteticki izracunati"*), replaced the CDR-based percentage entirely
+    with a synthetic **Ø Sprechzeit/Poziv** (average talk-time per call) computed purely
+    from already-trusted real fields: `talkTime / totalCalls` (per-agent in the table,
+    `talkSeconds / totalCalls` team-wide in `computeDialerTotals`/Bericht's own tile) -
+    no CDR call at all, so the mismatch can't leak into this number. Renamed the column
+    (`dostupnost` label: de "Ø Sprechzeit/Anruf", bs "Ø Sprechzeit/Poziv", fixing an
+    earlier typo "Dostupbarkeit"), flagged `alwaysReal: true` so it renders correctly
+    even on a `reconstructed` snapshot row, and shows a real value in both the live
+    table and its own Gesamt/Ukupno footer row. Bericht's own "Dostupnost" tile was
+    replaced with the same computation, sub-labeled *"Sintetički izračunato iz stvarnih
+    Pozivi/Sprechzeit - pravi status-kodovi za Dostupnost još nisu dokumentovani"* -
+    honest about being a synthetic stand-in, not a real answered/dialed ratio, per this
+    project's own anti-fabrication discipline (§3.2.6). `estimateReachability`/
+    `fetchDialerCallLog`'s CDR-based reachability logic was removed from Bericht's own
+    call site but left defined in `lib/dialer/status.ts` for the later, still-deferred
+    `metrike.php` root-cause investigation.
+
+    Verified live end-to-end with two fresh throwaway test accounts (admin + report,
+    both deleted after): confirmed admin's `/dialer` renders the full table unchanged
+    (all groups incl. `ZEITVERTEILUNG`, `Ø Bearbeitungszeit`, standalone "Status im
+    Tool" card, real "Ø Sprechzeit/Anruf" values e.g. 71s/65s/46s) and report's
+    `/dialer` renders the compact table (`AGENT/OBIM/REZULTAT/EFIKASNOST/AKTIVNOST`
+    groups only, no AHT, no Zeitverteilung), with the merged "Status u alatu" column
+    correctly appearing right after Status on the Live-Status table only (absent from
+    Verlauf), no standalone Status-im-Tool card, and real "Ø Sprechzeit/Poziv" values
+    including a real team-wide 65s in the Ukupno row. Bericht's own tile showed a real
+    "65s" with the honest synthetic-metric caveat. Typecheck/lint clean, full suite
+    green (41/41), `visibility_mode` confirmed still `'gebiet'` afterward.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

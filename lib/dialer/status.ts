@@ -9,6 +9,14 @@
 const DIALER_AGENTS_URL = "http://socialnet.dialer.ba/agents.php";
 const DIALER_METRIKE_URL = "http://socialnet.dialer.ba/metrike.php";
 
+/** In-app heartbeat status (from fn_get_agent_login_status), as opposed to
+ * DialerAgentStatus's real ViciDial call status - two separate data sources
+ * merged into one table for report@ (2026-08-18, "status u alatu dodati
+ * poslije statusa u dialeru i istu tabelu"). Exported here rather than
+ * defined in the page component so DialerStatusTable can share the type
+ * without importing from a page file. */
+export type LoginStatus = "none" | "created" | "idle" | "online";
+
 export type DialerAgentStatus = {
   extension: string;
   fullName: string;
@@ -154,6 +162,35 @@ export function estimateReachability(
   return { totalCalls, reachedEstimate, rate: totalCalls > 0 ? reachedEstimate / totalCalls : 0 };
 }
 
+/** Per-agent version of estimateReachability (2026-08-18, "proširiti OBIM -
+ * Koliko se ljudi javilo... dostupnost" per-row, not just a team total).
+ * The CDR only carries the dialer extension (row.user), not our agent id -
+ * dialerRows (agents.php, already fetched for the same page) carries BOTH
+ * the extension AND the real full_name together, so it's reused here purely
+ * as an extension→agent lookup (same matchDialerAgent diacritic-normalized
+ * matching already used everywhere else in this file), not for its live
+ * status fields. */
+export function computeReachedCallsByAgent(
+  callLogRows: DialerCallLogRow[],
+  dialerRows: DialerAgentStatus[],
+  agents: { id: string; full_name: string }[],
+  thresholdSec = 5,
+): Map<string, number> {
+  const agentIdByExtension = new Map<string, string>();
+  for (const row of dialerRows) {
+    const matched = matchDialerAgent(row.fullName, agents);
+    if (matched) agentIdByExtension.set(row.extension, matched.id);
+  }
+  const reachedByAgentId = new Map<string, number>();
+  for (const row of callLogRows) {
+    if (row.lengthInSec < thresholdSec) continue;
+    const agentId = agentIdByExtension.get(row.user);
+    if (!agentId) continue;
+    reachedByAgentId.set(agentId, (reachedByAgentId.get(agentId) ?? 0) + 1);
+  }
+  return reachedByAgentId;
+}
+
 /** Dialer time fields come as "HH:MM:SS" (talk/pause/wait/dispo/dead) or
  * "HH:MM" (totalTime) or "HH:MM (xx,xx%)" (active/inactive) - strip any
  * trailing "(...)" and parse whichever colon-count shows up into seconds. */
@@ -212,6 +249,8 @@ export function refreshSalesInSummaries(
 export type DialerAgentTotals = {
   totalCalls: number;
   callsPerHour: number;
+  reachedCalls: number;
+  reachRate: number;
   realSales: number;
   salePositions: number;
   conversion: number;
@@ -240,6 +279,7 @@ export type DialerAgentTotals = {
  * can see the summary as well." */
 export function computeDialerTotals(summaries: DialerAgentSummary[]): DialerAgentTotals {
   let totalCalls = 0;
+  let reachedCalls = 0;
   let realSales = 0;
   let salePositions = 0;
   let talkSec = 0;
@@ -253,6 +293,7 @@ export function computeDialerTotals(summaries: DialerAgentSummary[]): DialerAgen
 
   for (const s of summaries) {
     totalCalls += s.totalCalls;
+    reachedCalls += s.reachedCalls ?? 0;
     realSales += s.realSales;
     salePositions += s.salePositions;
     talkSec += parseDialerTimeToSeconds(s.talkTime);
@@ -272,6 +313,8 @@ export function computeDialerTotals(summaries: DialerAgentSummary[]): DialerAgen
   return {
     totalCalls,
     callsPerHour: totalHours > 0 ? totalCalls / totalHours : 0,
+    reachedCalls,
+    reachRate: totalCalls > 0 ? reachedCalls / totalCalls : 0,
     realSales,
     salePositions,
     conversion: totalCalls > 0 ? realSales / totalCalls : 0,
@@ -325,6 +368,12 @@ export type DialerAgentSummary = {
    * shown separately in the Dialer table now instead of one number that
    * used to conflate them. */
   salePositions: number;
+  /** Real reached-calls estimate (2026-08-18, "proširiti OBIM - dostupnost")
+   * from computeReachedCallsByAgent - see estimateReachability's own note on
+   * why this is a duration-based proxy, not a real disposition rate. `?? 0`
+   * at every read site since historical snapshots captured before this field
+   * existed won't have it. */
+  reachedCalls: number;
   conversion: number;
   callsPerHour: number;
   salesPerHour: number;
@@ -351,6 +400,7 @@ export function buildDialerAgentSummaries(
   agents: { id: string; full_name: string }[],
   salesByAgentId: Map<string, number>,
   positionsByAgentId: Map<string, number> = new Map(),
+  reachedCallsByAgentId: Map<string, number> = new Map(),
 ): DialerAgentSummary[] {
   return dialerRows
     .map((row) => ({ row, matched: matchDialerAgent(row.fullName, agents) }))
@@ -358,6 +408,7 @@ export function buildDialerAgentSummaries(
     .map(({ row, matched }) => {
       const realSales = salesByAgentId.get(matched.id) ?? 0;
       const salePositions = positionsByAgentId.get(matched.id) ?? 0;
+      const reachedCalls = reachedCallsByAgentId.get(matched.id) ?? 0;
       const conversion = row.totalCalls > 0 ? realSales / row.totalCalls : 0;
 
       const talkSec = parseDialerTimeToSeconds(row.talkTime);
@@ -386,6 +437,7 @@ export function buildDialerAgentSummaries(
         totalCalls: row.totalCalls,
         realSales,
         salePositions,
+        reachedCalls,
         conversion,
         callsPerHour: totalHours > 0 ? row.totalCalls / totalHours : 0,
         salesPerHour: totalHours > 0 ? realSales / totalHours : 0,

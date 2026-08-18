@@ -11,9 +11,7 @@ import { computeBonusByDate, type BonusThreshold } from "@/lib/team/bonus";
 import {
   buildDialerAgentSummaries,
   computeDialerTotals,
-  estimateReachability,
   fetchDialerAgentStatuses,
-  fetchDialerCallLog,
   formatSecondsAsHms,
 } from "@/lib/dialer/status";
 
@@ -325,15 +323,19 @@ export default async function BerichtPage() {
       : null;
   const talkShare = dialerTotals && dialerTotals.totalSeconds > 0 ? dialerTotals.talkSeconds / dialerTotals.totalSeconds : null;
 
-  // "Erreichbarkeit" (2026-08-18, Anis: "Koliko se ljudi javilo... ako imamo
-  // pravi izvor u metrikama.php iskoristi, ako ne, sintetički broj za sada")
-  // - checked the real dialer status codes first: duration per code has a
-  // wide, overlapping spread with no clean "instant no-answer" bucket, so
-  // there's no reliable way yet to classify answered/not from them (see
-  // fetchDialerCallLog's own note) - this stays a labeled ESTIMATE
-  // (duration >= 5s) until the dialer dev can explain the real codes.
-  const { data: callLogRows } = await fetchDialerCallLog(todayStart, now);
-  const reachability = callLogRows ? estimateReachability(callLogRows) : null;
+  // "Dostupnost" (2026-08-18, Anis: "Koliko se ljudi javilo... ako imamo
+  // pravi izvor u metrikama.php iskoristi, ako ne, sintetički broj za
+  // sada"). First cut used metrike.php's own CDR total as the denominator
+  // (reachedEstimate/CDR-total) - Anis caught a real mismatch the same day:
+  // "tamo pise 125 od 144, ali danas je bilo 354 poziva" - the CDR
+  // genuinely undercounts vs. the real dialer totalCalls counter (root
+  // cause deferred, "naknadno cemo se baviti metrikama php"). Replaced with
+  // his own suggested fallback: a fully real, CDR-free synthetic proxy from
+  // totalCalls + talkTime (both already trusted, same agents.php source as
+  // every other tile here) - "kolicinu poziva i trajanje poziva i
+  // sprechzeit pa sinteticki izracunati".
+  const avgTalkSecPerCall =
+    dialerTotals && dialerTotals.totalCalls > 0 ? dialerTotals.talkSeconds / dialerTotals.totalCalls : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -399,13 +401,9 @@ export default async function BerichtPage() {
                 accent="success"
               />
               <StatTile
-                label="Dostupnost (procijenjeno)"
-                value={reachability ? pct.format(reachability.rate) : "-"}
-                sub={
-                  reachability
-                    ? `${num(reachability.reachedEstimate)} od ${num(reachability.totalCalls)} - procjena, stvarni status-kodovi još nisu dokumentovani`
-                    : "Poziv-log trenutno nije dostupan"
-                }
+                label="Ø Sprechzeit/Poziv"
+                value={avgTalkSecPerCall !== null ? `${Math.round(avgTalkSecPerCall)}s` : "-"}
+                sub="Sintetički izračunato iz stvarnih Pozivi/Sprechzeit - pravi status-kodovi za Dostupnost još nisu dokumentovani"
                 accent="warning"
               />
             </div>

@@ -12,9 +12,12 @@ import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 import {
   buildDialerAgentSummaries,
+  computeReachedCallsByAgent,
   fetchDialerAgentStatuses,
+  fetchDialerCallLog,
   refreshSalesInSummaries,
   type DialerAgentSummary,
+  type LoginStatus,
 } from "@/lib/dialer/status";
 
 const ONLINE_THRESHOLD_MS = 90_000;
@@ -71,8 +74,6 @@ function pathLabel(path: string | null, locale: "de" | "bs"): string {
   }
   return path;
 }
-
-type LoginStatus = "none" | "created" | "idle" | "online";
 
 function IconTitle({
   icon: Icon,
@@ -181,6 +182,7 @@ export default async function DialerPage({
   let selectedSnapshotCapturedAt: string | null = null;
   let selectedSnapshotReconstructed = false;
   let appStatusRows: { agentId: string; name: string; status: LoginStatus; path: string | null }[] = [];
+  let appStatusByAgentId = new Map<string, { label: string; badgeVariant: "success" | "secondary" | "warning" | "muted" }>();
   let snapshotLogRows: {
     id: string;
     attempted_at: string;
@@ -201,6 +203,7 @@ export default async function DialerPage({
       { data: todaySoldRows },
       { data: snapshotRows },
       { data: loginStatusRows },
+      { data: callLogRows },
     ] = await Promise.all([
       fetchDialerAgentStatuses(),
       supabase.from("agents").select("id, full_name, profile_id").eq("active", true),
@@ -218,6 +221,12 @@ export default async function DialerPage({
       // "Status im Tool" - our own in-app heartbeat, same RPC/threshold the
       // Dashboard's Rangliste used to compute this with before it moved here.
       supabase.rpc("fn_get_agent_login_status"),
+      // "Dostupnost" (2026-08-18, "proširiti OBIM - dostupnost... i
+      // generalno u admin dialer view") - real per-agent reachability
+      // estimate from today's call log, see estimateReachability's own
+      // note on why this is a duration-based proxy, not a real
+      // disposition rate.
+      fetchDialerCallLog(new Date(`${todayStr}T00:00:00`), new Date()),
     ]);
     dialerError = fetchError;
     const agents = agentRows ?? [];
@@ -232,7 +241,12 @@ export default async function DialerPage({
       if (!agentId) continue;
       positionsByAgentId.set(agentId, (positionsByAgentId.get(agentId) ?? 0) + 1);
     }
-    liveRows = dialerData ? buildDialerAgentSummaries(dialerData, agents, salesByAgentId, positionsByAgentId) : null;
+    const reachedCallsByAgentId = dialerData
+      ? computeReachedCallsByAgent(callLogRows ?? [], dialerData, agents)
+      : new Map<string, number>();
+    liveRows = dialerData
+      ? buildDialerAgentSummaries(dialerData, agents, salesByAgentId, positionsByAgentId, reachedCallsByAgentId)
+      : null;
     snapshotDates = (snapshotRows ?? []).map((r) => r.snapshot_date);
 
     const now = new Date();
@@ -252,6 +266,28 @@ export default async function DialerPage({
         const order: Record<LoginStatus, number> = { online: 0, idle: 1, created: 2, none: 3 };
         return order[a.status] - order[b.status] || a.name.localeCompare(b.name);
       });
+
+    // "Status u alatu" merged into the Live-Status table for report@
+    // (2026-08-18, "status u alatu dodati poslije statusa u dialeru i istu
+    // tabelu") - pre-formatted here (where pathLabel/locale already live)
+    // rather than duplicated inside DialerStatusTable. Only built/passed
+    // for report - admin keeps the existing separate "Status im Tool" card
+    // untouched ("u adminu ostaviti puni prikaz").
+    appStatusByAgentId = new Map(
+      appStatusRows.map((row) => {
+        const label =
+          row.status === "online"
+            ? `${t.online}${row.path ? ` - ${pathLabel(row.path, locale)}` : ""}`
+            : row.status === "idle"
+              ? t.idle
+              : row.status === "created"
+                ? t.created
+                : t.none;
+        const badgeVariant: "success" | "secondary" | "warning" | "muted" =
+          row.status === "online" ? "success" : row.status === "idle" ? "secondary" : row.status === "created" ? "warning" : "muted";
+        return [row.agentId, { label, badgeVariant }] as const;
+      }),
+    );
 
     // Snapshot-Versuche (2026-08-18, nach der stvarnoj 17.08. rupi): admin-
     // only Verlauf svakog cron-poziva (uspjeh ili neuspjeh), da se buduće
@@ -315,7 +351,7 @@ export default async function DialerPage({
         <h1 className="font-heading text-2xl font-semibold tracking-tight">{t.title}</h1>
       </div>
 
-      {canView ? (
+      {isAdmin ? (
         <Card>
           <CardHeader>
             <IconTitle icon={Wifi}>{t.statusTitle}</IconTitle>
@@ -375,7 +411,14 @@ export default async function DialerPage({
                   {t.unreachable}: {dialerError}
                 </p>
               ) : (
-                <DialerStatusTable rows={liveRows ?? []} sortByStatus locale={locale} agentHref={agentHref} />
+                <DialerStatusTable
+                  rows={liveRows ?? []}
+                  sortByStatus
+                  locale={locale}
+                  agentHref={agentHref}
+                  variant={isReport ? "compact" : "full"}
+                  appStatusByAgentId={isReport ? appStatusByAgentId : undefined}
+                />
               )}
             </CardContent>
           </Card>
@@ -441,6 +484,7 @@ export default async function DialerPage({
                     locale={locale}
                     agentHref={agentHref}
                     reconstructed={selectedSnapshotReconstructed}
+                    variant={isReport ? "compact" : "full"}
                   />
                 </div>
               )}
