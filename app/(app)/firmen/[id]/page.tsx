@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card";
 import { AnrufenPlaceholderButton } from "@/components/anrufen-placeholder-button";
 import { BrandFocusVerifyButton } from "@/components/brand-focus-verify-button";
+import { FavoriteStarButton } from "@/components/favorite-star-button";
 import { EnrichNowButton } from "@/components/enrich-now-button";
 import { FeedbackForm } from "@/components/feedback-form";
 import { FeedbackHistoryItem } from "@/components/feedback-history-item";
@@ -138,6 +139,18 @@ export default async function CompanyProfilePage({
       supabase.from("company_daily_calls").select("call_count, call_date").eq("company_id", id),
     ]);
 
+  // Favoritenliste (2026-08-19, §14 item 124) - only meaningful once we know
+  // who's looking, so this stays a separate query rather than joining into
+  // the main Promise.all above (which runs before currentUser is known).
+  const { data: favoriteRow } = currentUser
+    ? await supabase
+        .from("company_favorites")
+        .select("id")
+        .eq("agent_id", currentUser.id)
+        .eq("company_id", id)
+        .maybeSingle()
+    : { data: null };
+
   if (error || !company) {
     notFound();
   }
@@ -161,6 +174,13 @@ export default async function CompanyProfilePage({
           <h1 className="font-heading text-2xl font-bold tracking-tight">
             {company.name}
           </h1>
+          {currentUser ? (
+            <FavoriteStarButton
+              companyId={company.id}
+              agentId={currentUser.id}
+              initialFavorited={Boolean(favoriteRow)}
+            />
+          ) : null}
           {company.call_priority ? (
             <Badge variant="warning">Zuerst anrufen</Badge>
           ) : null}

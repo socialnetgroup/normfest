@@ -7007,6 +7007,43 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     narrowed the full list down to exactly the 1 real feedback row for
     that company. Typecheck/lint clean.
 
+124. **Favoritenliste (star a company) — shipped (2026-08-19).** Anis:
+    "Could we make an Favoritenliste of the companies each agent has and
+    can 'star' them... sie benutzen wiedervorlagen dafuer, was falsch ist.
+    also favoritenliste ist die losung." Real evidence attached: a 485-row
+    export of Rijalda's own priority list, kept in the DIALER's own
+    lead-list feature (`list_id 6008`, "Priolist Favorit") instead of this
+    app - a separate mechanism the dialer happens to offer, never something
+    Wiedervorlage (§14 item 21, a callback-date field) was meant to cover.
+
+    New `company_favorites` table (`agent_id, company_id`, unique pair,
+    migration `20260819090000_company_favorites.sql`) - private per agent,
+    same shape as `chat_log` (§10 M7): each agent's own favorites are for
+    their own use (`agent_id = auth.uid()` insert/delete/select), admin can
+    read everyone's for oversight but never write another agent's list.
+
+    `components/favorite-star-button.tsx` - optimistic toggle (flips
+    immediately, reverts on a failed write, same interaction shape as
+    `SignalDismissButton`), rendered directly next to the company name on
+    the Firmenprofil header (`app/(app)/firmen/[id]/page.tsx`) per Anis's
+    own framing ("on top at the name of the company"). New `/favoriten`
+    page: agents see their own starred companies (name/Kundennummer/PLZ-
+    Ort, linked to the profile, with a remove-star action); admins get an
+    agent picker (`?agent=` = a real `profiles.id`, same pattern as
+    `/email-liste`'s Gebiet picker) to view (read-only) any agent's list.
+    New shared sidebar nav entry ("Favoriten", Star icon) right after
+    Firmen.
+
+    Verified live end-to-end (throwaway admin test account, deleted after):
+    starred a real company from its Firmenprofil, confirmed the DB row and
+    the button's persisted "Von Favoritenliste entfernen" state after a
+    fresh page load; confirmed the admin agent-picker correctly shows a
+    real agent's (Rijalda's) empty state with zero favorites, then (via a
+    temporary real row written directly for her, deleted immediately after)
+    confirmed the populated list renders correctly with no remove-star
+    button when an admin is viewing someone else's list (own-list-only
+    editing, by design). Typecheck/lint clean, full suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

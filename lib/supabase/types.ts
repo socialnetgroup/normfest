@@ -670,6 +670,42 @@ export type Database = {
           },
         ]
       }
+      company_favorites: {
+        Row: {
+          agent_id: string
+          company_id: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          agent_id: string
+          company_id: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          agent_id?: string
+          company_id?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_favorites_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "company_favorites_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       company_rfm: {
         Row: {
           company_id: string

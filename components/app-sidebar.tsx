@@ -31,6 +31,7 @@ import {
   Mail,
   KeyRound,
   X,
+  Star,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +41,11 @@ import { cn } from "@/lib/utils";
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/firmen", label: "Firmen", icon: Building2 },
+  // Favoritenliste (2026-08-19, §14 item 124) - Anis: agents were keeping
+  // their own priority list inside the dialer's own lead-list feature
+  // instead ("sie benutzen wiedervorlagen dafuer, was falsch ist"); this
+  // gives every agent a real, private list inside the app.
+  { href: "/favoriten", label: "Favoriten", icon: Star },
   { href: "/katalog", label: "Katalog", icon: Package },
   { href: "/fokus", label: "Fokus", icon: Target },
   // Alan's pilot feedback (2026-08-08) / admin-menu scoping audit: the
