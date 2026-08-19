@@ -7193,6 +7193,73 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     ViciDial quick-link renders with the exact real URL and opens in a new
     tab. Typecheck/lint clean, full suite green (41/41).
 
+129. **Real "Javilo se" (reached-calls) classification, replacing the
+    synthetic AHT-based estimate — shipped (2026-08-19).** Anis sent a real
+    screenshot of ViciDial's own "Hangup Again" disposition-code legend and
+    answered 3 clarifying questions (AskUserQuestion) on the ambiguous
+    codes: APNE ("Ansprechpartner nicht erreicht" - someone picked up, just
+    not the target person) counts as reached; KK ("Privat Person") and FG
+    ("Firma geschlossen") both count as reached (a real human interaction
+    happened); CBHOLD is the same as CALLBK (a real callback/hold).
+
+    `lib/dialer/status.ts` gained `classifyCallStatus()`. **Corrected once
+    more the same day** - Anis's first answer (APNE/KK/FG/CBHOLD reached,
+    SN reached, ADM/DNC/DOP/PARK excluded) was superseded a few messages
+    later by a direct, explicit list: "Javilo se: CALLBK, CBHOLD, NI, SALE,
+    APNE, KK, FG, PARK, DOP / Nije se javilo: A, KV, N, DC, DNC, ADM, SN -
+    ovo je ispravno za sada ipak." Final classification: REACHED =
+    `CALLBK, CBHOLD, NI, SALE, APNE, KK, FG, PARK, DOP`; NOT REACHED =
+    `A, KV, N, DC, DNC, ADM, SN`; EXCLUDED from both the numerator and the
+    denominator (not named in either list) = `KC` only (an internal QA
+    control-call, not a real customer call). New
+    `computeRealReachedByAgent(calls, extensionToAgentId)` classifies every
+    row of today's real CDR (`fetchDialerCallLog`, already built for the
+    QA-Bewertungen call picker, §14 item 109) per agent; new
+    `applyRealReachedToSummaries()` overrides each `DialerAgentSummary`'s
+    `reachedEstimate`/`reachedRate` with the real count when available,
+    setting a new `reachedIsReal` flag so the UI never silently presents a
+    synthetic number as real or vice versa - an agent with no real CDR
+    coverage (fetch failure, etc.) keeps the existing synthetic
+    talk/(talk+dispo)×totalCalls fallback untouched.
+
+    **Real, deliberate constraint: only usable for "today".** `metrike.php`'s
+    CDR retention is same-day-only (confirmed live, §14 item 122) - the
+    historical Verlauf snapshot viewer and MonthCalendar's per-day view have
+    no real CDR to classify against a past day, so both correctly keep using
+    the synthetic estimate unchanged; only `/dialer`'s live table and
+    `/bericht`'s Dialer aggregate tile fetch today's CDR and apply the real
+    override.
+
+    `computeDialerTotals()`'s Gesamt/Ukupno row previously recomputed a
+    team-wide synthetic rate from scratch (`talkSec/(talkSec+dispoSec)`) -
+    changed to sum each row's own already-resolved `reachedEstimate`
+    (real when available, synthetic fallback otherwise) instead, so the
+    total is always consistent with whichever method each individual row
+    actually used, and only labeled `reachedIsReal` when every contributing
+    row is real. `DialerStatusTable`'s "Javilo se"/"Erreicht" column header
+    dropped the permanent "(procjena)"/"(geschätzt)" suffix (no longer
+    always an estimate) - each cell now appends a small italic
+    "(procjena)"/"(geschätzt)" marker only when that specific row/total
+    isn't real, so real and estimated numbers are never visually confused.
+    `/bericht`'s own tile does the same (label/sub-text switch on
+    `reachedIsReal`).
+
+    Verified with a synthetic unit-level check first (classification of all
+    17 real codes against the corrected lists, a fabricated CDR + agent map,
+    confirming KC never counts toward either side of the ratio and an
+    unmatched extension is correctly dropped) - then live end-to-end against
+    the real dialer (reachable from this environment this session, unlike
+    some earlier documented cases) via a throwaway admin test account, both
+    before and after the correction: `/dialer`'s live
+    table showed real per-agent "Erreicht" values with no "(geschätzt)"
+    suffix (e.g. Arnela Orucevic 10/63 = 16,1%) and a real Gesamt row
+    (389/571 = 68,1%, no estimate marker); the historical Verlauf snapshot
+    for a past date correctly still showed every row tagged "(geschätzt)"
+    as expected; `/bericht`'s tile showed "68 % od 572 poziva - stvarno, iz
+    statusa poziva" (real, from call status), confirming the same real
+    classification applied there too. Typecheck/lint clean, full suite
+    green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

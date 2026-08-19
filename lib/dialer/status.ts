@@ -168,6 +168,72 @@ export async function fetchDialerCallLog(
   }
 }
 
+/** Real disposition-code classification (Anis, 2026-08-19: sent a screenshot
+ * of the dialer's real "Hangup Again" status legend, answered 3 clarifying
+ * questions, then corrected the set once more the same day: "Javilo se:
+ * CALLBK, CBHOLD, NI, SALE, APNE, KK, FG, PARK, DOP / Nije se javilo: A, KV,
+ * N, DC, DNC, ADM, SN - ovo je ispravno za sada ipak"). Replaces the earlier
+ * synthetic talk/(talk+dispo)×totalCalls estimate with a real per-call
+ * calculation - but ONLY usable for "today", since metrike.php's CDR
+ * retention is same-day-only (confirmed live, §14 item 122). Historical
+ * Verlauf snapshots and MonthCalendar's per-day view keep using the
+ * synthetic estimate, since no real CDR exists for a past day.
+ * Excluded entirely (neither reached nor not-reached, not counted in the
+ * denominator either) - not named in either of Anis's two lists: KC
+ * (Kontroll Call - internal QA dial, not a real customer call). */
+const REACHED_STATUSES = new Set(["CALLBK", "CBHOLD", "NI", "SALE", "APNE", "KK", "FG", "PARK", "DOP"]);
+const NOT_REACHED_STATUSES = new Set(["A", "KV", "N", "DC", "DNC", "ADM", "SN"]);
+
+export function classifyCallStatus(status: string): "reached" | "not-reached" | "excluded" {
+  const s = status.trim().toUpperCase();
+  if (REACHED_STATUSES.has(s)) return "reached";
+  if (NOT_REACHED_STATUSES.has(s)) return "not-reached";
+  return "excluded";
+}
+
+/** Real per-agent reached/total counts from today's real CDR (metrike.php),
+ * classified via classifyCallStatus. `total` only counts classified
+ * (reached + not-reached) calls - only KC is excluded from both sides. */
+export function computeRealReachedByAgent(
+  calls: DialerCallLogRow[],
+  extensionToAgentId: Map<string, { id: string }>,
+): Map<string, { reached: number; total: number }> {
+  const byAgent = new Map<string, { reached: number; total: number }>();
+  for (const call of calls) {
+    const agent = extensionToAgentId.get(call.user);
+    if (!agent) continue;
+    const cls = classifyCallStatus(call.status);
+    if (cls === "excluded") continue;
+    const entry = byAgent.get(agent.id) ?? { reached: 0, total: 0 };
+    entry.total += 1;
+    if (cls === "reached") entry.reached += 1;
+    byAgent.set(agent.id, entry);
+  }
+  return byAgent;
+}
+
+/** Overrides reachedEstimate/reachedRate with the real, CDR-based numbers
+ * for agents where real data is available (today only) - falls back to the
+ * existing synthetic estimate for any agent missing from the real map (e.g.
+ * the dialer fetch failed, or partial CDR data). Sets reachedIsReal per-row
+ * so the UI never silently presents a synthetic number as if it were real,
+ * or vice versa. */
+export function applyRealReachedToSummaries(
+  summaries: DialerAgentSummary[],
+  realReachedByAgentId: Map<string, { reached: number; total: number }>,
+): DialerAgentSummary[] {
+  return summaries.map((s) => {
+    const real = realReachedByAgentId.get(s.agentId);
+    if (!real || real.total === 0) return { ...s, reachedIsReal: false };
+    return {
+      ...s,
+      reachedEstimate: real.reached,
+      reachedRate: real.reached / real.total,
+      reachedIsReal: true,
+    };
+  });
+}
+
 /** Dialer time fields come as "HH:MM:SS" (talk/pause/wait/dispo/dead) or
  * "HH:MM" (totalTime) or "HH:MM (xx,xx%)" (active/inactive) - strip any
  * trailing "(...)" and parse whichever colon-count shows up into seconds. */
@@ -228,6 +294,10 @@ export type DialerAgentTotals = {
   callsPerHour: number;
   reachedEstimate: number;
   reachedRate: number;
+  /** True when reachedEstimate/reachedRate come from real, per-call CDR
+   * status-code classification (today only) rather than the synthetic
+   * talk/(talk+dispo)×totalCalls estimate. §14 item added 2026-08-19. */
+  reachedIsReal?: boolean;
   realSales: number;
   salePositions: number;
   conversion: number;
@@ -258,6 +328,8 @@ export function computeDialerTotals(summaries: DialerAgentSummary[]): DialerAgen
   let totalCalls = 0;
   let realSales = 0;
   let salePositions = 0;
+  let reachedSum = 0;
+  let allRowsReal = summaries.length > 0;
   let talkSec = 0;
   let waitSec = 0;
   let dispoSec = 0;
@@ -271,6 +343,15 @@ export function computeDialerTotals(summaries: DialerAgentSummary[]): DialerAgen
     totalCalls += s.totalCalls;
     realSales += s.realSales;
     salePositions += s.salePositions;
+    // Sum each row's own already-resolved reachedEstimate (real, per-call
+    // CDR-based when available - see applyRealReachedToSummaries - or the
+    // synthetic AHT-based fallback otherwise) rather than recomputing a
+    // team-wide synthetic estimate from scratch, so the Gesamt row is
+    // consistent with whatever method each individual row actually used.
+    if (s.totalCalls > 0) {
+      reachedSum += s.reachedEstimate;
+      if (!s.reachedIsReal) allRowsReal = false;
+    }
     talkSec += parseDialerTimeToSeconds(s.talkTime);
     waitSec += parseDialerTimeToSeconds(s.waitTime);
     dispoSec += parseDialerTimeToSeconds(s.dispoTime);
@@ -284,19 +365,13 @@ export function computeDialerTotals(summaries: DialerAgentSummary[]): DialerAgen
   const totalHours = totalSec / 3600;
   const availableSec = talkSec + dispoSec + waitSec + deadSec;
   const activeInactiveSec = activeSec + inactiveSec;
-  // Reached-calls estimate (2026-08-18, Anis's own chosen formula after the
-  // CDR-total mismatch above): assume the share of real handling time
-  // (talk+dispo) that was actual talking also applies to the share of
-  // total calls that were genuinely reached - talk/(talk+dispo) × totalCalls.
-  // Computed purely from already-trusted agents.php fields, no CDR needed.
-  const handleSec = talkSec + dispoSec;
-  const reachedRate = handleSec > 0 ? talkSec / handleSec : 0;
 
   return {
     totalCalls,
     callsPerHour: totalHours > 0 ? totalCalls / totalHours : 0,
-    reachedEstimate: Math.round(totalCalls * reachedRate),
-    reachedRate,
+    reachedEstimate: reachedSum,
+    reachedRate: totalCalls > 0 ? reachedSum / totalCalls : 0,
+    reachedIsReal: allRowsReal,
     realSales,
     salePositions,
     conversion: totalCalls > 0 ? realSales / totalCalls : 0,
@@ -377,6 +452,7 @@ export type DialerAgentSummary = {
    * this field existed won't have it. */
   reachedEstimate: number;
   reachedRate: number;
+  reachedIsReal?: boolean;
   conversion: number;
   callsPerHour: number;
   salesPerHour: number;

@@ -117,7 +117,8 @@ function buildColumns(
           vrijemeStatus: "Vrijeme u statusu",
           pozivi: "Pozivi",
           poziviH: "Pozivi/h",
-          dostupnost: "Javilo se (procjena)",
+          dostupnost: "Javilo se",
+          dostupnostEst: "procjena",
           prodaje: "Prodaje",
           pozicije: "Pozicije",
           konverzija: "Konverzija",
@@ -140,7 +141,8 @@ function buildColumns(
           vrijemeStatus: "Zeit im Status",
           pozivi: "Anrufe",
           poziviH: "Anrufe/Std.",
-          dostupnost: "Erreicht (geschätzt)",
+          dostupnost: "Erreicht",
+          dostupnostEst: "geschätzt",
           prodaje: "Sales",
           pozicije: "Positionen",
           konverzija: "Konversion",
@@ -224,10 +226,14 @@ function buildColumns(
       group: "obim",
       header: t.dostupnost,
       cell: (a) => {
-        if (a.totalCalls <= 0 || a.dispoTime === "-") return "-";
+        if (a.totalCalls <= 0) return "-";
+        if (!a.reachedIsReal && a.dispoTime === "-") return "-";
         return (
           <>
             {a.reachedEstimate} <span className="text-muted-foreground">({pct.format(a.reachedRate)})</span>
+            {!a.reachedIsReal ? (
+              <span className="ml-1 text-[10px] text-muted-foreground italic">({t.dostupnostEst})</span>
+            ) : null}
           </>
         );
       },
@@ -235,6 +241,9 @@ function buildColumns(
         tt.totalCalls > 0 ? (
           <>
             {tt.reachedEstimate} <span className="font-normal text-muted-foreground">({pct.format(tt.reachedRate)})</span>
+            {!tt.reachedIsReal ? (
+              <span className="ml-1 text-[10px] font-normal text-muted-foreground italic">({t.dostupnostEst})</span>
+            ) : null}
           </>
         ) : (
           "-"

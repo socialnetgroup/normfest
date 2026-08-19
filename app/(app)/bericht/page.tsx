@@ -9,10 +9,14 @@ import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 import { computeBonusByDate, type BonusThreshold } from "@/lib/team/bonus";
 import {
+  applyRealReachedToSummaries,
   buildDialerAgentSummaries,
   computeDialerTotals,
+  computeRealReachedByAgent,
   fetchDialerAgentStatuses,
+  fetchDialerCallLog,
   formatSecondsAsHms,
+  mapExtensionsToAgentIds,
 } from "@/lib/dialer/status";
 
 const eur = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
@@ -300,6 +304,12 @@ export default async function BerichtPage() {
   }
 
   const { data: dialerRows, error: dialerError } = await fetchDialerAgentStatuses();
+  // Real "Javilo se" (2026-08-19, real ViciDial disposition-code legend +
+  // Anis's confirmed classification) - only usable for today (metrike.php's
+  // CDR retention is same-day-only, §14 item 122). Falls back to the
+  // synthetic AHT-based estimate (computeDialerTotals's own fallback) for
+  // any agent this real data doesn't cover.
+  const { data: callLogRows } = await fetchDialerCallLog(todayStart, now);
   const salesByAgentIdToday = new Map(
     (perfRows ?? []).filter((r) => r.date === todayStr).map((r) => [r.agent_id, r.sales_count]),
   );
@@ -318,23 +328,28 @@ export default async function BerichtPage() {
   const dialerTotals =
     !dialerError && dialerRows
       ? computeDialerTotals(
-          buildDialerAgentSummaries(dialerRows, allAgents ?? [], salesByAgentIdToday, positionsByAgentIdToday),
+          (() => {
+            let summaries = buildDialerAgentSummaries(dialerRows, allAgents ?? [], salesByAgentIdToday, positionsByAgentIdToday);
+            if (callLogRows) {
+              const extensionToAgentId = mapExtensionsToAgentIds(dialerRows, allAgents ?? []);
+              const realReachedByAgentId = computeRealReachedByAgent(callLogRows, extensionToAgentId);
+              summaries = applyRealReachedToSummaries(summaries, realReachedByAgentId);
+            }
+            return summaries;
+          })(),
         )
       : null;
   const talkShare = dialerTotals && dialerTotals.totalSeconds > 0 ? dialerTotals.talkSeconds / dialerTotals.totalSeconds : null;
 
-  // "Javilo se (procjena)" (2026-08-18, Anis: "Koliko se ljudi javilo... ako
-  // imamo pravi izvor u metrikama.php iskoristi, ako ne, sintetički broj za
-  // sada"). First cut used metrike.php's own CDR total as the denominator -
-  // Anis caught a real mismatch the same day: "tamo pise 125 od 144, ali
-  // danas je bilo 354 poziva" - the CDR genuinely undercounts vs. the real
-  // dialer totalCalls counter (root cause deferred, "naknadno cemo se
-  // baviti metrikama php"). A same-day follow-up ("umjesto ovog... koliko se
-  // javilo... sa koliko su pricali na osnovu AHT-a") replaced the interim
-  // avg-talk-time tile with a real reached-calls COUNT - confirmed the exact
-  // formula via AskUserQuestion: talk / (talk+dispo) × totalCalls, computed
-  // purely from already-trusted agents.php fields (see
-  // lib/dialer/status.ts's computeDialerTotals for the shared computation).
+  // "Javilo se" (2026-08-19): Anis sent the real ViciDial disposition-code
+  // legend + confirmed the ambiguous classifications (APNE/KK/FG/CBHOLD =
+  // reached, KC/ADM/DNC/DOP/PARK excluded as non-outcome/administrative) -
+  // replaces the earlier synthetic talk/(talk+dispo)×totalCalls estimate
+  // with a real per-call count from today's metrike.php CDR (only usable
+  // for today; the CDR's own retention is same-day-only, §14 item 122).
+  // Falls back to the synthetic estimate per-agent when real data isn't
+  // available (dialer fetch failure, etc.) - see lib/dialer/status.ts's
+  // applyRealReachedToSummaries/computeDialerTotals for the shared logic.
 
   return (
     <div className="flex flex-col gap-6">
@@ -400,11 +415,13 @@ export default async function BerichtPage() {
                 accent="success"
               />
               <StatTile
-                label="Javilo se (procjena)"
+                label={dialerTotals?.reachedIsReal ? "Javilo se" : "Javilo se (procjena)"}
                 value={dialerTotals && dialerTotals.totalCalls > 0 ? num(dialerTotals.reachedEstimate) : "-"}
                 sub={
                   dialerTotals && dialerTotals.totalCalls > 0
-                    ? `${pct.format(dialerTotals.reachedRate)} od ${num(dialerTotals.totalCalls)} poziva - procjena iz Pozivi/Sprechzeit/Nachbearbeitung`
+                    ? dialerTotals.reachedIsReal
+                      ? `${pct.format(dialerTotals.reachedRate)} od ${num(dialerTotals.totalCalls)} poziva - stvarno, iz statusa poziva`
+                      : `${pct.format(dialerTotals.reachedRate)} od ${num(dialerTotals.totalCalls)} poziva - procjena iz Pozivi/Sprechzeit/Nachbearbeitung`
                     : undefined
                 }
                 accent="warning"

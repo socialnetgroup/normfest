@@ -10,8 +10,12 @@ import { DialerStatusTable } from "@/components/dialer-status-table";
 import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import {
+  applyRealReachedToSummaries,
   buildDialerAgentSummaries,
+  computeRealReachedByAgent,
   fetchDialerAgentStatuses,
+  fetchDialerCallLog,
+  mapExtensionsToAgentIds,
   refreshSalesInSummaries,
   type DialerAgentSummary,
   type LoginStatus,
@@ -196,6 +200,8 @@ export default async function DialerPage({
   if (canView) {
     const supabase = await createClient();
     const todayStr = new Date().toISOString().slice(0, 10);
+    const now0 = new Date();
+    const todayStart = new Date(now0.getFullYear(), now0.getMonth(), now0.getDate(), 0, 0, 0);
     const [
       { data: dialerData, error: fetchError },
       { data: agentRows },
@@ -203,6 +209,7 @@ export default async function DialerPage({
       { data: todaySoldRows },
       { data: snapshotRows },
       { data: loginStatusRows },
+      { data: callLogRows },
     ] = await Promise.all([
       fetchDialerAgentStatuses(),
       supabase.from("agents").select("id, full_name, profile_id").eq("active", true),
@@ -220,6 +227,12 @@ export default async function DialerPage({
       // "Status im Tool" - our own in-app heartbeat, same RPC/threshold the
       // Dashboard's Rangliste used to compute this with before it moved here.
       supabase.rpc("fn_get_agent_login_status"),
+      // Real "Javilo se" (2026-08-19, Anis sent the real ViciDial disposition-
+      // code legend + confirmed the ambiguous ones) - only usable for TODAY,
+      // since metrike.php's CDR retention is same-day-only (§14 item 122).
+      // A failure here just leaves the synthetic AHT-based estimate in place
+      // (buildDialerAgentSummaries already computes that as a fallback).
+      fetchDialerCallLog(todayStart, now0),
     ]);
     dialerError = fetchError;
     const agents = agentRows ?? [];
@@ -234,11 +247,15 @@ export default async function DialerPage({
       if (!agentId) continue;
       positionsByAgentId.set(agentId, (positionsByAgentId.get(agentId) ?? 0) + 1);
     }
-    // "Javilo se (procjena)" (2026-08-18, "proširiti OBIM - dostupnost", then
-    // revised to a reached-calls estimate from AHT - see buildDialerAgentSummaries'
-    // own note) is now computed inside buildDialerAgentSummaries directly from
-    // real agents.php fields - no separate CDR fetch needed for it anymore.
+    // "Javilo se" starts as the synthetic AHT-based estimate (§14 items
+    // 99-104), then gets overridden below with the real, per-call CDR
+    // status-code classification for every agent it's available for.
     liveRows = dialerData ? buildDialerAgentSummaries(dialerData, agents, salesByAgentId, positionsByAgentId) : null;
+    if (liveRows && callLogRows && dialerData) {
+      const extensionToAgentId = mapExtensionsToAgentIds(dialerData, agents);
+      const realReachedByAgentId = computeRealReachedByAgent(callLogRows, extensionToAgentId);
+      liveRows = applyRealReachedToSummaries(liveRows, realReachedByAgentId);
+    }
     snapshotDates = (snapshotRows ?? []).map((r) => r.snapshot_date);
 
     const now = new Date();
