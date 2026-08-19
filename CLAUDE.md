@@ -7147,6 +7147,22 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     proven on the Firmenprofil page) holds up nested inside a `Link` too.
     Typecheck/lint clean, full suite green (41/41).
 
+127. **VIS re-import (2026-08-19) — clean run, no password issue this
+    time.** Anis sent a fresh export (`1300 vom 19.8..xlsx`). Parsed
+    cleanly via the existing pipeline (`scripts/import-vis.mjs`, §14 item
+    58): 14,304 valid rows (2 trailing blank rows skipped, as usual),
+    **14,304 upserted, 8 real companies soft-deleted** (dropped from this
+    export - Marc Hillen Hillen Exclusive, Autogas Service Engels GmbH,
+    Ernst Harms, Schmidt Baumaschinen, Michael Winterroll, Auto Peters
+    Reifenfachhandel, Autoservice und Lackierung, Autohaus Kämpflein OHG).
+    Verified directly against the DB, not just the script's own output:
+    14,304 active (non-soft-deleted) companies total, one real spot-checked
+    row (BNS GmbH Dresden, Kundennummer 243725) matches the source file
+    exactly, and one soft-deleted row correctly carries a real
+    `soft_deleted_at` timestamp rather than being hard-deleted (§4's
+    established soft-delete convention - nothing an agent already did with
+    these 8 companies, feedback/notes/focus-list history, is lost).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
