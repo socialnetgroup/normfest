@@ -80,9 +80,19 @@ export default async function BerichtPage() {
   prevWeekSameSpanEnd.setDate(prevWeekSameSpanEnd.getDate() + dayOfWeek + 1);
   const todayStart = new Date(now);
   todayStart.setHours(0, 0, 0, 0);
-  const yesterdayStart = new Date(todayStart);
-  yesterdayStart.setDate(yesterdayStart.getDate() - 1);
-  const yesterdayStr = yesterdayStart.toISOString().slice(0, 10);
+  // Real, reproducible bug found live (2026-08-20): computing "yesterday" by
+  // taking todayStart (a LOCAL midnight Date, tzOffset -120 = UTC+2 on this
+  // machine) and calling .setDate()/.getDate() (also LOCAL) on it, then
+  // reading the result back out via .toISOString() (UTC), silently shifted
+  // the date by an extra day - todayStart's own UTC instant already reads
+  // as the PREVIOUS UTC calendar day (local midnight Aug 19 = 2026-08-18
+  // 22:00 UTC), so subtracting one more local day and converting to ISO
+  // landed on Aug 17, not Aug 18. Fixed by deriving yesterdayStr as pure
+  // calendar-date string arithmetic (UTC-anchored throughout, never touching
+  // local time) from the already-correct todayStr instead.
+  const yesterdayDate = new Date(`${todayStr}T00:00:00Z`);
+  yesterdayDate.setUTCDate(yesterdayDate.getUTCDate() - 1);
+  const yesterdayStr = yesterdayDate.toISOString().slice(0, 10);
 
   const [
     { data: reportStatsRows },
@@ -100,6 +110,7 @@ export default async function BerichtPage() {
     { data: todaySoldRows },
     { data: dialerRows, error: dialerError },
     { data: callLogRows },
+    { data: yesterdaySnapshot },
   ] = await Promise.all([
     supabase.rpc("fn_report_stats"),
     supabase.from("sales_feedback").select("id", { count: "exact", head: true }),
@@ -154,6 +165,17 @@ export default async function BerichtPage() {
     // cluncky and slow").
     fetchDialerAgentStatuses(),
     fetchDialerCallLog(todayStart, now),
+    // Anis, 2026-08-20: "Piše da je jučer bilo 104 poziva, ali nije tačno" -
+    // real root cause found by comparing sources directly: agent_daily_performance.
+    // calls_count for 18.08. WAS correctly synced from the real dialer snapshot
+    // (802 total) via the 18:00 cron, but a LATER Team Dashboard Excel re-import
+    // (§14 item 92, run 19.08.) overwrote the whole row - wiping calls_count to
+    // null for 9 of 10 agents (one stray non-null value survived by coincidence).
+    // This is exactly the known, already-documented trade-off from §14 item 27
+    // ("a later Team Dashboard re-import can still overwrite past dates"), now
+    // actually observed. Fixed by sourcing "Jučer" from the real, immutable daily
+    // dialer snapshot instead, which Excel imports never touch.
+    supabase.from("dialer_daily_snapshots").select("agents").eq("snapshot_date", yesterdayStr).maybeSingle(),
   ]);
 
   const stats = reportStatsRows?.[0] ?? {
@@ -193,9 +215,10 @@ export default async function BerichtPage() {
   const teamRevenueYesterday = (perfRows ?? [])
     .filter((r) => r.date === yesterdayStr && !r.day_off)
     .reduce((sum, r) => sum + r.revenue, 0);
-  const teamCallsYesterday = (perfRows ?? [])
-    .filter((r) => r.date === yesterdayStr && !r.day_off)
-    .reduce((sum, r) => sum + (r.calls_count ?? 0), 0);
+  const yesterdaySnapshotAgents = (yesterdaySnapshot?.agents as { totalCalls?: number }[] | null) ?? null;
+  const teamCallsYesterday = yesterdaySnapshotAgents
+    ? yesterdaySnapshotAgents.reduce((sum, a) => sum + (a.totalCalls ?? 0), 0)
+    : (perfRows ?? []).filter((r) => r.date === yesterdayStr && !r.day_off).reduce((sum, r) => sum + (r.calls_count ?? 0), 0);
   const teamRevenueWeek = (perfRows ?? [])
     .filter((r) => r.date >= weekStart.toISOString().slice(0, 10) && !r.day_off)
     .reduce((sum, r) => sum + r.revenue, 0);
@@ -498,7 +521,11 @@ export default async function BerichtPage() {
                     const dailyAvg = v.revenue / Math.max(1, realWorkingDaysInMonth(m));
                     return (
                       <tr key={m}>
-                        <td className="px-2 py-2 font-medium">{monthLabel(m)}</td>
+                        <td className="px-2 py-2 font-medium">
+                          <Link href={`/bericht/promet/${m}`} className="hover:underline">
+                            {monthLabel(m)} →
+                          </Link>
+                        </td>
                         <td className="px-2 py-2 tabular-nums">{eur.format(v.revenue)}</td>
                         <td className="px-2 py-2 tabular-nums">{eur.format(dailyAvg)}</td>
                         <td className="px-2 py-2 tabular-nums">{v.sales}</td>

@@ -7310,6 +7310,80 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     needs his call, not a silent reclassification. Flagged directly for a
     decision rather than assumed away.
 
+131. **CBHOLD confirmed as "javio se" (Rijalda's case is an agent-side
+    disposition error, not a code/classification bug) + real date off-by-one
+    bug found and fixed while re-verifying "Jučer" + two new report
+    features — shipped (2026-08-20).** Anis, on item 130's CBHOLD finding:
+    "Nek ostane da je javio se. Ovo Rijalda pogresno koristi da kazem
+    status." Classification unchanged (`lib/dialer/status.ts`'s
+    `REACHED_STATUSES` already correct per item 129's final list) - the
+    anomaly is a real agent workflow issue, not something this app should
+    silently "fix" by reclassifying a status code.
+
+    **Real, reproducible bug found while re-checking yesterday's real call
+    count** (802, per the real `dialer_daily_snapshots` row) against what
+    `/bericht` was showing (724 - wrong by 78, a genuinely different number
+    from item 130's own fix, not a stale render). Root-caused with a
+    temporary debug log rather than guessed: `yesterdayStr` was computed by
+    taking `todayStart` (a LOCAL-midnight `Date`, this machine's
+    `getTimezoneOffset()` is -120 = UTC+2) and calling `.setDate()`/
+    `.getDate()` on it (also local-time operations), then reading the
+    result back out via `.toISOString().slice(0,10)` (UTC) - `todayStart`'s
+    own underlying UTC instant already reads as the *previous* UTC calendar
+    day (local midnight Aug 19 = `2026-08-18T22:00:00Z`), so subtracting one
+    more local day and converting to ISO landed on **Aug 17**, not Aug 18 -
+    two days back instead of one. Classic local/UTC-mixing bug, invisible
+    unless you actually diff the computed string against a known-real value
+    (which is exactly how it was caught - comparing against the real
+    snapshot's own 802 total, not assumed correct because the code
+    "looked right"). Fixed by deriving `yesterdayStr` as pure UTC calendar-
+    date-string arithmetic from the already-correct `todayStr`
+    (`new Date(`${todayStr}T00:00:00Z`)`, `.setUTCDate(...-1)`), never
+    touching local time. The exact same bug pattern (`new Date(year, month,
+    1)` local-constructed, then `.toISOString()`'d) was found and fixed
+    pre-emptively in the brand-new `/bericht/promet/[month]` page (below)
+    before it ever shipped, using `Date.UTC(...)` instead.
+
+    **"Jučer" itself made real, not just fast.** While root-causing the
+    off-by-one, also fixed the *source*: `teamCallsYesterday` had been
+    reading `agent_daily_performance.calls_count` for yesterday, which a
+    later Team Dashboard Excel re-import (§14 item 92, run 19.08.) had
+    already silently overwritten to `null` for 9 of 10 agents (the exact,
+    already-documented trade-off from item 27, now actually observed for
+    real). Fixed by sourcing "Jučer" from the real, immutable
+    `dialer_daily_snapshots` row for that date instead (falls back to the
+    old `agent_daily_performance`-based sum only if no snapshot exists for
+    that date) - Excel re-imports never touch that table.
+
+    **Two new report features, same session, per Anis's two follow-up
+    asks:**
+    - "Takodjer napravi Promet (August, juli, juni) klikabilno kako bi se
+      provjerilo prometa po danu" - each month row on `/bericht`'s own
+      Promet table now links to a new `/bericht/promet/[month]` page: a
+      team-wide (not per-agent) day-by-day revenue breakdown for that
+      month, reusing the exact same `MonthCalendar` component already
+      proven on `/bericht/[agentId]` and `/tim`, just fed team-aggregated
+      `DayEntry` rows (summed across every agent for that day) instead of
+      one agent's own rows.
+    - "u tim dodati i Javilo se stavku poslije poziva" - `/tim`'s monthly
+      per-agent table gained a "Javilo se" column right after "Pozivi",
+      summing each agent's `reachedEstimate` straight from
+      `dialer_daily_snapshots` for that month (real when the snapshot was
+      captured same-day, synthetic AHT-based fallback otherwise per items
+      129/130 - never recomputed from scratch, just summed from what's
+      already stored) - correctly shows "-" for July/June, since no daily
+      snapshots exist before 2026-08-10.
+
+    Verified live end-to-end (throwaway report-role test account, deleted
+    after): `/bericht`'s "Jučer" now correctly shows **802** (not 724 or
+    100), matching the real snapshot exactly; `/bericht/promet/2026-08`
+    renders all 31 real August days (confirming the `Date.UTC` fix didn't
+    drop the 31st) with a team total (45.505,74 €) matching the overview's
+    own rounded figure; `/tim`'s new "Javilo se" column shows real per-agent
+    August values (e.g. Maja Biso 57, Rijalda 13, team total 358) and
+    correctly "-" for July/June. Typecheck/lint clean, full suite green
+    (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

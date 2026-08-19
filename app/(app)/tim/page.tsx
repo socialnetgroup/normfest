@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { computeBonusByDate, computeDailyBonus, type BonusThreshold } from "@/lib/team/bonus";
 import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import type { DialerAgentSummary } from "@/lib/dialer/status";
 
 const eur = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
 const eurCents = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", minimumFractionDigits: 2 });
@@ -45,7 +46,7 @@ export default async function TimPage() {
   const supabase = await createClient();
   const today = new Date().toISOString().slice(0, 10);
 
-  const [{ data, error }, { data: allAgents }, { data: todayRows }, { data: bonusSettings }, { data: feedbackRows }] =
+  const [{ data, error }, { data: allAgents }, { data: todayRows }, { data: bonusSettings }, { data: feedbackRows }, { data: snapshotRows }] =
     await Promise.all([
       supabase
         .from("agent_daily_performance")
@@ -64,6 +65,12 @@ export default async function TimPage() {
       // added same day ("TIM dio proširit... Wiedervorlage") to also count
       // real callback entries per agent per month, from the same query.
       supabase.from("sales_feedback").select("agent_id, created_at, wiedervorlage_date"),
+      // Anis, 2026-08-20: "u tim dodati i Javilo se stavku poslije poziva" -
+      // each stored snapshot already carries reachedEstimate per agent (real
+      // when captured same-day, synthetic AHT-based fallback otherwise, §14
+      // items 129/130) - summed per agent per month directly from that,
+      // rather than recomputed from raw talk/dispo seconds.
+      supabase.from("dialer_daily_snapshots").select("snapshot_date, agents"),
     ]);
 
   if (error) {
@@ -112,6 +119,7 @@ export default async function TimPage() {
         feedback: number;
         wiedervorlage: number;
         bonusKm: number;
+        reached: number;
       }
     >
   >();
@@ -130,12 +138,25 @@ export default async function TimPage() {
       feedback: 0,
       wiedervorlage: 0,
       bonusKm: 0,
+      reached: 0,
     };
     entry.revenue += row.revenue;
     entry.sales += row.sales_count;
     entry.calls += row.calls_count ?? 0;
     entry.bonusKm += bonusByDate.get(row.date)?.get(row.agent_id) ?? 0;
     agentMap.set(row.agent_id, entry);
+  }
+
+  for (const snap of snapshotRows ?? []) {
+    const month = snap.snapshot_date.slice(0, 7);
+    const agentMap = byMonth.get(month);
+    if (!agentMap) continue;
+    const summaries = (snap.agents as DialerAgentSummary[] | null) ?? [];
+    for (const s of summaries) {
+      const entry = agentMap.get(s.agentId);
+      if (!entry) continue;
+      entry.reached += s.reachedEstimate ?? 0;
+    }
   }
 
   const agentIdByProfileId = new Map(
@@ -249,6 +270,7 @@ export default async function TimPage() {
           const teamFeedback = sorted.reduce((sum, [, v]) => sum + v.feedback, 0);
           const teamWiedervorlage = sorted.reduce((sum, [, v]) => sum + v.wiedervorlage, 0);
           const teamBonusKm = sorted.reduce((sum, [, v]) => sum + v.bonusKm, 0);
+          const teamReached = sorted.reduce((sum, [, v]) => sum + v.reached, 0);
 
           return (
             <Card key={month}>
@@ -269,6 +291,9 @@ export default async function TimPage() {
                   <span>
                     Wiedervorlage: <span className="font-medium text-foreground">{teamWiedervorlage}</span>
                   </span>
+                  <span>
+                    Javilo se: <span className="font-medium text-foreground">{teamReached > 0 ? teamReached : "-"}</span>
+                  </span>
                   {bonusVisible ? (
                     <span>
                       Timski bonus:{" "}
@@ -288,6 +313,7 @@ export default async function TimPage() {
                         <th className="px-3 py-2 font-medium">Feedback</th>
                         <th className="px-3 py-2 font-medium">Wiedervorlage</th>
                         <th className="px-3 py-2 font-medium">Pozivi</th>
+                        <th className="px-3 py-2 font-medium">Javilo se</th>
                         <th className="px-3 py-2 font-medium">Konverzija (Prodaje/Pozivi)</th>
                         {bonusVisible ? <th className="px-3 py-2 font-medium">Bonus (KM)</th> : null}
                       </tr>
@@ -305,6 +331,7 @@ export default async function TimPage() {
                           <td className="px-3 py-2">{v.feedback > 0 ? v.feedback : "-"}</td>
                           <td className="px-3 py-2">{v.wiedervorlage > 0 ? v.wiedervorlage : "-"}</td>
                           <td className="px-3 py-2">{v.calls > 0 ? v.calls : "-"}</td>
+                          <td className="px-3 py-2">{v.reached > 0 ? v.reached : "-"}</td>
                           <td className="px-3 py-2">{v.calls > 0 ? pct.format(v.sales / v.calls) : "-"}</td>
                           {bonusVisible ? (
                             <td className="px-3 py-2 font-medium text-success-foreground">
