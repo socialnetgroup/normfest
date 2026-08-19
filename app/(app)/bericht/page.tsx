@@ -80,6 +80,9 @@ export default async function BerichtPage() {
   prevWeekSameSpanEnd.setDate(prevWeekSameSpanEnd.getDate() + dayOfWeek + 1);
   const todayStart = new Date(now);
   todayStart.setHours(0, 0, 0, 0);
+  const yesterdayStart = new Date(todayStart);
+  yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+  const yesterdayStr = yesterdayStart.toISOString().slice(0, 10);
 
   const [
     { data: reportStatsRows },
@@ -95,6 +98,8 @@ export default async function BerichtPage() {
     { data: coverageStats },
     { data: loginStatusRows },
     { data: todaySoldRows },
+    { data: dialerRows, error: dialerError },
+    { data: callLogRows },
   ] = await Promise.all([
     supabase.rpc("fn_report_stats"),
     supabase.from("sales_feedback").select("id", { count: "exact", head: true }),
@@ -140,6 +145,15 @@ export default async function BerichtPage() {
     // Konverzija uvijek bila 0%. Isti pravi izvor kao /dialer's Live-Status
     // (sales_feedback za danas, agent_id je PROFILE id, konvertuje se ispod).
     supabase.from("sales_feedback").select("agent_id").eq("outcome", "sold").gte("created_at", todayStart.toISOString()),
+    // Real dialer live-status + today's real per-call CDR (for "Javilo se",
+    // §14 item 129) - both real network calls to the dialer, previously
+    // fetched sequentially AFTER this whole Promise.all resolved, adding
+    // their combined latency on top of everything else instead of
+    // overlapping with it. Moved in here so they run concurrently with the
+    // Supabase queries above (Anis, 2026-08-20: "Report profile... kinda
+    // cluncky and slow").
+    fetchDialerAgentStatuses(),
+    fetchDialerCallLog(todayStart, now),
   ]);
 
   const stats = reportStatsRows?.[0] ?? {
@@ -173,6 +187,15 @@ export default async function BerichtPage() {
   const teamRevenueToday = (perfRows ?? [])
     .filter((r) => r.date === todayStr && !r.day_off)
     .reduce((sum, r) => sum + r.revenue, 0);
+  // Anis, 2026-08-20: "for Umsatz, calls (add yesterday besides today)" -
+  // real yesterday figures pulled from the same already-fetched perfRows
+  // (full history, no new query needed).
+  const teamRevenueYesterday = (perfRows ?? [])
+    .filter((r) => r.date === yesterdayStr && !r.day_off)
+    .reduce((sum, r) => sum + r.revenue, 0);
+  const teamCallsYesterday = (perfRows ?? [])
+    .filter((r) => r.date === yesterdayStr && !r.day_off)
+    .reduce((sum, r) => sum + (r.calls_count ?? 0), 0);
   const teamRevenueWeek = (perfRows ?? [])
     .filter((r) => r.date >= weekStart.toISOString().slice(0, 10) && !r.day_off)
     .reduce((sum, r) => sum + r.revenue, 0);
@@ -303,13 +326,11 @@ export default async function BerichtPage() {
     coverage.push({ label: "Nedodijeljeno", agentId: null, ...unassignedTotals });
   }
 
-  const { data: dialerRows, error: dialerError } = await fetchDialerAgentStatuses();
   // Real "Javilo se" (2026-08-19, real ViciDial disposition-code legend +
   // Anis's confirmed classification) - only usable for today (metrike.php's
   // CDR retention is same-day-only, §14 item 122). Falls back to the
   // synthetic AHT-based estimate (computeDialerTotals's own fallback) for
   // any agent this real data doesn't cover.
-  const { data: callLogRows } = await fetchDialerCallLog(todayStart, now);
   const salesByAgentIdToday = new Map(
     (perfRows ?? []).filter((r) => r.date === todayStr).map((r) => [r.agent_id, r.sales_count]),
   );
@@ -364,7 +385,7 @@ export default async function BerichtPage() {
         <StatTile
           label="Timski promet (mjesec)"
           value={eur.format(teamRevenueMonth)}
-          sub={`Danas: ${eur.format(teamRevenueToday)}`}
+          sub={`Danas: ${eur.format(teamRevenueToday)} · Jučer: ${eur.format(teamRevenueYesterday)}`}
           accent="primary"
         />
         <StatTile label="Dnevni prosjek prometa" value={eur.format(dailyAvgRevenueMonth)} accent="primary" />
@@ -395,7 +416,12 @@ export default async function BerichtPage() {
             <p className="text-sm text-muted-foreground">Dialer podaci trenutno nisu dostupni.</p>
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
-              <StatTile label="Pozivi ukupno" value={num(dialerTotals.totalCalls)} accent="secondary" />
+              <StatTile
+                label="Pozivi ukupno"
+                value={num(dialerTotals.totalCalls)}
+                sub={`Jučer: ${num(teamCallsYesterday)}`}
+                accent="secondary"
+              />
               <StatTile
                 label="Vrijeme razgovora"
                 value={formatSecondsAsHms(dialerTotals.talkSeconds)}

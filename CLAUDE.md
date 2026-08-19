@@ -7260,6 +7260,56 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     classification applied there too. Typecheck/lint clean, full suite
     green (41/41).
 
+130. **`/bericht` perf fix (real sequential-fetch bug) + "Jučer" alongside
+    "Danas" for Umsatz/Pozivi — shipped (2026-08-20).** Anis: "The speed of
+    the Report profile account seems kinda cluncky and slow." Root-caused
+    directly rather than guessed: item 129's own real-CDR wiring
+    (`fetchDialerAgentStatuses()` then `fetchDialerCallLog()`) had been
+    added as two sequential `await`s running AFTER the page's main
+    `Promise.all` had already resolved - two real external HTTP round-trips
+    to the dialer server, back-to-back, stacked on top of everything else
+    instead of overlapping with it. Moved both into the same top-level
+    `Promise.all` (they don't depend on any of its other results), so they
+    now run concurrently with the Supabase queries instead of serially
+    after them - a genuine latency fix, not a cosmetic one.
+
+    Second ask, same message: "in report for Umsatz, calls (add yesterday
+    besides today)." Both real "Jučer" figures come from data already
+    fetched (`perfRows`, full `agent_daily_performance` history, no new
+    query) - `teamRevenueYesterday`/`teamCallsYesterday` filtered to
+    `yesterdayStr`. "Timski promet (mjesec)" tile now shows "Danas: X €
+    · Jučer: Y €"; "Pozivi ukupno" (Dialer-danas card) gained a "Jučer: N"
+    sub-line.
+
+    Verified live (throwaway report-role test account, deleted after):
+    page renders correctly with real values ("Danas: 2.144 € · Jučer:
+    4.117 €" - the 4.117,43 € figure matches the already-documented real
+    2026-08-18 revenue, §14 item 92/95; "Pozivi ukupno... Jučer: 100").
+    Typecheck/lint clean, full suite green (41/41).
+
+    **Real, separate finding surfaced while re-verifying "Javilo se" -
+    reported back, not silently changed.** Investigated a live number Anis
+    flagged as "kinda weird" (Rijalda: 65 calls, 54 reached, showing
+    100%). Pulled today's real CDR directly: **Rijalda's status breakdown
+    was 100% CBHOLD (59 of 59 real rows)** - CBHOLD is confirmed-reached
+    per Anis's own corrected list (item 129), so her rate is genuinely
+    100% under that classification, not a bug in the math. But the
+    underlying pattern is worth a second look: CBHOLD is also the single
+    most common status **team-wide today** (363 of 676 rows, 54%), several
+    other agents show CBHOLD as their dominant or sole status too (Emina
+    Berilo 78/88, Lejla Piric 78/101), and real CBHOLD call durations range
+    from 0-755 seconds including several literal 1-second calls - a
+    genuine "someone answered, wants a callback" event doesn't usually
+    last 1 second. This raises a real, unresolved question: whether CBHOLD
+    behaves consistently as "real callback requested" across every
+    campaign/list, or whether at least one list (e.g. Rijalda's
+    `list_id=6008`, the migrated Favoritenliste export, §14 item 124) uses
+    it as more of a default/generic disposition rather than a genuine
+    reached-and-scheduled-callback event. Not changed unilaterally - this
+    contradicts Anis's own explicit, twice-confirmed classification, so it
+    needs his call, not a silent reclassification. Flagged directly for a
+    decision rather than assumed away.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
