@@ -7044,6 +7044,20 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     button when an admin is viewing someone else's list (own-list-only
     editing, by design). Typecheck/lint clean, full suite green (41/41).
 
+    **Real one-time migration of Rijalda's existing 485-row dialer list,
+    same day:** matched the real Excel export's phone numbers (last-8-
+    digit suffix, same robust-to-leading-0 approach as `company_daily_calls`
+    matching, §14 item 120) against `companies.telefon`/`telefon_2`/
+    `telefon_3`. **453 of 485 matched cleanly (93.4%), 5 correctly skipped
+    as ambiguous (2+ candidate companies), 27 genuinely no-match** (not in
+    her Gebiet's VIS data or a stale/reused number) - none guessed. Spot-
+    checked one real match by hand before trusting the batch (phone
+    `20518030215` → `Feldmann Türsystem GmbH`, `telefon: '020518030215'`,
+    `gebiet: '130017'` - confirmed that's genuinely her real Gebiet) and
+    confirmed the final row count directly in the DB (453). One-off script,
+    not committed (same pattern as other pure data-migration scripts in
+    this project).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
