@@ -68,6 +68,9 @@ const SETTINGS_ITEMS = [
   { href: "/admin/brand-profiles", label: "Marken-Profile", icon: Tags },
   { href: "/admin/katalog-dedup", label: "Katalog-Dedup", icon: Copy },
   { href: "/admin/katalog-qualitaet", label: "Katalog-Qualität", icon: BarChart3 },
+  // Anis (2026-08-19): "napraviti samo jednu listu, koji gebiet pripada
+  // kojem agentu" - simple read-only reference table.
+  { href: "/admin/gebiete", label: "Gebiete", icon: Users },
 ];
 
 // Anis, 2026-08-06: "stavi mogucnost da menu u aplikaciji se moze ugasiti

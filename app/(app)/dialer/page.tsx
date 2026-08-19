@@ -19,6 +19,17 @@ import {
 
 const ONLINE_THRESHOLD_MS = 90_000;
 
+// Quick-link to ViciDial's real Monitor screen (Anis, 2026-08-19 - live
+// call listen-in already works natively in ViciDial via a supervisor's
+// own X-Lite softphone, we just save the navigation step). Real URL Anis
+// uses himself, monitor_phone=4501 is his own X-Lite extension - opens
+// the "Real-Time Main Report" with Monitor mode pre-selected; the admin
+// still clicks LISTEN next to whichever agent they want to hear.
+// Requires an active ViciDial admin session (separate login from this
+// app) and X-Lite running to actually receive the audio.
+const VICIDIAL_MONITOR_URL =
+  "http://socialnet.dialer.ba/procall_admin/realtime_report.php?RR=4&DB=0&groups[]=ALL-ACTIVE&user_group_filter[]=ALL-GROUPS&adastats=1&SIPmonitorLINK=&IAXmonitorLINK=&usergroup=&UGdisplay=0&UidORname=1&orderby=timeup&SERVdisplay=0&CALLSdisplay=1&PHONEdisplay=0&CUSTPHONEdisplay=0&with_inbound=Y&monitor_active=MONITOR&monitor_phone=4501&ALLINGROUPstats=&DROPINGROUPstats=0&NOLEADSalert=&CARRIERstats=0&PRESETstats=0&AGENTtimeSTATS=0&INGROUPcolorOVERRIDE=0&droppedOFtotal=0";
+
 // Moved here from the Dashboard's Rangliste (2026-08-14) - Anis: "merge
 // dialer status under status in dialer and delete on dashboard, show one
 // under the other so everything has a place" - both "is this agent doing
@@ -339,7 +350,19 @@ export default async function DialerPage({
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <IconTitle icon={Activity}>{t.liveTitle}</IconTitle>
-              <Badge variant="success">{t.liveBadge}</Badge>
+              <div className="flex items-center gap-3">
+                {isAdmin ? (
+                  <a
+                    href={VICIDIAL_MONITOR_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm font-medium text-primary hover:underline"
+                  >
+                    Live-Monitor in ViciDial öffnen →
+                  </a>
+                ) : null}
+                <Badge variant="success">{t.liveBadge}</Badge>
+              </div>
             </CardHeader>
             <CardContent>
               <p className="mb-3 text-sm text-muted-foreground">{t.liveDesc}</p>

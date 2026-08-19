@@ -7163,6 +7163,36 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     established soft-delete convention - nothing an agent already did with
     these 8 companies, feedback/notes/focus-list history, is lost).
 
+128. **Two small admin additions — shipped (2026-08-19).**
+
+    **`/admin/gebiete`** - Anis: "u admin u settingsima napraviti samo
+    jednu listu, koji gebiet pripada kojem agentu." Plain read-only table
+    from the already-authoritative `agents` table (`full_name`, `gebiet`,
+    `active`) - no new schema, just a reference view for the info already
+    used everywhere else in this app (fn_search_companies, Team, etc.).
+    Added to the Settings submenu.
+
+    **Live-Monitor quick-link on `/dialer`.** Anis's follow-up to the
+    earlier live-listen question: confirmed real call monitoring already
+    works today, natively, through ViciDial's own "Monitor" feature - a
+    supervisor selects options in ViciDial's admin panel, which places a
+    call to their own X-Lite softphone (SIP client) to listen in. Not
+    something to build (no new telephony integration, consistent with §1's
+    MVP boundary) - Anis confirmed the real ask was just a shortcut link to
+    skip the manual navigation. Added a "Live-Monitor in ViciDial öffnen"
+    link (admin-only) on the Live-Status card, opening the real
+    `procall_admin/realtime_report.php` URL Anis uses himself (Monitor mode
+    pre-selected, `monitor_phone=4501` = his own X-Lite extension) in a new
+    tab - the admin still clicks LISTEN next to whichever agent's row they
+    want to hear from there. Requires an active ViciDial admin session
+    (separate login) and X-Lite running - this link only saves the
+    navigation step, nothing more.
+
+    Verified live end-to-end (throwaway admin test account, deleted after):
+    `/admin/gebiete` renders all 10 real Gebiet→Agent pairs correctly; the
+    ViciDial quick-link renders with the exact real URL and opens in a new
+    tab. Typecheck/lint clean, full suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
