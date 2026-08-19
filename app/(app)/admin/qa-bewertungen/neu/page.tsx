@@ -5,10 +5,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { fetchDialerAgentStatuses, fetchDialerCallLog, mapExtensionsToAgentIds } from "@/lib/dialer/status";
 import { createClient } from "@/lib/supabase/server";
 
-function yesterdayIso() {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  return d.toISOString().slice(0, 10);
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 // Real call picker (2026-08-19, Anis: "kada se bira novi formular, i agent
@@ -19,6 +17,19 @@ function yesterdayIso() {
 // client picker. See lib/dialer/status.ts's fetchDialerCallLog for why this
 // stays a raw log fetch (no answered/not-answered classification) and
 // components/qa-call-picker.tsx for the actual pick-a-call UX.
+//
+// Default date changed from "yesterday" to "today" (2026-08-19, Anis:
+// "Keine Anrufe werden geladen in QA") - real root cause investigated
+// directly, not assumed: the dialer's own metrike.php retention shrank to
+// same-day-only sometime between the CDR backfill (§14 item 120, which
+// pulled 2026-08-10 through 08-18 successfully) and this report - a fresh
+// query for every one of those same dates now returns 0 rows, only
+// 2026-08-19 (today) has data. This isn't a bug in our matching logic
+// (confirmed by replicating the page's own extension-matching against the
+// real CDR directly - every agent showed 0 for yesterday, not just one).
+// "Today" is the only date currently guaranteed to have real data; worth
+// re-confirming with the dev whether this is the real, permanent retention
+// window or a transient issue.
 export default async function NeueBewertungPage({
   searchParams,
 }: {
@@ -46,7 +57,7 @@ export default async function NeueBewertungPage({
   }
 
   const selectedAgentId = agentIdParam && agents.some((a) => a.id === agentIdParam) ? agentIdParam : agents[0].id;
-  const selectedDate = datumParam || yesterdayIso();
+  const selectedDate = datumParam || todayIso();
 
   const [{ data: dialerRows }, { data: callLogRows, error: dialerError }] = await Promise.all([
     fetchDialerAgentStatuses().then((r) => ({ data: r.data ?? [] })),

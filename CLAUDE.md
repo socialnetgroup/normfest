@@ -6956,6 +6956,42 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     has genuine run-to-run variance under `json_schema` mode, not a fixed
     bug with one fix.
 
+122. **QA-Bewertungen call picker: "Keine Anrufe werden geladen" — real root
+    cause, not a matching bug (2026-08-19).** Investigated directly rather
+    than assuming the extension-matching logic (§14 item 109/121) broke:
+    re-queried the dialer's `metrike.php` CDR for every date from
+    2026-08-10 through 2026-08-18 - **every single one now returns 0 rows**,
+    even though the exact same dates had hundreds of real calls each just
+    one day earlier during the historical backfill (§14 item 120). Only
+    today (2026-08-19) had real data. Confirmed this wasn't our matching
+    logic by replicating the page's own extension-to-agent matching against
+    the real CDR for all 10 agents directly - every single one showed 0
+    calls for yesterday, ruling out a per-agent mapping bug.
+
+    **Real cause: the dialer's own CDR retention window shrank to
+    same-day-only** sometime between the backfill and this report - not
+    something this app controls. `app/(app)/admin/qa-bewertungen/neu/page.tsx`'s
+    default date changed from "yesterday" (`yesterdayIso()`) to "today"
+    (`todayIso()`), since that's the only date currently guaranteed to have
+    real data. `components/qa-call-picker.tsx`'s empty-state message updated
+    to stop claiming "echte Anruf-Historie beginnt am 10.08.2026" (now
+    misleading given the shrunk window) and instead explain the dialer may
+    only retain calls briefly.
+
+    **`company_daily_calls` (§14 item 120) is unaffected** - that historical
+    data was already captured into our own table before the dialer's window
+    rolled past it, so the "Anrufe" count on the Firmenprofil stays correct
+    regardless of what the dialer itself still has. Only the QA call
+    picker, which queries `metrike.php` live on every page load, was
+    exposed to this. Worth asking the dev directly what the real, current
+    retention window is (noted in memory, not yet asked - a natural
+    follow-up alongside the already-planned status-code question).
+
+    Verified live (throwaway admin test account, deleted after): opened
+    `/admin/qa-bewertungen/neu` fresh, confirmed it now defaults to today's
+    date and shows 12 real calls for the first agent, matching the direct
+    CDR check exactly. Typecheck/lint clean.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

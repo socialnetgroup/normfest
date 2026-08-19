@@ -118,8 +118,8 @@ export function QaCallPicker({
             <p className="text-sm text-destructive">Dialer nicht erreichbar: {dialerError}</p>
           ) : calls.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Keine Anrufe für diesen Mitarbeiter an diesem Tag gefunden (echte Anruf-Historie beginnt am
-              10.08.2026).
+              Keine Anrufe für diesen Mitarbeiter an diesem Tag gefunden. Der Dialer speichert Anrufe teils nur
+              kurz zurück - falls das für &quot;heute&quot; auch leer bleibt, ist der Zeitraum evtl. abgelaufen.
             </p>
           ) : filteredCalls.length === 0 ? (
             <p className="text-sm text-muted-foreground">Keine Anrufe mit Status &quot;{statusFilter}&quot; gefunden.</p>
