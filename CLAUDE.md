@@ -6992,6 +6992,21 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     date and shows 12 real calls for the first agent, matching the direct
     CDR check exactly. Typecheck/lint clean.
 
+123. **`/feedback`: Kundennummer filter added — shipped (2026-08-19).** Anis:
+    "napravi da se Feedback moze filterisati po Kundennummer." New
+    `?kundennummer=` query param, same `<form method="get">` composable
+    pattern as the existing Agent/Ergebnis/Wiedervorlage/Von/Bis filters.
+    Resolves the real company id(s) matching that Kundennummer first
+    (`ilike`, same forgiving partial-match convention as the Firmen search)
+    then filters `sales_feedback` on `company_id` - an empty match set
+    forces zero rows via an impossible id rather than silently falling
+    back to unfiltered.
+
+    Verified live (throwaway admin test account, deleted after) against a
+    real Kundennummer (`552343`, TKL Handsender und Torzubehör): correctly
+    narrowed the full list down to exactly the 1 real feedback row for
+    that company. Typecheck/lint clean.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

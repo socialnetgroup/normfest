@@ -40,7 +40,15 @@ const WIEDERVORLAGE_OPTIONS = [
 export default async function FeedbackListPage({
   searchParams,
 }: {
-  searchParams: Promise<{ agent?: string; von?: string; bis?: string; outcome?: string; wv?: string; page?: string }>;
+  searchParams: Promise<{
+    agent?: string;
+    von?: string;
+    bis?: string;
+    outcome?: string;
+    wv?: string;
+    kundennummer?: string;
+    page?: string;
+  }>;
 }) {
   const {
     agent: agentFilter,
@@ -48,6 +56,7 @@ export default async function FeedbackListPage({
     bis: bisFilter,
     outcome: outcomeFilter,
     wv: wvFilter,
+    kundennummer: kundennummerFilter,
     page: pageParam,
   } = await searchParams;
   const page = Math.max(1, Number(pageParam) || 1);
@@ -85,6 +94,21 @@ export default async function FeedbackListPage({
   if (vonFilter) feedbackBuilder = feedbackBuilder.gte("created_at", `${vonFilter}T00:00:00.000Z`);
   if (bisFilter) feedbackBuilder = feedbackBuilder.lte("created_at", `${bisFilter}T23:59:59.999Z`);
 
+  // Anis (2026-08-19): "Feedback moze filterisati po Kundennummer" - resolve
+  // the real company id(s) matching that Kundennummer first (ilike, same
+  // forgiving partial-match convention as the Firmen search), then filter
+  // sales_feedback on company_id. An empty match set forces zero rows via
+  // an impossible id rather than silently falling back to "no filter".
+  if (kundennummerFilter) {
+    const { data: matchedCompanies } = await supabase
+      .from("companies")
+      .select("id")
+      .ilike("kundennummer", `%${kundennummerFilter}%`)
+      .limit(500);
+    const ids = (matchedCompanies ?? []).map((c) => c.id);
+    feedbackBuilder = feedbackBuilder.in("company_id", ids.length > 0 ? ids : ["00000000-0000-0000-0000-000000000000"]);
+  }
+
   const [{ data: agentOptions }, { data: feedbackRows, count }] = await Promise.all([
     isAdmin
       ? supabase.from("agents").select("id, full_name, profile_id").not("profile_id", "is", null).order("full_name")
@@ -94,7 +118,7 @@ export default async function FeedbackListPage({
 
   const total = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const hasFilter = Boolean(agentFilter || vonFilter || bisFilter || outcomeFilter || wvFilter);
+  const hasFilter = Boolean(agentFilter || vonFilter || bisFilter || outcomeFilter || wvFilter || kundennummerFilter);
 
   function pageHref(p: number) {
     const params = new URLSearchParams();
@@ -103,6 +127,7 @@ export default async function FeedbackListPage({
     if (bisFilter) params.set("bis", bisFilter);
     if (outcomeFilter) params.set("outcome", outcomeFilter);
     if (wvFilter) params.set("wv", wvFilter);
+    if (kundennummerFilter) params.set("kundennummer", kundennummerFilter);
     if (p > 1) params.set("page", String(p));
     const qs = params.toString();
     return qs ? `/feedback?${qs}` : "/feedback";
@@ -156,6 +181,17 @@ export default async function FeedbackListPage({
                   </option>
                 ))}
               </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="kundennummer">Kundennummer</Label>
+              <Input
+                id="kundennummer"
+                name="kundennummer"
+                type="text"
+                defaultValue={kundennummerFilter ?? ""}
+                className="w-32"
+                placeholder="z.B. 572076"
+              />
             </div>
             <div className="flex flex-col gap-1">
               <Label htmlFor="von">Von</Label>
