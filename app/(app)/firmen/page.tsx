@@ -4,6 +4,8 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FavoriteStarButton } from "@/components/favorite-star-button";
+import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
 const PAGE_SIZE = 25;
@@ -19,6 +21,7 @@ export default async function FirmenPage({
   const from = (page - 1) * PAGE_SIZE;
 
   const supabase = await createClient();
+  const { user } = await getCurrentUser();
 
   // RPC instead of a direct .from("companies") query -- a direct query goes
   // through RLS's companies_select_visible policy, whose fn_company_visible()
@@ -45,6 +48,25 @@ export default async function FirmenPage({
   const total = results?.data?.[0]?.total_count ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const pageHref = (p: number) => `/firmen?q=${encodeURIComponent(query)}&page=${p}`;
+
+  // Favoritenliste star, now also shown here (Anis, 2026-08-19: "neka pise i
+  // u generalnoj listi favorita zvjezdica kraj imena kad se otvore alle
+  // firmen") - scoped to just the ids on this page (not the agent's whole
+  // list, which can be in the hundreds, §14 item 124's Rijalda migration)
+  // since that's all this render needs.
+  const pageCompanyIds = (results?.data ?? []).map((c) => c.id);
+  const favoriteIds =
+    user && pageCompanyIds.length > 0
+      ? new Set(
+          (
+            await supabase
+              .from("company_favorites")
+              .select("company_id")
+              .eq("agent_id", user.id)
+              .in("company_id", pageCompanyIds)
+          ).data?.map((f) => f.company_id) ?? [],
+        )
+      : new Set<string>();
 
   return (
     <div className="flex flex-col gap-6">
@@ -100,6 +122,13 @@ export default async function FirmenPage({
                     >
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
+                          {user ? (
+                            <FavoriteStarButton
+                              companyId={company.id}
+                              agentId={user.id}
+                              initialFavorited={favoriteIds.has(company.id)}
+                            />
+                          ) : null}
                           <span className="truncate font-medium">{company.name}</span>
                           {company.call_priority ? (
                             <Badge variant="warning">Zuerst anrufen</Badge>

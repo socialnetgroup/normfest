@@ -7072,6 +7072,81 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     not committed (same pattern as other pure data-migration scripts in
     this project).
 
+125. **Real production regression: `visibility_mode` stuck on 'shared' again,
+    hardened the root cause this time (2026-08-19), Anis: "Agenti vide sve
+    firme. Moraju vidjeti samo svoj gebiet uvijek!"** Checked the real
+    setting directly rather than guessing: `visibility_mode = 'shared'`,
+    exactly the same class of incident already documented once before
+    (§14 item 76) - the RLS test suite's global `beforeAll`/`afterAll`
+    forces `'shared'` for the run and is supposed to restore the real
+    value after. Restored to `'gebiet'` immediately (the one-line fix,
+    same as last time), then investigated properly instead of just noting
+    it a third time.
+
+    **Real bug found in `supabase/tests/rls.test.ts`:** `realVisibilityMode`
+    was typed `string | null`, captured via `modeRow?.value as string |
+    null`, and `afterAll` only restored `if (realVisibilityMode !== null)`.
+    If the initial read ever came back empty (`modeRow` undefined - a
+    transient query hiccup, matching this project's own documented history
+    of exactly this kind of flakiness under DB load, §12), `realVisibilityMode`
+    became `undefined` - which is `!== null` in JS, so `afterAll` would
+    still attempt to write `undefined` into a real production setting
+    instead of skipping the restore safely, or in the worse case where the
+    write partially failed, silently leave the value stuck on the
+    test-only `'shared'`.
+
+    **Fix:** `realVisibilityMode` now defaults to the known-correct
+    production value (`'gebiet'`, current since the 2026-07-31 Gebiet
+    pilot, §14 item 10) and only overwrites that default when the initial
+    read genuinely returns a real value; `afterAll`'s restore is now
+    unconditional (no more `if` guard that could skip it). This can no
+    longer strand the real setting on the test-only value regardless of
+    what the initial read does. Verified live: ran the full suite twice
+    after the fix, confirmed `visibility_mode` correctly read `'gebiet'`
+    immediately after each run completed (not stuck on `'shared'`).
+    Typecheck/lint clean, full suite green (41/41) both times.
+
+126. **Two follow-ups to the Favoritenliste feature (§14 item 124), same
+    day.**
+
+    **Star color adjusted twice, based on real visual feedback.** First
+    fix (item 124 itself) moved from `text-warning` (measured lightness
+    80.3%, "too pale to read") to `text-warning-text` (47.5%) - Anis then
+    flagged that as "too dark/bronze". Landed on a dedicated arbitrary
+    value (`text-[oklch(0.72_0.16_78)]`, lightness 67.4% - measured via
+    live `getComputedStyle`, not guessed) sitting between the two existing
+    tokens: genuinely gold, not pale and not bronze. Kept as a one-off
+    value on this button rather than a new shared token, since this was
+    the button's own taste call, not a reusable semantic color.
+
+    **Real FK bug hit live while cleaning up a throwaway test account,
+    fixed properly:** deleting a test account that had even one
+    `company_favorites` row failed with the same opaque `500
+    AuthRetryableFetchError` already documented for `agents.profile_id`/
+    `settings.updated_by` (§14 items 83/86) - `company_favorites.agent_id`
+    referenced `profiles(id)` with no cascade. Migration
+    `20260819100000_company_favorites_fk_cascade.sql` adds `on delete
+    cascade` (a favorite has no meaning once the agent's account is gone,
+    same reasoning as `company_id`'s existing cascade). Verified live: the
+    same throwaway-account-with-a-favorite deletion that failed before now
+    succeeds cleanly.
+
+    **Star also added to the "Alle Firmen" list** (`app/(app)/firmen/page.tsx`),
+    per Anis: "neka pise i u generalnoj listi favorita zvjezdica kraj
+    imena kad se otvore alle firmen." Reuses the same `FavoriteStarButton`
+    component (not just a static indicator - fully interactive, consistent
+    with the Firmenprofil page), scoped to just the company ids on the
+    current page (not the agent's whole list, which can be in the
+    hundreds, §14 item 124's Rijalda migration) since that's all one
+    render needs. Verified live end-to-end (throwaway admin test account
+    with one real pre-existing favorite, deleted after): the star rendered
+    correctly favorited in the search-result row, clicking it inside the
+    row's own `<Link>` correctly toggled the favorite (confirmed in the DB)
+    **without** triggering navigation to the company profile - the
+    button's existing `preventDefault()`/`stopPropagation()` (already
+    proven on the Firmenprofil page) holds up nested inside a `Link` too.
+    Typecheck/lint clean, full suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

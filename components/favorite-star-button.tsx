@@ -52,8 +52,14 @@ export function FavoriteStarButton({
       title={favorited ? "Von Favoritenliste entfernen" : "Zur Favoritenliste hinzufügen"}
       className={cn(
         "inline-flex shrink-0 items-center justify-center rounded-full p-1.5 transition-colors disabled:opacity-50",
+        // Anis (2026-08-19): text-warning-text read as "too dark/bronze" -
+        // a genuine gold sits between --warning (too pale to read, the
+        // original bug) and --warning-text (tuned dark for table text, not
+        // an icon fill). A one-off arbitrary value here rather than a new
+        // shared token, since this is this button's own taste call, not a
+        // reusable semantic color.
         favorited
-          ? "text-warning-text hover:bg-warning/15"
+          ? "text-[oklch(0.72_0.16_78)] hover:bg-warning/15"
           : "text-muted-foreground hover:bg-muted hover:text-foreground",
       )}
     >

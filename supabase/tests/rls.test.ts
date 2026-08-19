@@ -24,7 +24,18 @@ const password = `test-password-${stamp}!`;
 
 let agentId = "";
 let adminId = "";
-let realVisibilityMode: string | null = null;
+// Real bug found (2026-08-19): this was typed `string | null` and the
+// afterAll guard was `if (realVisibilityMode !== null)` - if the initial
+// read below ever failed or returned no row, `modeRow?.value` evaluates to
+// `undefined`, which is `!== null`, so afterAll would still attempt to
+// write `undefined` back into a real production setting instead of
+// skipping the restore safely. Worse, production got stuck on 'shared'
+// at least twice this way (confirmed live via `updated_at` timestamps not
+// matching any traceable test run) - defaulting to the known-correct
+// production value ('gebiet', current since the 2026-07-31 Gebiet pilot,
+// CLAUDE.md §14 item 10) if the read comes back empty means this can never
+// silently strand the real setting on the test-only value again.
+let realVisibilityMode: string = "gebiet";
 
 beforeAll(async () => {
   // The whole suite (fixture companies picked arbitrarily, test agents with
@@ -36,7 +47,7 @@ beforeAll(async () => {
   // permanently mutate, a real production setting. The two tests that
   // specifically exercise 'gebiet' mode save/restore around themselves.
   const { data: modeRow } = await admin.from("settings").select("value").eq("key", "visibility_mode").single();
-  realVisibilityMode = modeRow?.value as string | null;
+  if (modeRow?.value) realVisibilityMode = modeRow.value as string;
   await admin.from("settings").update({ value: "shared" }).eq("key", "visibility_mode");
 
   const { data: agentUser, error: agentErr } = await admin.auth.admin.createUser({
@@ -65,9 +76,10 @@ beforeAll(async () => {
 afterAll(async () => {
   if (agentId) await admin.auth.admin.deleteUser(agentId);
   if (adminId) await admin.auth.admin.deleteUser(adminId);
-  if (realVisibilityMode !== null) {
-    await admin.from("settings").update({ value: realVisibilityMode }).eq("key", "visibility_mode");
-  }
+  // Always restore - realVisibilityMode has a safe known-good default
+  // (see its declaration above) even if the initial read never succeeded,
+  // so this can never leave the real setting stuck on the test-only value.
+  await admin.from("settings").update({ value: realVisibilityMode }).eq("key", "visibility_mode");
 });
 
 describe("profiles RLS (fn_is_admin, on_auth_user_created)", () => {
