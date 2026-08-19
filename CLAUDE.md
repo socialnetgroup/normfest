@@ -7044,6 +7044,20 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     button when an admin is viewing someone else's list (own-list-only
     editing, by design). Typecheck/lint clean, full suite green (41/41).
 
+    **Real, same-day color bug found + fixed: the starred icon rendered
+    barely visible, not "yellow", Anis: "zvjezdica star nije žuta
+    selektovana."** Checked the actual computed style rather than guessing
+    - `text-warning` resolved to `lab(80.3 ...)`, a pale, low-lightness
+    color, because `--warning` (§14's own dialer-table design tokens) is
+    tuned as a light BADGE FILL, not a standalone icon/text color - the
+    exact same class of bug already fixed once this session for the dialer
+    Zeitverteilung columns, which is why `--warning-text` (a genuinely
+    darker variant built for exactly this "readable standalone" case)
+    already existed. Swapped `favorite-star-button.tsx` from
+    `text-warning` to `text-warning-text` - verified the computed color
+    dropped from lightness 80.3 to 47.5, a clearly visible gold instead of
+    a near-invisible pastel. Typecheck/lint clean.
+
     **Real one-time migration of Rijalda's existing 485-row dialer list,
     same day:** matched the real Excel export's phone numbers (last-8-
     digit suffix, same robust-to-leading-0 approach as `company_daily_calls`

@@ -53,7 +53,7 @@ export function FavoriteStarButton({
       className={cn(
         "inline-flex shrink-0 items-center justify-center rounded-full p-1.5 transition-colors disabled:opacity-50",
         favorited
-          ? "text-warning hover:bg-warning/15"
+          ? "text-warning-text hover:bg-warning/15"
           : "text-muted-foreground hover:bg-muted hover:text-foreground",
       )}
     >
