@@ -7446,6 +7446,121 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     data exists for either month, correctly untouched). Typecheck/lint
     clean, full suite green (41/41).
 
+134. **Externe Chancen: more suggestions per opportunity + real ranking
+    instead of arbitrary DB order — shipped (2026-08-20).** Anis, reviewing
+    real Externe Chancen output: "dodaj vise prijedloga po eksternoj sansi...
+    rangiraj bitnije prema manje bitnijim... za bitnost uzeti cijenu i
+    kolicinu review-a na webshopu" (tire shop example: valve caps surfaced,
+    balance weights - which sell far more - didn't). Investigated before
+    building: `matchCatalogProducts()` (`lib/enrichment/analyze.mjs`) had a
+    hard `.limit(3)` with **no ordering at all** - whatever Postgres
+    happened to return first. Checked what's actually available to rank by:
+    neither price nor real webshop review counts exist anywhere in this
+    app's data - the catalog PDF never had pricing extracted (no `price`
+    column on `products` at all), and the original webshop crawl (§13 M4)
+    only ever captured name/SKU/category/image/cross-sell, never reviews.
+    Getting either for real would need a new, scoped webshop crawl - Anis
+    confirmed doing #1/#2 first with what's already free, discussing #3
+    (a real crawl) separately once he also has real per-product click data
+    coming from Normfest directly to fold in.
+
+    Used the one real, already-existing signal instead: how often a
+    candidate product appears as the TARGET of a real cross-sell relation
+    (`product_relations.related_product_id`, from the same 141k-row real
+    webshop crawl) - a genuine "the webshop's own merchandising considered
+    this worth recommending alongside something else" proxy, zero new data
+    collection needed. `matchCatalogProducts()` now pulls a wider candidate
+    pool (30) matching category+search_terms, ranks by that frequency, and
+    returns the real top 6 (up from a flat, unordered 3) - written so this
+    ranking step (not the whole matching pipeline) is the one place to
+    swap in real click-count data once Anis has it.
+
+    **Real de-dup bug caught by spot-checking before trusting the ranking:**
+    the DIN- & Normteile category has genuine parametric-family products
+    sharing an identical display name across different real SKUs (e.g.
+    "Geomet® Sechskantschrauben DIN 931" - two different dimension variants,
+    same catalog reality already documented elsewhere in this app) - a
+    naive top-6 could burn 2 of 6 slots on what visually looks like the
+    same product suggested twice. Fixed by filling with distinct names
+    first, only padding with same-name variants if there aren't enough
+    distinct candidates to reach the limit.
+
+    **Retroactively applied to all already-analyzed companies, zero LLM
+    cost.** The ranking-only fix only affects future ANALYZE calls on its
+    own - the ~14,169 already-analyzed companies keep their old opportunity
+    list until re-matched. Since `catalog_category`/`search_terms` are
+    already stored per opportunity (real prior LLM output, not being
+    redone), re-running just the matching/ranking step needs zero Anthropic
+    spend. New `scripts/rerank-matched-products.mjs` (dry-run tested on 10
+    companies first, real diffs spot-checked before the full run) re-matched
+    every stored opportunity across all 14,169 companies with the fixed
+    logic - **13,678 of 14,169 (96.5%) got a genuinely different
+    `matched_products` list, 0 errors.**
+
+    Verified live end-to-end (throwaway admin test account, deleted after)
+    on "Reiner Pförtner und Andrej Bergen" (the real company picked as the
+    project's richest showcase example - see below): several opportunities
+    now correctly show 6 real, distinct matched products (Reifenmontage-
+    Zubehör, Werkzeugbedarf, Elektrik-Zubehör) instead of the old flat 3.
+
+    **Real, separate finding from the same review, not fixed here:** one of
+    that same company's real opportunities ("Bremsenkomponenten" -
+    "Regelmäßige Bremsenüberprüfung erfordert Verschleißteile...") shows
+    **zero matched products**, even though real, relevant catalog products
+    genuinely exist (Bremsenreiniger, Bremsen-/Montagepaste,
+    Bremsenschutzspray, a Bremsenentlüfter-Satz - all under "Inspektion &
+    Wartung", confirmed directly). This is a prompt-level gap in the
+    ANALYZE step's `catalog_category`/`search_terms` choice, not a ranking
+    or catalog-coverage problem - a real, separate fix (and, to apply
+    retroactively, a real paid re-analysis, unlike this session's free
+    re-match) that Anis has not yet greenlit.
+
+    **Also analyzed, not yet built: a real showcase-company request.**
+    Picked "Reiner Pförtner und Andrej Bergen" (Memmingen, Gebiet 130027) as
+    the project's richest demo company: 4 real invoices/orders, 3 real
+    signal types firing (cross_sell, revenue_trend_risk, seasonal_push), 9
+    external opportunities with 16 total matched products, 12 real
+    Google-review-backed strengths + 2 weaknesses. Runner-up "Puckhaber
+    KFZ" has more real orders (5) and a `replenishment_due` signal instead,
+    but zero strengths/weaknesses (no real Google review data for that
+    company).
+
+135. **Legacy ticket-system import (`input/kunden_tickets_FINAL_v2.csv`,
+    900,400 rows, 2021-07-01 through today) — analyzed, not yet built, per
+    Anis's own explicit "Prije implementacije analiziraj i ovo."** Real
+    numbers checked directly before proposing anything: 83,337 distinct
+    Kundennummer values in the file, but only **16.3% (13,564)** match a
+    real company in the current VIS-sourced `companies` table (barely
+    changes including soft-deleted rows, so this isn't a soft-delete
+    artifact - the old system's customer universe was genuinely much wider
+    than what's in VIS today). At the actual comment-row level the real,
+    usable set is much smaller still: **only 29,345 of 900,400 rows (1.6%)
+    match a real company**, spread across 986 companies (avg ~30 comments/
+    company, max 209). A random sample of the matched rows showed most are
+    call-logistics noise ("nicht erreicht", "Anrufbeantworter", "später
+    anrufen"), not real customer sentiment - confirming Anis's own instinct
+    to filter for "positive" comments only, rather than importing
+    everything that matches.
+
+    **Proposed design (not built, pending Anis's confirmation of what
+    counts as "positive"):** a new, dedicated table (not merged into
+    `sales_feedback` - different shape/meaning, historical call notes vs.
+    structured outcome-tagged feedback) with `company_id`, `created_at`
+    (from `Zeitstempel`), comment text, agent name (kept as a disclaimer/
+    attribution even for an agent no longer at the company, per Anis's own
+    ask), and a `positive` classification. Classification only needs to run
+    on the real 29,345 matched rows, not all 900,400 - a real, cheap bulk-
+    tier LLM pass once scoped, not the $20-90 range a naive full-900k
+    estimate would suggest. Display: rendered chronologically interleaved
+    with the existing Feedback-Verlauf/notes timeline on the Firmenprofil,
+    clearly labeled as coming from the old system - same "never silently
+    mix data sources" discipline as everywhere else in this app (§3.2.6).
+
+    **Still open, asked back to Anis:** the exact definition of "positive"
+    (a completed sale only, vs. also genuine shown interest) - this
+    directly determines how much of the 29,345 survives the filter and
+    hasn't been confirmed yet.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
