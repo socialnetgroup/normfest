@@ -89,12 +89,17 @@ export default async function BerichtAgentPage({ params }: { params: Promise<{ a
 
   const talkSecondsByDate = new Map<string, number>();
   const dispoSecondsByDate = new Map<string, number>();
+  // Real calls per day, preferring the immutable dialer snapshot wherever
+  // one exists (§14 item 131/132 - a full-month Excel re-import can
+  // silently overwrite a day the dialer-sync cron already got right).
+  const realCallsByDate = new Map<string, number>();
   for (const snap of snapshotRows ?? []) {
     const summaries = (snap.agents as DialerAgentSummary[] | null) ?? [];
     const mine = summaries.find((s) => s.agentId === agentId);
     if (mine) {
       talkSecondsByDate.set(snap.snapshot_date, parseDialerTimeToSeconds(mine.talkTime));
       dispoSecondsByDate.set(snap.snapshot_date, parseDialerTimeToSeconds(mine.dispoTime));
+      realCallsByDate.set(snap.snapshot_date, mine.totalCalls ?? 0);
     }
   }
   const wiedervorlageByDate = new Map<string, number>();
@@ -112,7 +117,7 @@ export default async function BerichtAgentPage({ params }: { params: Promise<{ a
       date: r.date,
       revenue: r.revenue,
       salesCount: r.sales_count,
-      callsCount: r.calls_count,
+      callsCount: realCallsByDate.get(r.date) ?? r.calls_count,
       dayOff: r.day_off,
       bonusKm: bonusByDate.get(r.date)?.get(agentId) ?? 0,
       talkSeconds: talkSecondsByDate.get(r.date) ?? null,

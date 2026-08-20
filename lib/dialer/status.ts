@@ -212,12 +212,57 @@ export function computeRealReachedByAgent(
   return byAgent;
 }
 
+/** Real per-(date, agent) call counts, preferring the immutable daily dialer
+ * snapshot over agent_daily_performance.calls_count wherever a snapshot
+ * exists for that date. Anis, 2026-08-20: "pozivi niski, pogledaj iz
+ * snapshota historijski pa ubaci sta imamo" - checked directly and found
+ * calls_count for 08-10 through 08-18 was significantly LOWER than the real
+ * snapshot totals (e.g. 08-17: 100 stored vs. 724 real) for every date a
+ * snapshot exists - the same class of overwrite already found and fixed for
+ * just "yesterday" (§14 item 131), now confirmed to span most of the month:
+ * a full-month Team Dashboard Excel re-import (§14 item 92) touches every
+ * day's row, including days the 18:00 dialer-sync cron had already written
+ * a real number into, and its own "Anzahl Anrufe" column is often lower/
+ * blank for dates not yet fully entered at export time. Snapshots only
+ * exist from 2026-08-10 on, so June/July and any snapshot-less August day
+ * keep using the stored calls_count - there's no better real source for
+ * those, not a bug. Keyed `${date}|${agentId}` so per-agent pages
+ * (e.g. /tim) and per-day/team pages can both look up what they need. */
+export function buildRealCallsByDateAgent(
+  perfRows: { date: string; agent_id: string; calls_count: number | null }[],
+  snapshotRows: { snapshot_date: string; agents: { agentId: string; totalCalls: number }[] | null }[],
+): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const r of perfRows) {
+    map.set(`${r.date}|${r.agent_id}`, r.calls_count ?? 0);
+  }
+  for (const snap of snapshotRows) {
+    for (const a of snap.agents ?? []) {
+      map.set(`${snap.snapshot_date}|${a.agentId}`, a.totalCalls ?? 0);
+    }
+  }
+  return map;
+}
+
 /** Overrides reachedEstimate/reachedRate with the real, CDR-based numbers
  * for agents where real data is available (today only) - falls back to the
  * existing synthetic estimate for any agent missing from the real map (e.g.
  * the dialer fetch failed, or partial CDR data). Sets reachedIsReal per-row
  * so the UI never silently presents a synthetic number as if it were real,
- * or vice versa. */
+ * or vice versa.
+ *
+ * Real, deliberate scaling (Anis, 2026-08-20: "% kod javio se nekako nisu
+ * dobri"): metrike.php's CDR row count and agents.php's own live totalCalls
+ * counter are two independently-polled sources that don't always agree
+ * (confirmed live: e.g. Lejla Piric showed 148 CDR rows vs. 145 totalCalls -
+ * a real ~2% drift, not a bug in either source). Showing the raw CDR
+ * reached COUNT next to the "Pozivi" column (totalCalls) could then display
+ * a reached count HIGHER than the calls total sitting right beside it,
+ * which reads as obviously broken even though the underlying rate is real.
+ * `reachedRate` stays the genuine real fraction from classified CDR data;
+ * `reachedEstimate` (the displayed count) is that rate applied to the
+ * agent's own totalCalls instead of the raw CDR count, so it can never
+ * exceed - or look inconsistent with - the Pozivi number next to it. */
 export function applyRealReachedToSummaries(
   summaries: DialerAgentSummary[],
   realReachedByAgentId: Map<string, { reached: number; total: number }>,
@@ -225,10 +270,11 @@ export function applyRealReachedToSummaries(
   return summaries.map((s) => {
     const real = realReachedByAgentId.get(s.agentId);
     if (!real || real.total === 0) return { ...s, reachedIsReal: false };
+    const rate = real.reached / real.total;
     return {
       ...s,
-      reachedEstimate: real.reached,
-      reachedRate: real.reached / real.total,
+      reachedEstimate: Math.round(rate * s.totalCalls),
+      reachedRate: rate,
       reachedIsReal: true,
     };
   });

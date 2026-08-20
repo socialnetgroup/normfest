@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { computeBonusByDate, computeDailyBonus, type BonusThreshold } from "@/lib/team/bonus";
 import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import type { DialerAgentSummary } from "@/lib/dialer/status";
+import { buildRealCallsByDateAgent, type DialerAgentSummary } from "@/lib/dialer/status";
 
 const eur = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
 const eurCents = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", minimumFractionDigits: 2 });
@@ -83,6 +83,14 @@ export default async function TimPage() {
 
   const rows = (data ?? []) as unknown as DayRow[];
 
+  // Real per-(date, agent) calls, preferring the immutable dialer snapshot
+  // wherever one exists (§14 item 131/132 - a full-month Excel re-import can
+  // silently overwrite a day the dialer-sync cron already got right).
+  const realCallsByKey = buildRealCallsByDateAgent(
+    rows.map((r) => ({ date: r.date, agent_id: r.agent_id, calls_count: r.calls_count })),
+    (snapshotRows ?? []) as { snapshot_date: string; agents: { agentId: string; totalCalls: number }[] | null }[],
+  );
+
   const bonusSettingsMap: Record<string, unknown> = {};
   for (const row of bonusSettings ?? []) bonusSettingsMap[row.key] = row.value;
   const thresholds = (bonusSettingsMap.bonus_thresholds as BonusThreshold[] | undefined) ?? [];
@@ -142,7 +150,7 @@ export default async function TimPage() {
     };
     entry.revenue += row.revenue;
     entry.sales += row.sales_count;
-    entry.calls += row.calls_count ?? 0;
+    entry.calls += realCallsByKey.get(`${row.date}|${row.agent_id}`) ?? row.calls_count ?? 0;
     entry.bonusKm += bonusByDate.get(row.date)?.get(row.agent_id) ?? 0;
     agentMap.set(row.agent_id, entry);
   }

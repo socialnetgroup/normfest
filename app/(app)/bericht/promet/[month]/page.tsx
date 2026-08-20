@@ -6,7 +6,7 @@ import { MonthCalendar, type DayEntry } from "@/components/team/month-calendar";
 import { computeBonusByDate, type BonusThreshold } from "@/lib/team/bonus";
 import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { parseDialerTimeToSeconds, type DialerAgentSummary } from "@/lib/dialer/status";
+import { buildRealCallsByDateAgent, parseDialerTimeToSeconds, type DialerAgentSummary } from "@/lib/dialer/status";
 
 const eur = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
 const eurCents = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", minimumFractionDigits: 2 });
@@ -112,13 +112,21 @@ export default async function BerichtPrometMonthPage({ params }: { params: Promi
     wiedervorlageByDate.set(date, (wiedervorlageByDate.get(date) ?? 0) + 1);
   }
 
+  // Real per-(date, agent) calls, preferring the immutable dialer snapshot
+  // wherever one exists (§14 item 131/132 - a full-month Excel re-import
+  // can silently overwrite a day the dialer-sync cron already got right).
+  const realCallsByKey = buildRealCallsByDateAgent(
+    (rows ?? []).map((r) => ({ date: r.date, agent_id: r.agent_id, calls_count: r.calls_count })),
+    (snapshotRows ?? []) as { snapshot_date: string; agents: { agentId: string; totalCalls: number }[] | null }[],
+  );
+
   const byDate = new Map<string, { revenue: number; sales: number; calls: number }>();
   for (const r of rows ?? []) {
     if (r.day_off) continue;
     const entry = byDate.get(r.date) ?? { revenue: 0, sales: 0, calls: 0 };
     entry.revenue += r.revenue;
     entry.sales += r.sales_count;
-    entry.calls += r.calls_count ?? 0;
+    entry.calls += realCallsByKey.get(`${r.date}|${r.agent_id}`) ?? r.calls_count ?? 0;
     byDate.set(r.date, entry);
   }
 

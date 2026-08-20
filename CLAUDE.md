@@ -7384,6 +7384,68 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     correctly "-" for July/June. Typecheck/lint clean, full suite green
     (41/41).
 
+132. **Real fix: "Javilo se" count could exceed "Pozivi", making the % look
+    broken — shipped (2026-08-20).** Anis: "i dalje na dialeru mi % kod
+    javio se nekako nisu dobri." Investigated live rather than guessed:
+    pulled today's real CDR directly and compared per-agent CDR row counts
+    against `agents.php`'s own live `totalCalls` counter - found a real,
+    small structural drift between the two independently-polled sources
+    (e.g. Lejla Piric: 148 CDR rows vs. 145 `totalCalls`, ~2% higher).
+    `applyRealReachedToSummaries()` (`lib/dialer/status.ts`) had been
+    showing the raw CDR reached COUNT (146 for Lejla) next to the "Pozivi"
+    column (145) - a reached count visibly exceeding the calls total sitting
+    right beside it, which reads as obviously broken even though the
+    underlying rate (98.6%) was real. Fixed by keeping `reachedRate` as the
+    genuine fraction from classified CDR data, but scaling the *displayed*
+    `reachedEstimate` count to `round(rate × totalCalls)` instead of the raw
+    CDR integer - it can now never exceed, or look inconsistent with, the
+    Pozivi number next to it. `computeDialerTotals()`'s Gesamt row already
+    summed each row's own `reachedEstimate`, so it inherited the fix
+    automatically with no separate change needed. Verified live (throwaway
+    admin test account, deleted after): Lejla now shows "145 Anrufe...
+    143 (98,6%)" - 143 ≤ 145, consistent at a glance.
+
+133. **Real fix: monthly "Pozivi" (report + admin Team views) were
+    significantly undercounted — shipped (2026-08-20).** Anis: "Mjeseci...
+    puni prikaz - pozivi niski, pogledaj iz snapshota historijski pa ubaci
+    sta imamo." Checked directly rather than assumed: for every date from
+    2026-08-10 on where a real `dialer_daily_snapshots` row exists,
+    `agent_daily_performance.calls_count` was dramatically lower than the
+    real snapshot total (e.g. 08-10: 384 stored vs. **952 real**; 08-17: 100
+    vs. **724**; 08-18: 104 vs. **802**) - the same overwrite already found
+    and fixed for just "yesterday" in item 131 turned out to span nearly the
+    whole month: a full-month Team Dashboard Excel re-import (§14 item 92)
+    touches every day's row including ones the 18:00 dialer-sync cron had
+    already written a real number into. June/July have no real snapshot
+    data at all (snapshots only exist from 08-10 on) - those months keep
+    using the stored `calls_count`, since there's no better real source for
+    them, not a remaining bug.
+
+    New shared `buildRealCallsByDateAgent(perfRows, snapshotRows)`
+    (`lib/dialer/status.ts`) builds a `${date}|${agentId}` → real-calls map,
+    preferring the immutable snapshot's `totalCalls` wherever one exists for
+    that date, falling back to the stored `calls_count` otherwise. Wired
+    into every place a monthly/daily calls figure gets computed from
+    `agent_daily_performance`, so none of the app's several call-count views
+    can drift apart from each other again: `/bericht`'s own monthly Promet
+    table (and its `teamCallsYesterday`, simplified to reuse the same map
+    instead of its own separate item-131 query), the new
+    `/bericht/promet/[month]` drill-down, `/bericht/[agentId]`, `/tim`, and
+    both `admin/team` pages (`page.tsx` and `[agentId]/page.tsx`) - the
+    admin-facing pages were fixed too even though not explicitly named,
+    since leaving them on the old undercounted numbers while report@ showed
+    the corrected ones would just relocate the same "brojevi ne slažu se"
+    confusion rather than resolve it.
+
+    Verified live end-to-end (throwaway admin test account, deleted after):
+    August "Pozivi ukupno" on `/bericht` went from the old, wrong 4.371 to
+    the real **8.563** (nearly 2x higher, matching what the raw snapshot
+    data implies); `/tim`'s per-agent August Pozivi grew correspondingly
+    (e.g. Maja Biso 597→1012, Alan Sačić 292→844); June/July stayed
+    unchanged (70.217 €/8.772 poziva, 80.806 €/12.496 poziva - no snapshot
+    data exists for either month, correctly untouched). Typecheck/lint
+    clean, full suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

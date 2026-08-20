@@ -11,6 +11,7 @@ import { computeBonusByDate, type BonusThreshold } from "@/lib/team/bonus";
 import {
   applyRealReachedToSummaries,
   buildDialerAgentSummaries,
+  buildRealCallsByDateAgent,
   computeDialerTotals,
   computeRealReachedByAgent,
   fetchDialerAgentStatuses,
@@ -110,7 +111,7 @@ export default async function BerichtPage() {
     { data: todaySoldRows },
     { data: dialerRows, error: dialerError },
     { data: callLogRows },
-    { data: yesterdaySnapshot },
+    { data: allSnapshotRows },
   ] = await Promise.all([
     supabase.rpc("fn_report_stats"),
     supabase.from("sales_feedback").select("id", { count: "exact", head: true }),
@@ -165,17 +166,15 @@ export default async function BerichtPage() {
     // cluncky and slow").
     fetchDialerAgentStatuses(),
     fetchDialerCallLog(todayStart, now),
-    // Anis, 2026-08-20: "Piše da je jučer bilo 104 poziva, ali nije tačno" -
-    // real root cause found by comparing sources directly: agent_daily_performance.
-    // calls_count for 18.08. WAS correctly synced from the real dialer snapshot
-    // (802 total) via the 18:00 cron, but a LATER Team Dashboard Excel re-import
-    // (§14 item 92, run 19.08.) overwrote the whole row - wiping calls_count to
-    // null for 9 of 10 agents (one stray non-null value survived by coincidence).
-    // This is exactly the known, already-documented trade-off from §14 item 27
-    // ("a later Team Dashboard re-import can still overwrite past dates"), now
-    // actually observed. Fixed by sourcing "Jučer" from the real, immutable daily
-    // dialer snapshot instead, which Excel imports never touch.
-    supabase.from("dialer_daily_snapshots").select("agents").eq("snapshot_date", yesterdayStr).maybeSingle(),
+    // Anis, 2026-08-20: "Piše da je jučer bilo 104 poziva, ali nije tačno"
+    // (root cause: Team Dashboard Excel re-imports overwrite calls_count for
+    // dates the dialer-sync cron already wrote real numbers into, §14 item
+    // 131), then "pozivi niski... pogledaj iz snapshota" once the same gap
+    // was found across most of August, not just yesterday - full history
+    // (only real from 2026-08-10 on, not date-filtered) so both "Jučer" and
+    // the monthly Promet table can prefer real snapshot data wherever it
+    // exists, via buildRealCallsByDateAgent.
+    supabase.from("dialer_daily_snapshots").select("snapshot_date, agents"),
   ]);
 
   const stats = reportStatsRows?.[0] ?? {
@@ -215,10 +214,17 @@ export default async function BerichtPage() {
   const teamRevenueYesterday = (perfRows ?? [])
     .filter((r) => r.date === yesterdayStr && !r.day_off)
     .reduce((sum, r) => sum + r.revenue, 0);
-  const yesterdaySnapshotAgents = (yesterdaySnapshot?.agents as { totalCalls?: number }[] | null) ?? null;
-  const teamCallsYesterday = yesterdaySnapshotAgents
-    ? yesterdaySnapshotAgents.reduce((sum, a) => sum + (a.totalCalls ?? 0), 0)
-    : (perfRows ?? []).filter((r) => r.date === yesterdayStr && !r.day_off).reduce((sum, r) => sum + (r.calls_count ?? 0), 0);
+  // Real per-(date, agent) call counts, preferring the immutable dialer
+  // snapshot wherever one exists (2026-08-20 - the same gap already fixed
+  // for just "yesterday" turned out to span most of August once checked
+  // against the real snapshot history, §14 item 131/132 - see the shared
+  // helper's own comment for the full root cause).
+  const realCallsByKey = buildRealCallsByDateAgent(
+    (perfRows ?? []).map((r) => ({ date: r.date, agent_id: r.agent_id, calls_count: r.calls_count })),
+    (allSnapshotRows ?? []) as { snapshot_date: string; agents: { agentId: string; totalCalls: number }[] | null }[],
+  );
+  const teamCallsYesterday = (allAgents ?? [])
+    .reduce((sum, a) => sum + (realCallsByKey.get(`${yesterdayStr}|${a.id}`) ?? 0), 0);
   const teamRevenueWeek = (perfRows ?? [])
     .filter((r) => r.date >= weekStart.toISOString().slice(0, 10) && !r.day_off)
     .reduce((sum, r) => sum + r.revenue, 0);
@@ -249,7 +255,7 @@ export default async function BerichtPage() {
     const entry = byMonth.get(month) ?? { revenue: 0, sales: 0, calls: 0, bonusKm: 0 };
     entry.revenue += row.revenue;
     entry.sales += row.sales_count;
-    entry.calls += row.calls_count ?? 0;
+    entry.calls += realCallsByKey.get(`${row.date}|${row.agent_id}`) ?? row.calls_count ?? 0;
     entry.bonusKm += bonusByDate?.get(row.date)?.get(row.agent_id) ?? 0;
     byMonth.set(month, entry);
     revenueByDate.set(row.date, (revenueByDate.get(row.date) ?? 0) + row.revenue);

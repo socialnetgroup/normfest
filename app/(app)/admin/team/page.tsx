@@ -12,6 +12,7 @@ import { DayOffToggle } from "@/components/day-off-toggle";
 import { computeBonusByDate, computeDailyBonus, type BonusThreshold } from "@/lib/team/bonus";
 import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { buildRealCallsByDateAgent } from "@/lib/dialer/status";
 
 const eur = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
 const eurCents = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", minimumFractionDigits: 2 });
@@ -41,18 +42,23 @@ export default async function TeamDashboardPage() {
   const supabase = await createClient();
   const today = new Date().toISOString().slice(0, 10);
 
-  const [{ data, error }, { data: allAgents }, { data: todayRows }, { data: bonusSettings }] = await Promise.all([
-    supabase
-      .from("agent_daily_performance")
-      .select("date, revenue, sales_count, calls_count, agent_id, day_off, agents(full_name)")
-      .order("date"),
-    supabase.from("agents").select("id, full_name").eq("active", true).order("full_name"),
-    supabase.from("agent_daily_performance").select("agent_id, revenue, day_off").eq("date", today),
-    supabase
-      .from("settings")
-      .select("key, value")
-      .in("key", ["bonus_thresholds", "bonus_min_contribution_pct", "bonus_min_qualifying_agents", "bonus_visible"]),
-  ]);
+  const [{ data, error }, { data: allAgents }, { data: todayRows }, { data: bonusSettings }, { data: snapshotRows }] =
+    await Promise.all([
+      supabase
+        .from("agent_daily_performance")
+        .select("date, revenue, sales_count, calls_count, agent_id, day_off, agents(full_name)")
+        .order("date"),
+      supabase.from("agents").select("id, full_name").eq("active", true).order("full_name"),
+      supabase.from("agent_daily_performance").select("agent_id, revenue, day_off").eq("date", today),
+      supabase
+        .from("settings")
+        .select("key, value")
+        .in("key", ["bonus_thresholds", "bonus_min_contribution_pct", "bonus_min_qualifying_agents", "bonus_visible"]),
+      // Real calls, preferring the immutable dialer snapshot wherever one
+      // exists (§14 item 131/132 - a full-month Excel re-import can
+      // silently overwrite a day the dialer-sync cron already got right).
+      supabase.from("dialer_daily_snapshots").select("snapshot_date, agents"),
+    ]);
 
   if (error) {
     return (
@@ -63,6 +69,11 @@ export default async function TeamDashboardPage() {
   }
 
   const rows = (data ?? []) as unknown as DayRow[];
+
+  const realCallsByKey = buildRealCallsByDateAgent(
+    rows.map((r) => ({ date: r.date, agent_id: r.agent_id, calls_count: r.calls_count })),
+    (snapshotRows ?? []) as { snapshot_date: string; agents: { agentId: string; totalCalls: number }[] | null }[],
+  );
 
   const bonusSettingsMap: Record<string, unknown> = {};
   for (const row of bonusSettings ?? []) bonusSettingsMap[row.key] = row.value;
@@ -118,8 +129,9 @@ export default async function TeamDashboardPage() {
     };
     entry.revenue += row.revenue;
     entry.sales += row.sales_count;
-    if (row.calls_count !== null) {
-      entry.calls += row.calls_count;
+    const realCalls = realCallsByKey.get(`${row.date}|${row.agent_id}`);
+    if (realCalls !== undefined || row.calls_count !== null) {
+      entry.calls += realCalls ?? row.calls_count ?? 0;
       entry.callDays += 1;
     }
     entry.bonusKm += bonusByDate.get(row.date)?.get(row.agent_id) ?? 0;
