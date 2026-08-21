@@ -7711,6 +7711,72 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     same `rm -rf .next` + restart; re-verified clean afterward. Typecheck/
     lint clean, full suite green (41/41).
 
+137. **Real agent names fixed with proper diacritics (data, not display) —
+    shipped (2026-08-21).** Anis: "use the real last names with ćčdž etc"
+    across the tool (Gebiete, QA-Bewertungen, ...). Checked directly rather
+    than assumed: 9 of 10 real active agents had `agents.full_name` stored
+    WITHOUT diacritics ("Orucevic" instead of "Oručević", "Adzemovic"
+    instead of "Adžemović", etc. - only "Alan Sačić" was already correct).
+    Since `full_name` is the single source every screen in this app reads
+    from (Gebiete, Team, Rangliste, QA-Bewertungen, Dialer, ...), this was a
+    real data problem, not a per-page display bug - fixing it once fixes it
+    everywhere. Proposed the corrected spellings to Anis for confirmation
+    before touching anything (a real person's name, not something to guess
+    at) rather than silently "fixing" them - confirmed correct as proposed
+    (only "Biso" stays as-is, no diacritic). Updated both `agents.full_name`
+    and the linked `profiles.full_name` directly (a one-off data fix, no
+    migration/code needed). Verified live end-to-end (throwaway admin test
+    account) on `/` - Rangliste now correctly shows "Rijalda Halilović",
+    "Muhamed Lepić", "Merima Zulfić", "Elida Karović", "Arnela Oručević",
+    "Lejla Pirić", "Nejra Adžemović" throughout.
+
+138. **Admin Dashboard KPI row + new "Dialer (heute)" card, inspired by
+    /bericht — shipped (2026-08-21).** Anis: "updateujemo admin dashboard s
+    inspiracijom na bericht dashboard... Ostavi njemacki" - German stays on
+    admin (§1's convention), only the tile SET/layout borrows from
+    `/bericht`'s already-proven design, not the language.
+
+    Per his own itemized list: **Firmen gesamt** unchanged; **Team-Umsatz**
+    unchanged, plus a new **"Ø Tagesumsatz"** tile (real working-days-aware
+    daily average, same non-naive calculation as `/bericht`'s own "dnevni
+    prosjek" fix - divides by real days with revenue > 0, not raw calendar
+    days, so real €0 weekends don't artificially depress it) with a
+    "Heute: X · Gestern: Y" sub-line (real yesterday figure from its own
+    single-day query, since the existing `monthRows` fetch is deliberately
+    scoped to the current month only - widening it would break Rangliste's
+    own real-time leaderboard, which iterates the very same fetched data
+    and must stay current-month-only); a new **"Projektierter Umsatz
+    (Monat)"** tile (daily average × real weekdays in the whole month, same
+    run-rate approach as `/bericht`); **Feedback diese Woche** left
+    untouched; **"Signale offen"** tile removed entirely (the separate
+    "Signale" card with the real top-8 list further down the page is a
+    different section and was NOT touched - Anis's ask was specifically
+    about the KPI-row tile, confirmed from context since every other item
+    in his list mapped to a tile in that same row). The now-dead
+    `fn_dashboard_signals_count` RPC call was removed along with it, not
+    left as an unused import.
+
+    New **"Dialer (heute)" card** (Anis, mid-turn: "dodaj dialer danas
+    rezime kako je i tamo u berichtu") - reuses the exact same real
+    per-agent computation `/bericht`'s own card is built from
+    (`lib/dialer/status.ts`: `buildDialerAgentSummaries`,
+    `computeDialerTotals`, `applyRealReachedToSummaries` for the real
+    per-call "Erreicht" classification, §14 items 129-132), just rendered
+    in German (Anrufe gesamt/Sprechzeit/Ø Bearbeitungszeit/Auslastung/
+    Konversion/Erreicht) instead of Bosnian - admin-only, placed directly
+    under the KPI tile row per Anis's own "ispod toga" placement.
+
+    Verified live end-to-end (throwaway admin test account, deleted
+    after): all four new/changed elements render correctly with real data
+    - "Ø Tagesumsatz" showed "3.508 € / Heute: 2.573 € · Gestern: 4.279 €",
+    "Projektierter Umsatz (Monat)" showed "73.676 €", "Signale offen" tile
+    confirmed absent from the KPI row while the separate "Signale" list
+    card below it still rendered correctly, and "Dialer (heute)" showed
+    real live numbers (341 Anrufe, 05:46:22 Sprechzeit, 63% Erreicht - "echt,
+    aus Anruf-Status"). Also incidentally re-confirmed item 137's diacritic
+    fix is holding correctly throughout Rangliste. Typecheck/lint clean,
+    full suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

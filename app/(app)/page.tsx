@@ -1,4 +1,4 @@
-import { BellRing } from "lucide-react";
+import { BellRing, Phone } from "lucide-react";
 import Link from "next/link";
 
 import { AutoRefresh } from "@/components/auto-refresh";
@@ -19,9 +19,29 @@ import { getCurrentUser } from "@/lib/auth";
 import { signalTypeLabel, signalTypeVariant } from "@/lib/signals";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
+import {
+  applyRealReachedToSummaries,
+  buildDialerAgentSummaries,
+  computeDialerTotals,
+  computeRealReachedByAgent,
+  fetchDialerAgentStatuses,
+  fetchDialerCallLog,
+  formatSecondsAsHms,
+  mapExtensionsToAgentIds,
+} from "@/lib/dialer/status";
 
 const eur = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+const num = new Intl.NumberFormat("de-DE");
+const pct = new Intl.NumberFormat("de-DE", { style: "percent", minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const shortDateFmt = new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+// Anis, 2026-08-18: "Prosječno vrijeme obrade ipak format mm:ss" (same
+// reasoning as /bericht's own copy of this helper).
+function formatSecondsAsMmSs(totalSeconds: number): string {
+  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) return "00:00";
+  const m = Math.floor(totalSeconds / 60);
+  const s = Math.floor(totalSeconds % 60);
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
 
 type SettingsMap = Record<string, number>;
 
@@ -62,6 +82,14 @@ export default async function DashboardPage() {
   const todayStr = now.toISOString().slice(0, 10);
   const todayStart = new Date(now);
   todayStart.setHours(0, 0, 0, 0);
+  // UTC-anchored, never touching local time (the same off-by-one bug already
+  // found and fixed once on /bericht, CLAUDE.md §14 item 131 - taking a
+  // local-midnight Date and calling .setDate()/.getDate() on it, then
+  // reading it back via toISOString(), silently shifts by a day on a
+  // machine ahead of UTC).
+  const yesterdayDate = new Date(`${todayStr}T00:00:00Z`);
+  yesterdayDate.setUTCDate(yesterdayDate.getUTCDate() - 1);
+  const yesterdayStr = yesterdayDate.toISOString().slice(0, 10);
 
   const [
     { data: monthRows },
@@ -70,15 +98,19 @@ export default async function DashboardPage() {
     { count: feedbackCountToday },
     { count: myFeedbackCountToday },
     { data: topSignals },
-    { data: signalsTotal },
     { data: companyCountsRows },
     { data: myToday },
     { data: coverageAgents },
     { data: coverageStats },
+    { data: yesterdayRows },
+    { data: dialerAgents },
+    { data: todaySoldRows },
+    { data: dialerRows, error: dialerError },
+    { data: callLogRows },
   ] = await Promise.all([
     supabase
       .from("agent_daily_performance")
-      .select("agent_id, date, revenue, agents(full_name)")
+      .select("agent_id, date, revenue, sales_count, agents(full_name)")
       .gte("date", monthStartStr),
     supabase
       .from("sales_feedback")
@@ -124,7 +156,6 @@ export default async function DashboardPage() {
     // gebiet-filtered set before the LIMIT could apply (measured ~2.15s
     // combined vs ~6ms + ~580ms split). See 20260731060000_signals_gebiet_visibility.sql.
     supabase.rpc("fn_dashboard_top_signals", { p_limit: 8 }),
-    supabase.rpc("fn_dashboard_signals_count"),
     // RPC instead of direct .from("companies") counts -- a direct count goes
     // through RLS's companies_select_visible policy, whose fn_company_visible()
     // predicate forces a per-row function call on a full Seq Scan (measured
@@ -152,6 +183,24 @@ export default async function DashboardPage() {
     // explicitly and does the aggregation without per-row RLS overhead
     // (measured ~28ms). See 20260731040000_fn_company_gebiet_coverage.sql.
     isAdmin ? supabase.rpc("fn_company_gebiet_coverage") : Promise.resolve({ data: null }),
+    // "Ø Tagesumsatz" tile's Heute/Gestern sub-line (Anis, 2026-08-21,
+    // inspired by /bericht's own "Jučer" figure) - a single-day query
+    // rather than widening monthRows' own range, since monthRows also
+    // feeds Rangliste and must stay scoped to the current month only.
+    isAdmin
+      ? supabase.from("agent_daily_performance").select("revenue").eq("date", yesterdayStr)
+      : Promise.resolve({ data: null }),
+    // Real Dialer (heute) summary card (Anis: "dodaj dialer danas rezime
+    // kako je i tamo u berichtu") - same real per-agent data /bericht's own
+    // card uses (lib/dialer/status.ts), admin-only.
+    isAdmin
+      ? supabase.from("agents").select("id, full_name, profile_id").eq("active", true)
+      : Promise.resolve({ data: null }),
+    isAdmin
+      ? supabase.from("sales_feedback").select("agent_id").eq("outcome", "sold").gte("created_at", todayStart.toISOString())
+      : Promise.resolve({ data: null }),
+    isAdmin ? fetchDialerAgentStatuses() : Promise.resolve({ data: null, error: null }),
+    isAdmin ? fetchDialerCallLog(todayStart, now) : Promise.resolve({ data: null }),
   ]);
 
   // Wiedervorlagen fällig heute oder überfällig. Originally team-weit
@@ -203,6 +252,73 @@ export default async function DashboardPage() {
   // pattern as "Feedback heute" (§14 item 78), just filtered from the
   // already-fetched monthRows instead of a separate query.
   const teamRevenueToday = (monthRows ?? []).filter((r) => r.date === todayStr).reduce((sum, r) => sum + r.revenue, 0);
+  // Anis, 2026-08-21: "Dnevni prosjek prometa dodaj (u tu katicu dodaj jucer
+  // i danas koliko je bilo)" - real "gestern" figure from its own single-day
+  // query (see Promise.all above), not derived from monthRows (which is
+  // scoped to the current month and would miss yesterday on the 1st).
+  const teamRevenueYesterday = (yesterdayRows ?? []).reduce((sum, r) => sum + r.revenue, 0);
+
+  // "Dnevni prosjek prometa" / "Projektierter Umsatz (Monat)" tiles -
+  // ported from /bericht's own real, working-days-aware calculation
+  // (CLAUDE.md §14, "Dnevni prosjek prometa nije tacan" fix) rather than a
+  // naive calendar-day average, which artificially depresses the number by
+  // counting real €0 weekends in the denominator.
+  const currentMonthKey = monthStartStr.slice(0, 7);
+  const revenueByDate = new Map<string, number>();
+  for (const row of monthRows ?? []) {
+    revenueByDate.set(row.date, (revenueByDate.get(row.date) ?? 0) + row.revenue);
+  }
+  function realWorkingDaysInMonth(month: string): number {
+    let count = 0;
+    for (const [date, revenue] of revenueByDate) {
+      if (!date.startsWith(month)) continue;
+      if (date > todayStr) continue;
+      if (revenue > 0) count++;
+    }
+    return count;
+  }
+  function totalWeekdaysInMonth(month: string): number {
+    const [year, m] = month.split("-").map(Number);
+    const daysInMonth = new Date(Date.UTC(year, m, 0)).getUTCDate();
+    let count = 0;
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dow = new Date(Date.UTC(year, m - 1, d)).getUTCDay();
+      if (dow !== 0 && dow !== 6) count++;
+    }
+    return count;
+  }
+  const dailyAvgRevenueMonth = teamRevenue / Math.max(1, realWorkingDaysInMonth(currentMonthKey));
+  const projectedRevenueMonth = dailyAvgRevenueMonth * totalWeekdaysInMonth(currentMonthKey);
+
+  // Dialer (heute) - same real per-agent data /bericht's own card is built
+  // from (lib/dialer/status.ts), admin-only.
+  const salesByAgentIdToday = new Map(
+    (monthRows ?? []).filter((r) => r.date === todayStr).map((r) => [r.agent_id, r.sales_count]),
+  );
+  const agentIdByProfileIdToday = new Map(
+    (dialerAgents ?? []).filter((a) => a.profile_id).map((a) => [a.profile_id as string, a.id]),
+  );
+  const positionsByAgentIdToday = new Map<string, number>();
+  for (const row of todaySoldRows ?? []) {
+    const agentId = agentIdByProfileIdToday.get(row.agent_id);
+    if (!agentId) continue;
+    positionsByAgentIdToday.set(agentId, (positionsByAgentIdToday.get(agentId) ?? 0) + 1);
+  }
+  const dialerTotals =
+    !dialerError && dialerRows
+      ? computeDialerTotals(
+          (() => {
+            let summaries = buildDialerAgentSummaries(dialerRows, dialerAgents ?? [], salesByAgentIdToday, positionsByAgentIdToday);
+            if (callLogRows) {
+              const extensionToAgentId = mapExtensionsToAgentIds(dialerRows, dialerAgents ?? []);
+              const realReachedByAgentId = computeRealReachedByAgent(callLogRows, extensionToAgentId);
+              summaries = applyRealReachedToSummaries(summaries, realReachedByAgentId);
+            }
+            return summaries;
+          })(),
+        )
+      : null;
+  const talkShare = dialerTotals && dialerTotals.totalSeconds > 0 ? dialerTotals.talkSeconds / dialerTotals.totalSeconds : null;
 
   const monthLabel = new Intl.DateTimeFormat("de-DE", { month: "long", year: "numeric" }).format(new Date());
 
@@ -276,29 +392,86 @@ export default async function DashboardPage() {
       </div>
 
       {isAdmin ? (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-          <StatTile label="Firmen gesamt" value={String(totalCompanies ?? 0)} accent="primary" />
-          <StatTile
-            label="Team-Umsatz"
-            value={eur.format(teamRevenue)}
-            accent="primary"
-            sub={`Heute: ${eur.format(teamRevenueToday)}`}
-          />
-          <StatTile
-            label="Feedback diese Woche"
-            value={String(feedbackCountThisWeek ?? 0)}
-            accent="success"
-            href="/feedback"
-            sub={`Heute: ${feedbackCountToday ?? 0}`}
-          />
-          <StatTile
-            label="Nicht kontaktiert (3+ Mon.)"
-            value={String(uncontacted)}
-            accent={uncontactedSevere ? "warning" : "secondary"}
-            href="#kontakt-abdeckung"
-          />
-          <StatTile label="Signale offen" value={String(signalsTotal ?? 0)} accent="secondary" />
-        </div>
+        <>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+            <StatTile label="Firmen gesamt" value={String(totalCompanies ?? 0)} accent="primary" />
+            <StatTile
+              label="Team-Umsatz"
+              value={eur.format(teamRevenue)}
+              accent="primary"
+              sub={`Heute: ${eur.format(teamRevenueToday)}`}
+            />
+            <StatTile
+              label="Ø Tagesumsatz"
+              value={eur.format(dailyAvgRevenueMonth)}
+              accent="primary"
+              sub={`Heute: ${eur.format(teamRevenueToday)} · Gestern: ${eur.format(teamRevenueYesterday)}`}
+            />
+            <StatTile
+              label="Projektierter Umsatz (Monat)"
+              value={eur.format(projectedRevenueMonth)}
+              accent="primary"
+              sub="Auf Basis des Tagesdurchschnitts"
+            />
+            <StatTile
+              label="Feedback diese Woche"
+              value={String(feedbackCountThisWeek ?? 0)}
+              accent="success"
+              href="/feedback"
+              sub={`Heute: ${feedbackCountToday ?? 0}`}
+            />
+            <StatTile
+              label="Nicht kontaktiert (3+ Mon.)"
+              value={String(uncontacted)}
+              accent={uncontactedSevere ? "warning" : "secondary"}
+              href="#kontakt-abdeckung"
+            />
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Phone className="size-4 text-primary" />
+                Dialer (heute)
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {dialerError || !dialerTotals ? (
+                <p className="text-sm text-muted-foreground">Dialer-Daten aktuell nicht verfügbar.</p>
+              ) : (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
+                  <StatTile label="Anrufe gesamt" value={num.format(dialerTotals.totalCalls)} accent="secondary" />
+                  <StatTile
+                    label="Sprechzeit"
+                    value={formatSecondsAsHms(dialerTotals.talkSeconds)}
+                    sub={talkShare !== null ? `${pct.format(talkShare)} der Gesamtzeit` : undefined}
+                    accent="secondary"
+                  />
+                  <StatTile label="Ø Bearbeitungszeit" value={formatSecondsAsMmSs(dialerTotals.ahtSeconds)} accent="secondary" />
+                  <StatTile label="Auslastung" value={pct.format(dialerTotals.occupancy)} accent="secondary" />
+                  <StatTile
+                    label="Konversion (Sales/Anrufe)"
+                    value={pct.format(dialerTotals.conversion)}
+                    sub={`Sales: ${num.format(dialerTotals.realSales)} · Positionen: ${num.format(dialerTotals.salePositions)}`}
+                    accent="success"
+                  />
+                  <StatTile
+                    label={dialerTotals.reachedIsReal ? "Erreicht" : "Erreicht (geschätzt)"}
+                    value={dialerTotals.totalCalls > 0 ? num.format(dialerTotals.reachedEstimate) : "-"}
+                    sub={
+                      dialerTotals.totalCalls > 0
+                        ? dialerTotals.reachedIsReal
+                          ? `${pct.format(dialerTotals.reachedRate)} von ${num.format(dialerTotals.totalCalls)} Anrufen - echt, aus Anruf-Status`
+                          : `${pct.format(dialerTotals.reachedRate)} von ${num.format(dialerTotals.totalCalls)} Anrufen - geschätzt`
+                        : undefined
+                    }
+                    accent="warning"
+                  />
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
       ) : (
         // Agent view (Anis, 2026-07-31): Firmen gesamt first, then the same
         // not-contacted breakdown admin sees per-agent in "Kontakt-Abdeckung"
