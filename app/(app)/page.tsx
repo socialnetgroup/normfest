@@ -322,6 +322,23 @@ export default async function DashboardPage() {
             : "unter Ziel (Projektion)",
       }
     : undefined;
+  // Anis, 2026-08-21: "in a color that matches... if under 80k red, between
+  // 80-90k yellow, and above 90k green, above 100k dark green and bold" -
+  // generalized off the real floor/target settings (currently 80k/100k, so
+  // the midpoint tier lands exactly on his 90k example) rather than
+  // hardcoding those two euro figures, so this stays correct if the goals
+  // are ever changed in /admin/team's settings.
+  const goalMidpoint = (goals.team_monthly_goal_floor + goals.team_monthly_goal_target) / 2;
+  const projectedRevenueTrendClass =
+    !goals.team_monthly_goal_floor || !goals.team_monthly_goal_target
+      ? "text-muted-foreground"
+      : projectedRevenueMonth > goals.team_monthly_goal_target
+        ? "text-green-700 dark:text-green-400 font-bold"
+        : projectedRevenueMonth >= goalMidpoint
+          ? "text-success"
+          : projectedRevenueMonth >= goals.team_monthly_goal_floor
+            ? "text-warning"
+            : "text-destructive";
   const weekDaysElapsed = dayOfWeek + 1;
   const avgFeedbackPerDayWeek = (feedbackCountThisWeek ?? 0) / weekDaysElapsed;
   const feedbackTrend: { direction: "up" | "down"; label: string } | undefined =
@@ -592,8 +609,18 @@ export default async function DashboardPage() {
                 { position: goals.team_monthly_goal_stretch, label: eur.format(goals.team_monthly_goal_stretch) },
                 // Anis, 2026-08-21: "projektovanu sumu dodaj na Team-Ziel bar,
                 // dokle ce hipotetečki stignuti" - same real, working-days-aware
-                // projection already shown on the Ø Tagesumsatz tile above.
-                { position: projectedRevenueMonth, label: `Projiziert ${eur.format(projectedRevenueMonth)}` },
+                // projection already shown on the Team-Umsatz tile above.
+                // Elevated (own row above the floor/target/stretch ticks) +
+                // tiered color, since a projection landing near the floor
+                // marker was overlapping it (Anis, same day): red below
+                // floor, yellow between floor and the floor-target midpoint,
+                // green from there to target, dark-green+bold above target.
+                {
+                  position: projectedRevenueMonth,
+                  label: `Projiziert ${eur.format(projectedRevenueMonth)}`,
+                  elevated: true,
+                  className: projectedRevenueTrendClass,
+                },
               ]}
             />
           </CardContent>

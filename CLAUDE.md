@@ -7894,6 +7894,34 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     its sub-line, and Ø Tagesumsatz correctly showed only "Heute: 2.605 € ·
     Gestern: 4.279 €". Typecheck/lint clean.
 
+142. **Team-Ziel bar: Projiziert marker moved to its own row + tiered color —
+    shipped (2026-08-21).** Anis: "the projectzion is overlapping with the
+    80k ziel atm. lets do the projizier above and in a color that matches...
+    if under 80k red, between 80-90k yellow, and above 90k green, above
+    100k dark green and bold." `components/progress-bar.tsx`'s `ProgressBar`
+    gained a per-marker `elevated`/`className` option (new
+    `ProgressBarMarker` type) - an elevated marker renders in its own row
+    above the regular floor/target/stretch row (container padding grows
+    from `pt-4` to `pt-8` when any marker is elevated) instead of sharing
+    the same `top-0` row and visually colliding with a nearby tick.
+
+    Color tiers computed in `app/(app)/page.tsx` (`projectedRevenueTrendClass`)
+    off the real `team_monthly_goal_floor`/`_target` settings rather than
+    hardcoding 80k/90k/100k, so it stays correct if those goals are ever
+    changed in `/admin/team`'s bonus-rules-adjacent settings - the midpoint
+    between floor and target lands exactly on Anis's own 90k example at
+    today's real values (floor 80k, target 100k): `< floor` → `text-
+    destructive` (red), `floor..midpoint` → `text-warning` (yellow),
+    `midpoint..target` → `text-success` (green), `> target` → `text-green-
+    700 dark:text-green-400 font-bold` (dark green, bold).
+
+    Verified live (throwaway admin test account, deleted after) via direct
+    `getComputedStyle()`: the real projected figure (73.466 €, below the
+    80k floor) rendered with class `text-destructive` at `top: 0px`, while
+    the floor/target/stretch markers stayed at `top: 16px` - confirmed two
+    genuinely separate rows, not just non-overlapping text by luck.
+    Typecheck/lint clean.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
