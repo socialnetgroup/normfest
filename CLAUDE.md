@@ -7777,6 +7777,91 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     fix is holding correctly throughout Rangliste. Typecheck/lint clean,
     full suite green (41/41).
 
+139. **Admin "vollständige Liste"-Drill-down + three Dashboard tile follow-ups —
+    shipped (2026-08-21), same day as item 138.** Anis, noticing the admin Team
+    Dashboard had no equivalent of `/bericht`'s clickable per-month "Promet po
+    danu" view: "TIM promet po danu za npr august pa 'prikazi punu listu' to
+    sve nemamo u admin view-u? Kopirao bih isto i tamo da se sve vidi
+    prosireno s pozivima, javljenim itd." New `/admin/team/promet/[month]`
+    (`app/(app)/admin/team/promet/[month]/page.tsx`) - a deliberate near-
+    duplicate of `/bericht/promet/[month]/page.tsx` (§14 item 131: German
+    instead of Bosnian, `/admin/team` instead of `/bericht` as the back-link
+    and `notFound()` gate), reusing the exact same `MonthCalendar` component
+    and team-aggregated (not per-agent) daily revenue/sales/calls/talk-dispo/
+    Wiedervorlage computation - same reasoning as `/tim` already being a full
+    parallel copy of `/admin/team` itself. Each month's `CardTitle` on
+    `/admin/team` is now a link into this new page.
+
+    Three follow-up asks on the Dashboard tiles, same session:
+    - **Merged "Projektierter Umsatz (Monat)" into the "Ø Tagesumsatz" tile's
+      sub-line instead of its own standalone tile**, and **dropped "Heute: X"
+      from the "Team-Umsatz" tile** (now redundant with Ø Tagesumsatz's own
+      Heute/Gestern/Projiziert sub-line) - Anis: "Team-Umsatz izbaci iz te
+      kartice HEUTE... jer to je sada u Tagesumsatz prosjeku, i onda izbaci
+      karticu za projektovani." Tile grid narrowed from 6 to 5 columns
+      (`lg:grid-cols-5`).
+    - **"Anrufe gesamt" (Dialer heute card) gained a real "Gestern: N"
+      sub-line** - Anis: "U dialer heute pozivi ukupno dodaj Jučer." Sourced
+      from the real, immutable `dialer_daily_snapshots` row for yesterday
+      (summed `agents[].totalCalls`), same real source `/bericht`'s own
+      "Jučer" figure and the admin Team pages already use.
+    - **"Team-Ziel" progress bar gained a 4th marker showing the same real
+      projected-revenue figure** - Anis: "takodjer projektovanu sumu dodaj na
+      Team-Ziel bar, dokle ce hipotetečki stignuti." `ProgressBar`'s existing
+      `markers` prop (already used for floor/target/stretch) took a 4th entry
+      with no component change needed.
+
+    Verified live end-to-end (throwaway admin test account, deleted after):
+    `/admin/team` → clicking "August 2026" opens `/admin/team/promet/2026-08`
+    showing the correct real team total (52.625,59 €, 342 Sales, 8.563
+    Anrufe, matching the Rangliste sum exactly) with "Vollständige Liste
+    anzeigen" correctly expanding to a full day-by-day table including real
+    Anrufe/Erreicht (geschätzt)/CR/Wiedervorlage columns (e.g. 17.08.2026:
+    723 Anrufe, 723 (100%) Erreicht, 50 Wiedervorlage); Dashboard confirmed
+    all three tile changes rendering with real numbers ("Ø Tagesumsatz...
+    Heute: 2.573 € · Gestern: 4.279 € · Projiziert (Monat): 73.676 €",
+    "Anrufe gesamt... Gestern: 823", Team-Ziel bar showing a 4th "Projiziert
+    73.676 €" marker alongside the floor/target/stretch markers).
+    Typecheck/lint clean on every touched file, full suite green (41/41).
+
+140. **Dashboard tile trend badges (color-coded up/down vs. a real baseline)
+    — shipped (2026-08-21), same session as item 139.** Anis: "par stvari
+    color code-amo u ovim tile, sa trendom, streslicama... npr: ako je
+    tagesumsatz ispod ili iznad prosjeka da bude zelen ili crven trend itd.
+    pokusaj sto vise stvari vizualizirati 'na jedan pogled', gdje smo sta
+    smo gdje idemo." `components/ui/stat-tile.tsx`'s `StatTile` gained an
+    optional `trend?: { direction: "up"|"down"; label: string }` prop - a
+    small colored arrow (`ArrowUpRight`/`ArrowDownRight`, `text-success`/
+    `text-destructive` - the plain-text-safe base tokens already proven
+    correct standalone elsewhere in this app, not the muted `-foreground`
+    variants, per the same lesson learned twice already this project on the
+    Dialer table's Zeitverteilung colors) plus a matching colored label line
+    under the tile's `sub`.
+
+    Wired to exactly three tiles, each against a real, already-computed
+    baseline - deliberately not fabricated for tiles with no defensible
+    comparison (Firmen gesamt, Nicht kontaktiert, and the Dialer Auslastung/
+    Konversion/Anrufe-heute-vs-gestern tiles, the last one skipped because
+    comparing a still-accumulating partial today against a full yesterday
+    would be a misleading like-for-unlike ratio, the same class of bug this
+    project has explicitly guarded against multiple times, e.g. §14 items
+    92/99/130/131):
+    - **Team-Umsatz**: `projectedRevenueMonth >= goals.team_monthly_goal_target`
+      → "Ziel in Reichweite (Projektion)" / "unter Ziel (Projektion)".
+    - **Ø Tagesumsatz**: `teamRevenueToday >= dailyAvgRevenueMonth` → "über Ø
+      heute" / "unter Ø heute" - the literal comparison Anis asked for.
+    - **Feedback diese Woche**: today's count vs. this week's own per-day
+      average (`feedbackCountThisWeek / weekDaysElapsed`) → "über Ø diese
+      Woche" / "unter Ø diese Woche".
+
+    Verified live (throwaway admin test account, deleted after): all three
+    trend labels rendered correctly against real data ("unter Ziel
+    (Projektion)", "unter Ø heute", "unter Ø diese Woche" - a genuinely slow
+    day-in-progress, not cherry-picked), and a direct `getComputedStyle()`
+    check on the arrow icons confirmed the "down" state resolves to
+    `text-destructive`'s real red color, not just the right class name.
+    Typecheck/lint clean, full suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

@@ -262,7 +262,11 @@ export default async function TeamDashboardPage() {
           return (
             <Card key={month}>
               <CardHeader>
-                <CardTitle className="capitalize">{monthLabel(month)}</CardTitle>
+                <CardTitle className="capitalize">
+                  <Link href={`/admin/team/promet/${month}`} className="hover:underline">
+                    {monthLabel(month)}
+                  </Link>
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="mb-4 flex gap-6 text-sm text-muted-foreground">

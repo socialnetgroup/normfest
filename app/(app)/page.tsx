@@ -203,6 +203,16 @@ export default async function DashboardPage() {
     isAdmin ? fetchDialerCallLog(todayStart, now) : Promise.resolve({ data: null }),
   ]);
 
+  // "Anrufe gesamt" tile's Gestern sub-line (Anis, 2026-08-21) - the
+  // immutable dialer snapshot for yesterday, same real source /bericht's own
+  // "Jučer" figure and the admin Team pages already use for past-day calls.
+  const { data: yesterdaySnapshot } = isAdmin
+    ? await supabase.from("dialer_daily_snapshots").select("agents").eq("snapshot_date", yesterdayStr).maybeSingle()
+    : { data: null };
+  const yesterdayTotalCalls = (
+    (yesterdaySnapshot?.agents as { totalCalls: number }[] | null) ?? []
+  ).reduce((sum, a) => sum + (a.totalCalls ?? 0), 0);
+
   // Wiedervorlagen fällig heute oder überfällig. Originally team-weit
   // sichtbar (Anis, 2026-08-06: "sve da vidi od svih") - but that predates
   // visibility_mode='gebiet' going live (§14 item 16, 2026-07-31). Once
@@ -289,6 +299,37 @@ export default async function DashboardPage() {
   }
   const dailyAvgRevenueMonth = teamRevenue / Math.max(1, realWorkingDaysInMonth(currentMonthKey));
   const projectedRevenueMonth = dailyAvgRevenueMonth * totalWeekdaysInMonth(currentMonthKey);
+
+  // Anis, 2026-08-21: "par stvari color code-amo u ovim tile, sa trendom...
+  // ako je tagesumsatz ispod ili iznad prosjeka da bude zelen ili crven
+  // trend" - trend badges only where a real, already-computed baseline
+  // exists (never a fabricated comparison, same discipline as every other
+  // ratio in this app).
+  const dailyRevenueTrend: { direction: "up" | "down"; label: string } | undefined =
+    teamRevenueToday > 0
+      ? {
+          direction: teamRevenueToday >= dailyAvgRevenueMonth ? "up" : "down",
+          label: teamRevenueToday >= dailyAvgRevenueMonth ? "über Ø heute" : "unter Ø heute",
+        }
+      : undefined;
+  const teamRevenueTrend: { direction: "up" | "down"; label: string } | undefined = goals.team_monthly_goal_target
+    ? {
+        direction: projectedRevenueMonth >= goals.team_monthly_goal_target ? "up" : "down",
+        label:
+          projectedRevenueMonth >= goals.team_monthly_goal_target
+            ? "Ziel in Reichweite (Projektion)"
+            : "unter Ziel (Projektion)",
+      }
+    : undefined;
+  const weekDaysElapsed = dayOfWeek + 1;
+  const avgFeedbackPerDayWeek = (feedbackCountThisWeek ?? 0) / weekDaysElapsed;
+  const feedbackTrend: { direction: "up" | "down"; label: string } | undefined =
+    (feedbackCountToday ?? 0) > 0
+      ? {
+          direction: (feedbackCountToday ?? 0) >= avgFeedbackPerDayWeek ? "up" : "down",
+          label: (feedbackCountToday ?? 0) >= avgFeedbackPerDayWeek ? "über Ø diese Woche" : "unter Ø diese Woche",
+        }
+      : undefined;
 
   // Dialer (heute) - same real per-agent data /bericht's own card is built
   // from (lib/dialer/status.ts), admin-only.
@@ -393,25 +434,20 @@ export default async function DashboardPage() {
 
       {isAdmin ? (
         <>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
             <StatTile label="Firmen gesamt" value={String(totalCompanies ?? 0)} accent="primary" />
             <StatTile
               label="Team-Umsatz"
               value={eur.format(teamRevenue)}
               accent="primary"
-              sub={`Heute: ${eur.format(teamRevenueToday)}`}
+              trend={teamRevenueTrend}
             />
             <StatTile
               label="Ø Tagesumsatz"
               value={eur.format(dailyAvgRevenueMonth)}
               accent="primary"
-              sub={`Heute: ${eur.format(teamRevenueToday)} · Gestern: ${eur.format(teamRevenueYesterday)}`}
-            />
-            <StatTile
-              label="Projektierter Umsatz (Monat)"
-              value={eur.format(projectedRevenueMonth)}
-              accent="primary"
-              sub="Auf Basis des Tagesdurchschnitts"
+              sub={`Heute: ${eur.format(teamRevenueToday)} · Gestern: ${eur.format(teamRevenueYesterday)} · Projiziert (Monat): ${eur.format(projectedRevenueMonth)}`}
+              trend={dailyRevenueTrend}
             />
             <StatTile
               label="Feedback diese Woche"
@@ -419,6 +455,7 @@ export default async function DashboardPage() {
               accent="success"
               href="/feedback"
               sub={`Heute: ${feedbackCountToday ?? 0}`}
+              trend={feedbackTrend}
             />
             <StatTile
               label="Nicht kontaktiert (3+ Mon.)"
@@ -440,7 +477,12 @@ export default async function DashboardPage() {
                 <p className="text-sm text-muted-foreground">Dialer-Daten aktuell nicht verfügbar.</p>
               ) : (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
-                  <StatTile label="Anrufe gesamt" value={num.format(dialerTotals.totalCalls)} accent="secondary" />
+                  <StatTile
+                    label="Anrufe gesamt"
+                    value={num.format(dialerTotals.totalCalls)}
+                    sub={yesterdayTotalCalls > 0 ? `Gestern: ${num.format(yesterdayTotalCalls)}` : undefined}
+                    accent="secondary"
+                  />
                   <StatTile
                     label="Sprechzeit"
                     value={formatSecondsAsHms(dialerTotals.talkSeconds)}
@@ -543,6 +585,10 @@ export default async function DashboardPage() {
                 { position: goals.team_monthly_goal_floor, label: eur.format(goals.team_monthly_goal_floor) },
                 { position: goals.team_monthly_goal_target, label: eur.format(goals.team_monthly_goal_target) },
                 { position: goals.team_monthly_goal_stretch, label: eur.format(goals.team_monthly_goal_stretch) },
+                // Anis, 2026-08-21: "projektovanu sumu dodaj na Team-Ziel bar,
+                // dokle ce hipotetečki stignuti" - same real, working-days-aware
+                // projection already shown on the Ø Tagesumsatz tile above.
+                { position: projectedRevenueMonth, label: `Projiziert ${eur.format(projectedRevenueMonth)}` },
               ]}
             />
           </CardContent>
