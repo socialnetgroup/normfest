@@ -7663,6 +7663,54 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     real order contents (e.g. "Bestellung: Stahl-Kleberiegel schwarz 60 g,
     Schleifpapier MIRKA gold..."). Typecheck/lint clean.
 
+136. **Externe Chancen: real "wrong catalog category" root cause fixed
+    with a general fallback search, not a Bremsen-specific hack — shipped
+    (2026-08-21).** Anis: "da li mozemo nesto kodom svrstati proizvode pod
+    Bremsen?" Investigated directly rather than hand-mapping SKUs: checked
+    every real "Bremsen"-related opportunity across the whole book (2,284
+    of them) and found **1,586 (69%) had zero matched products** - almost
+    all because the model consistently chose `catalog_category:
+    "Fahrzeugteile PKW"` (real parts Normfest doesn't sell - Bremsbeläge/
+    Bremsscheiben) even when its own `search_terms` correctly included
+    "Bremsenreiniger" - a real product that exists, just filed under
+    `"Inspektion & Wartung"` instead. `matchCatalogProducts()`'s exact
+    `.eq("category_name", catalogCategory)` then excluded it every time,
+    regardless of how good the search_terms were.
+
+    Not a Bremsen-only problem - the model's category guess vs. this
+    catalog's real bucketing can mismatch for any repair type. Fixed
+    generally in `lib/enrichment/analyze.mjs`: if the category-scoped
+    search finds nothing, `matchCatalogProducts()` now retries the same
+    `search_terms` across the WHOLE catalog (no category filter) before
+    giving up, then runs the same importance-ranking/name-dedup logic on
+    whichever result set actually has candidates. Verified live before
+    trusting it: both real failing search_terms combos (`Bremsbeläge/
+    Bremsscheiben/Bremsflüssigkeit` and `Bremsbeläge/Bremsenreiniger/
+    Bremsscheiben`) now correctly return real brake-fluid/brake-cleaner/
+    disc-press-tool products; a real already-working case (Reifenmontage +
+    Ventil/Wuchtgewicht) was re-tested too and confirmed it stays correctly
+    category-scoped, not falling through unnecessarily.
+
+    **Retroactively applied to all 14,169 already-analyzed companies,
+    zero LLM cost** (same free re-match approach as item 134 -
+    `catalog_category`/`search_terms` are already stored, no re-analysis
+    needed): `scripts/rerank-matched-products.mjs` re-run in full -
+    **7,164 of 14,169 companies (50.6%) got a genuinely different
+    matched_products list.** Verified live on "Reiner Pförtner und Andrej
+    Bergen" (the project's own showcase example, §14 item 134) - its real
+    "Bremsenkomponenten" opportunity, previously showing zero matched
+    products, now correctly shows 6 real products (Bremsflüssigkeit DOT4,
+    Bremsflüssigkeit DOT4 Plus, a brake-fluid tester, disc-press tools).
+
+    **Real, unrelated dev-environment issue hit during verification, not a
+    code bug:** the live check first returned a genuine 404 for a company
+    ID confirmed to exist and not be soft-deleted in the database (ruled
+    out with a direct query before assuming anything else) - the same
+    stale `.next` dev-cache corruption class already documented multiple
+    times in this project (§14 items 94/98/109's own notes). Fixed with the
+    same `rm -rf .next` + restart; re-verified clean afterward. Typecheck/
+    lint clean, full suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
