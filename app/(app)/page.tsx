@@ -237,12 +237,13 @@ export default async function DashboardPage() {
   if (!isAdmin && user) dueWiedervorlagenBuilder = dueWiedervorlagenBuilder.eq("agent_id", user.id);
   const { data: dueWiedervorlagen } = await dueWiedervorlagenBuilder;
 
-  const byAgent = new Map<string, { name: string; revenue: number }>();
+  const byAgent = new Map<string, { name: string; revenue: number; revenueToday: number }>();
   for (const row of monthRows ?? []) {
     const name = (row.agents as { full_name: string } | null)?.full_name;
     if (!name) continue;
-    const entry = byAgent.get(row.agent_id) ?? { name, revenue: 0 };
+    const entry = byAgent.get(row.agent_id) ?? { name, revenue: 0, revenueToday: 0 };
     entry.revenue += row.revenue;
+    if (row.date === todayStr) entry.revenueToday += row.revenue;
     byAgent.set(row.agent_id, entry);
   }
 
@@ -440,13 +441,17 @@ export default async function DashboardPage() {
               label="Team-Umsatz"
               value={eur.format(teamRevenue)}
               accent="primary"
+              // Anis, 2026-08-21: "Projiziert (Monat) put it in Team-Umsatz
+              // Tile, since its related to it" - moved out of Ø Tagesumsatz's
+              // sub-line, both being month-total figures.
+              sub={`Projiziert (Monat): ${eur.format(projectedRevenueMonth)}`}
               trend={teamRevenueTrend}
             />
             <StatTile
               label="Ø Tagesumsatz"
               value={eur.format(dailyAvgRevenueMonth)}
               accent="primary"
-              sub={`Heute: ${eur.format(teamRevenueToday)} · Gestern: ${eur.format(teamRevenueYesterday)} · Projiziert (Monat): ${eur.format(projectedRevenueMonth)}`}
+              sub={`Heute: ${eur.format(teamRevenueToday)} · Gestern: ${eur.format(teamRevenueYesterday)}`}
               trend={dailyRevenueTrend}
             />
             <StatTile
@@ -630,8 +635,16 @@ export default async function DashboardPage() {
                       <span className={i === 0 ? "font-semibold" : undefined}>{row.name}</span>
                     )}
                   </span>
-                  <span className={cn("tabular-nums", i === 0 ? "font-bold text-primary" : "font-medium")}>
-                    {eur.format(row.revenue)}
+                  <span className="flex items-baseline gap-2">
+                    {/* Anis, 2026-08-21: "dodaj u Rangliste (heute: umsatz)
+                        da vidimo na prvu koliko ko ima" - today's revenue
+                        shown inline next to the month total, per agent. */}
+                    <span className="text-xs whitespace-nowrap text-muted-foreground">
+                      Heute: {eur.format(row.revenueToday)}
+                    </span>
+                    <span className={cn("tabular-nums", i === 0 ? "font-bold text-primary" : "font-medium")}>
+                      {eur.format(row.revenue)}
+                    </span>
                   </span>
                 </li>
               ))}

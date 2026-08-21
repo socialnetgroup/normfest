@@ -7862,6 +7862,38 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     `text-destructive`'s real red color, not just the right class name.
     Typecheck/lint clean, full suite green (41/41).
 
+141. **Rangliste gets a real per-agent "Heute" figure, and Projiziert (Monat)
+    moved from Ø Tagesumsatz into Team-Umsatz — shipped (2026-08-21).** Anis:
+    "dodaj u Rangliste - August 2026 (heute: umsatz) da vidimo na prvu
+    koliko ko ima." `byAgent`'s aggregation (`app/(app)/page.tsx`) now also
+    sums each agent's `monthRows` rows matching `todayStr` into a
+    `revenueToday` field (already-fetched data, no new query), rendered as a
+    small "Heute: X" line next to each Rangliste row's month total.
+
+    Same session, Anis: "Projiziert (Monat)... put it in Team-Umsatz Tile,
+    since its related to it" - moved that figure out of Ø Tagesumsatz's
+    sub-line (item 139) into Team-Umsatz's own sub-line instead, since both
+    are month-total figures; Ø Tagesumsatz's sub now shows only
+    Heute/Gestern.
+
+    **Real, unrelated dev-environment issue hit while verifying, not caused
+    by this change:** login briefly failed with "This page couldn't load" -
+    the same stale `.next` dev-cache corruption class of bug already
+    documented multiple times in this project (§14 items 94/98/109/136).
+    Fixed with `rm -rf .next` + server restart, unrelated to the code
+    change itself. Separately, the full background test suite's
+    `fn_refresh_signals` idempotency test hit the already-documented
+    "upstream request timeout" flake (§12) - re-ran it in isolation and it
+    passed cleanly, confirming it was transient and unrelated (nothing in
+    this session's changes touches `signals`).
+
+    Verified live (throwaway admin test account, deleted after): Rangliste
+    showed real distinct per-agent "Heute" figures (e.g. Muhamed Lepić
+    867 €, Rijalda Halilović 736 €, Maja Biso 0 €) matching real daily
+    activity; Team-Umsatz correctly showed "Projiziert (Monat): 73.466 €" as
+    its sub-line, and Ø Tagesumsatz correctly showed only "Heute: 2.605 € ·
+    Gestern: 4.279 €". Typecheck/lint clean.
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
