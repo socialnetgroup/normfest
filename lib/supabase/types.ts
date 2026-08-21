@@ -1140,6 +1140,41 @@ export type Database = {
         }
         Relationships: []
       }
+      legacy_ticket_comments: {
+        Row: {
+          agent_name: string | null
+          comment: string
+          company_id: string
+          created_at: string
+          id: string
+          occurred_at: string
+        }
+        Insert: {
+          agent_name?: string | null
+          comment: string
+          company_id: string
+          created_at?: string
+          id?: string
+          occurred_at: string
+        }
+        Update: {
+          agent_name?: string | null
+          comment?: string
+          company_id?: string
+          created_at?: string
+          id?: string
+          occurred_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "legacy_ticket_comments_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       objection_cards: {
         Row: {
           category: string | null

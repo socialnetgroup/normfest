@@ -111,6 +111,18 @@ UI German labels; assistant mirrors DE/BS.
    agent-verified). Enrichment never overwrites imported master data (fills empty fields
    only, logged, revertible).
 7. Provenance everywhere (IDs internally; quotes+URLs externally).
+7a. **PostgREST silently caps any unbounded `.select()`/`.rpc()` result at
+   1000 rows — no error, just a truncated array.** Hit and re-fixed at least
+   8 separate times across this project's history (§14 items 32, 50, 58, 61,
+   70, and again on 2026-08-20 while building the legacy-ticket-comment
+   import: a company-lookup fetch silently checked matches against only
+   1000 of the real 14,350 companies, understating a real match count by
+   12x before being caught and fixed). **Any query against a table that
+   could plausibly hold >1000 rows — `companies`, `products`,
+   `sales_feedback`, `agent_daily_performance`, `signals`, anything similar —
+   MUST paginate via `.range(from, from + PAGE - 1)` in a loop, never a bare
+   `.select()`.** Do this by default, before writing the rest of the script,
+   not as an afterthought once a suspiciously round number shows up.
 8. Migrations through code. **Single Supabase project for now** (decision, 2026-07-22):
    no separate staging/prod split during solo build — one project (`ethykzocikyirmoztrtq`)
    serves both; re-split into staging+prod is a pre-go-live (M8) decision, not an M0 one.
@@ -7526,40 +7538,130 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     company).
 
 135. **Legacy ticket-system import (`input/kunden_tickets_FINAL_v2.csv`,
-    900,400 rows, 2021-07-01 through today) — analyzed, not yet built, per
-    Anis's own explicit "Prije implementacije analiziraj i ovo."** Real
-    numbers checked directly before proposing anything: 83,337 distinct
-    Kundennummer values in the file, but only **16.3% (13,564)** match a
-    real company in the current VIS-sourced `companies` table (barely
-    changes including soft-deleted rows, so this isn't a soft-delete
-    artifact - the old system's customer universe was genuinely much wider
-    than what's in VIS today). At the actual comment-row level the real,
-    usable set is much smaller still: **only 29,345 of 900,400 rows (1.6%)
-    match a real company**, spread across 986 companies (avg ~30 comments/
-    company, max 209). A random sample of the matched rows showed most are
-    call-logistics noise ("nicht erreicht", "Anrufbeantworter", "später
-    anrufen"), not real customer sentiment - confirming Anis's own instinct
-    to filter for "positive" comments only, rather than importing
-    everything that matches.
+    900,400 rows, 2021-07-01 through today) — shipped (2026-08-20/21), per
+    Anis's own explicit "Prije implementacije analiziraj i ovo."**
 
-    **Proposed design (not built, pending Anis's confirmation of what
-    counts as "positive"):** a new, dedicated table (not merged into
-    `sales_feedback` - different shape/meaning, historical call notes vs.
-    structured outcome-tagged feedback) with `company_id`, `created_at`
-    (from `Zeitstempel`), comment text, agent name (kept as a disclaimer/
-    attribution even for an agent no longer at the company, per Anis's own
-    ask), and a `positive` classification. Classification only needs to run
-    on the real 29,345 matched rows, not all 900,400 - a real, cheap bulk-
-    tier LLM pass once scoped, not the $20-90 range a naive full-900k
-    estimate would suggest. Display: rendered chronologically interleaved
-    with the existing Feedback-Verlauf/notes timeline on the Firmenprofil,
-    clearly labeled as coming from the old system - same "never silently
-    mix data sources" discipline as everywhere else in this app (§3.2.6).
+    **Real numbers, corrected once mid-flight - a first analysis pass hit
+    the exact PostgREST 1000-row cap bug this session just added a
+    permanent rule for (§3.2 item 7a), reporting only 29,345/900,400 (1.6%)
+    matched a real company. Re-checked with a properly paginated fetch: the
+    real number is 361,197 of 900,400 (40.1%)** - 12x higher, across all
+    14,350 real companies (not just the first 1,000 the earlier buggy fetch
+    happened to see). Flagged this correction to Anis directly and
+    immediately rather than silently proceeding on the wrong number.
 
-    **Still open, asked back to Anis:** the exact definition of "positive"
-    (a completed sale only, vs. also genuine shown interest) - this
-    directly determines how much of the 29,345 survives the filter and
-    hasn't been confirmed yet.
+    **"Useful" defined by Anis directly** (not left to guesswork): "sve što
+    je korisno i nije šum... ok je i interes, o proizvodima o kojim su
+    pricali, uglavnom sve sto je korisno u nekom smislu, a ne kao nije se
+    javio, anrufebantowrter - sve sto demotivise, izostavi" - a real sale,
+    shown interest, or ANY concretely informative content (including which
+    products were discussed/offered, even without interest - the fact that
+    "these products were already pitched" is itself useful for the next
+    call), excluding pure call-logistics noise.
+
+    **Free, zero-risk heuristic pre-filter before spending anything on
+    LLM classification** (`lib/legacy-tickets/noise.mjs`): real frequency
+    analysis of the 361,197 matched rows found the top handful of exact,
+    whole-comment phrases ("nicht erreicht", "Anrufbeantworter", "kunde
+    meldet sich nicht", bare "kein bedarf" variants, etc.) alone account for
+    over half the volume. A reviewed allowlist of these phrases, matched
+    only against the ENTIRE normalized comment (never a substring - a
+    longer comment like "nicht erreicht, hat aber Bremsenreiniger bestellt"
+    is untouched and still goes to the real classifier) drops **176,684 of
+    361,197 rows (48.9%) for free**, leaving 184,513 for real LLM
+    classification - real cost cut roughly in half with zero risk of losing
+    real content, verified directly (`isFreeNoise()` tested against both a
+    pure-noise phrase and a longer comment containing that same phrase
+    plus real content, confirmed only the former is dropped).
+
+    **Real cost, confirmed with Anis before running anything** ("Imam
+    72.50 dolara. 50$ bih mogao halaliti"): iterative test passes (25, 30,
+    then 40 real rows, `scripts/test-classify-legacy-tickets.mjs`) found and
+    fixed two real classification misses along the way - a longer comment
+    mentioning specific products offered ("...Ich habe Klebegewichtsrolle,
+    Bremsenreiniger und Handschuhe angeboten") was wrongly marked noise
+    (fixed: the prompt now explicitly counts "products mentioned/offered"
+    as useful independent of whether interest was shown), and a bare single
+    word "Bestellung" (order) was wrongly marked noise (fixed: the prompt
+    now explicitly calls out that a single word like "Bestellung"/
+    "bestellt"/"verkauft" alone already counts as a real sale). Also trimmed
+    the prompt for token cost once quality was confirmed stable. Final real
+    per-row rate: ~$0.0002 with the Batches API's 50% discount → **~$37 for
+    the real 184,513-row remainder**, comfortably under Anis's $50 ceiling.
+
+    **Schema**: new `legacy_ticket_comments` table (migration
+    `20260820010000_legacy_ticket_comments.sql`) - deliberately separate
+    from `sales_feedback` (different shape/meaning: unstructured historical
+    call notes vs. this app's own structured outcome-tagged feedback,
+    §3.2.6 "never silently mix"). `company_id`, `occurred_at` (from
+    `Zeitstempel`), `comment`, `agent_name` (plain text disclaimer/
+    attribution, not a profiles/agents FK - most of these agents never had
+    accounts in this app and many no longer work here, per Anis's own "da
+    se zna od koga je komentar" ask). Shared-read RLS (same team-wide
+    flywheel visibility as `sales_feedback`), admin-only write (one-time
+    historical import via the service-role client, never a user-facing
+    insert).
+
+    **Real bug found and fixed during the import itself, not after
+    shipping**: `scripts/process-legacy-tickets-batch.mjs` (polls one
+    Anthropic Batches API job and writes `useful=true` rows) was mistakenly
+    invoked twice against the same already-`ended` small batch (4,513 rows)
+    while checking status - its first version used a plain `.insert()`
+    with no idempotency protection, silently double-inserting every useful
+    row from that batch (2,169 real duplicate rows). Caught immediately by
+    checking the real row count against the expected count (not assumed
+    correct), cleaned up manually, then fixed properly rather than just
+    noting it: migration `20260821010000_legacy_ticket_comments_unique.sql`
+    adds a real unique constraint on `(company_id, occurred_at, comment)`,
+    and the script now `.upsert(..., {onConflict: "...", ignoreDuplicates:
+    true})` instead of a plain insert - re-verified live that re-running
+    the fixed script against the same already-processed batch is now a
+    genuine no-op (row count unchanged).
+
+    **Pipeline** (3 scripts, run in order): `prepare-legacy-tickets.mjs`
+    (parses the CSV, resolves `company_id` via a properly paginated
+    `companies` fetch, applies the free noise pre-filter, writes matched
+    rows needing real classification to a local scratchpad staging file -
+    never committed, no reason for a 65MB JSON blob to live in the repo);
+    `submit-legacy-tickets-batch.mjs` (splits into ≤90,000-request batches,
+    since a single Batches API job caps at 100,000 - the real 184,513-row
+    run needed 3 batches: 90,000 + 90,000 + 4,513); `process-legacy-tickets-
+    batch.mjs` (polls each batch, writes only `useful=true` rows - noise
+    is never inserted at all, matching Anis's "save the positive ones," not
+    "save everything and flag it"). Real classification prompt/schema
+    shared in `lib/legacy-tickets/classify.mjs`.
+
+    **Real final results, all 3 batches complete:** 74,347 rows classified
+    useful (2,165 + 37,877 + 34,305 across the three batches; 2 of 184,513
+    requests errored on the Anthropic side, both themselves low-value noise-
+    type comments, not worth retrying), **74,143 real rows landed in
+    `legacy_ticket_comments`** (the 204-row gap from 74,347 is the real
+    unique constraint correctly collapsing genuine exact-duplicate source
+    rows - same company/timestamp/text - not a bug). Real total cost:
+    **$0.9177 + $18.2307 + $18.2106 = $37.36**, matching the pre-run
+    estimate almost exactly and comfortably under Anis's $50 ceiling.
+
+    **UI**: `components/legacy-comment-item.tsx` (new) renders one legacy
+    comment - a muted, dashed-left-border `<li>` with a "Historisch (altes
+    System)" badge, the comment text, and `{agent_name} · {date}` as the
+    disclaimer/attribution Anis asked for. Wired into `/firmen/[id]`'s
+    existing Feedback-Verlauf card: real `sales_feedback` rows (already
+    grouped via `groupFeedbackRows` for multi-position sales, §14 item 80)
+    and legacy comments are merged into one array tagged with a comparable
+    date, sorted together, and rendered as a single chronological list -
+    genuinely interleaved, not a separate section, per Anis's own
+    "hronoloski ako ima novih komentara u toolu" ask. The card's visibility
+    condition widened to show when EITHER source has rows, so a
+    company with only legacy history (no real feedback yet) still gets a
+    Feedback-Verlauf card instead of staying hidden.
+
+    Verified live (throwaway admin test account, deleted after) on "HT
+    Metallbearbeitung" (91 real legacy comments, the most of any company) -
+    the list renders correctly chronologically (12.08.2026 → 23.06.2026 →
+    09.06.2026 → ...), each entry showing the real "Historisch (altes
+    System)" badge, the real agent name (Lejla Piric), the real date, and
+    real order contents (e.g. "Bestellung: Stahl-Kleberiegel schwarz 60 g,
+    Schleifpapier MIRKA gold..."). Typecheck/lint clean.
 
 ---
 

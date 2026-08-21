@@ -16,6 +16,7 @@ import { EnrichNowButton } from "@/components/enrich-now-button";
 import { FeedbackForm } from "@/components/feedback-form";
 import { FeedbackHistoryItem } from "@/components/feedback-history-item";
 import { FeedbackSoldGroup } from "@/components/feedback-sold-group";
+import { LegacyCommentItem } from "@/components/legacy-comment-item";
 import { OrderItemsToggle } from "@/components/order-items-toggle";
 import { SignalDismissButton } from "@/components/signal-dismiss-button";
 import { StammdatenCard } from "@/components/stammdaten-card";
@@ -82,6 +83,7 @@ export default async function CompanyProfilePage({
     { data: enrichment },
     { data: orders },
     { data: callStats },
+    { data: legacyComments },
   ] = await Promise.all([
       supabase
         .from("companies")
@@ -137,6 +139,19 @@ export default async function CompanyProfilePage({
       // already documented for the QA-Bewertungen call picker) - CALL_LOG_
       // START below reflects that, not a display trick.
       supabase.from("company_daily_calls").select("call_count, call_date").eq("company_id", id),
+      // Legacy ticket-system comments (§14 item 135) - real historical call
+      // notes from a decommissioned system, imported once, kept useful-only.
+      // Merged chronologically with the real Feedback-Verlauf below rather
+      // than shown as a separate silo, per Anis's own "hronoloski ako ima
+      // novih komentara u toolu" ask - a generous limit (20) since most
+      // companies only have a handful, and it's merged/re-sorted with real
+      // feedback afterward anyway, not shown as its own unbounded list.
+      supabase
+        .from("legacy_ticket_comments")
+        .select("id, occurred_at, comment, agent_name")
+        .eq("company_id", id)
+        .order("occurred_at", { ascending: false })
+        .limit(20),
     ]);
 
   // Favoritenliste (2026-08-19, §14 item 124) - only meaningful once we know
@@ -546,43 +561,68 @@ export default async function CompanyProfilePage({
         </CardContent>
       </Card>
 
-      {feedbackHistory && feedbackHistory.length > 0 ? (
+      {(feedbackHistory && feedbackHistory.length > 0) || (legacyComments && legacyComments.length > 0) ? (
         <Card>
           <CardHeader>
             <CardTitle>Feedback-Verlauf</CardTitle>
           </CardHeader>
           <CardContent>
             <ul className="flex flex-col divide-y">
-              {groupFeedbackRows(
-                feedbackHistory.map((f) => {
-                  const fp = f.profiles as { full_name: string | null; agents: { id: string }[] } | null;
-                  const agentId = fp?.agents?.[0]?.id;
-                  return {
-                    id: f.id,
-                    outcome: f.outcome,
-                    qty: f.qty,
-                    valueNet: f.value_net,
-                    objection: f.objection,
-                    comment: f.comment,
-                    createdAt: f.created_at,
-                    productId: f.product_id,
-                    productName: (f.products as { name: string } | null)?.name ?? null,
-                    agentName: fp?.full_name ?? "-",
-                    adminAgentLink: isAdmin && agentId ? `/admin/team/${agentId}` : null,
-                    canEdit: f.agent_id === currentUser?.id || isAdmin,
-                    wiedervorlageDate: f.wiedervorlage_date,
-                    wiedervorlageTime: f.wiedervorlage_time,
-                    wiedervorlageDone: f.wiedervorlage_done,
-                    batch_id: f.batch_id,
-                  };
-                }),
-              ).map((group) =>
-                group.length > 1 ? (
-                  <FeedbackSoldGroup key={group[0].id} rows={group} />
-                ) : (
-                  <FeedbackHistoryItem key={group[0].id} {...group[0]} />
-                ),
-              )}
+              {(() => {
+                const feedbackGroups = groupFeedbackRows(
+                  (feedbackHistory ?? []).map((f) => {
+                    const fp = f.profiles as { full_name: string | null; agents: { id: string }[] } | null;
+                    const agentId = fp?.agents?.[0]?.id;
+                    return {
+                      id: f.id,
+                      outcome: f.outcome,
+                      qty: f.qty,
+                      valueNet: f.value_net,
+                      objection: f.objection,
+                      comment: f.comment,
+                      createdAt: f.created_at,
+                      productId: f.product_id,
+                      productName: (f.products as { name: string } | null)?.name ?? null,
+                      agentName: fp?.full_name ?? "-",
+                      adminAgentLink: isAdmin && agentId ? `/admin/team/${agentId}` : null,
+                      canEdit: f.agent_id === currentUser?.id || isAdmin,
+                      wiedervorlageDate: f.wiedervorlage_date,
+                      wiedervorlageTime: f.wiedervorlage_time,
+                      wiedervorlageDone: f.wiedervorlage_done,
+                      batch_id: f.batch_id,
+                    };
+                  }),
+                );
+                // Merged chronologically with real Feedback-Verlauf rows
+                // (§14 item 135, "hronoloski ako ima novih komentara u
+                // toolu") rather than shown as a separate silo - each
+                // entry tagged with a comparable date, sorted together.
+                type TimelineEntry = { date: string; node: React.ReactNode };
+                const timeline: TimelineEntry[] = [
+                  ...feedbackGroups.map((group) => ({
+                    date: group[0].createdAt,
+                    node:
+                      group.length > 1 ? (
+                        <FeedbackSoldGroup key={group[0].id} rows={group} />
+                      ) : (
+                        <FeedbackHistoryItem key={group[0].id} {...group[0]} />
+                      ),
+                  })),
+                  ...(legacyComments ?? []).map((c) => ({
+                    date: c.occurred_at,
+                    node: (
+                      <LegacyCommentItem
+                        key={`legacy-${c.id}`}
+                        comment={c.comment}
+                        occurredAt={c.occurred_at}
+                        agentName={c.agent_name}
+                      />
+                    ),
+                  })),
+                ];
+                timeline.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+                return timeline.map((entry) => entry.node);
+              })()}
             </ul>
           </CardContent>
         </Card>
