@@ -1440,6 +1440,7 @@ export type Database = {
       }
       products: {
         Row: {
+          access_count_2026: number | null
           active: boolean
           category_code: string | null
           category_name: string | null
@@ -1464,6 +1465,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          access_count_2026?: number | null
           active?: boolean
           category_code?: string | null
           category_name?: string | null
@@ -1488,6 +1490,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          access_count_2026?: number | null
           active?: boolean
           category_code?: string | null
           category_name?: string | null

@@ -7977,6 +7977,62 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     with no "(geschätzt)" suffix) will happen naturally on the next real
     business day. Typecheck/lint clean, full suite green (41/41).
 
+144. **Real webshop access counts imported and wired into Externe Chancen
+    ranking — shipped (2026-08-22), delivers on the promise from §14 item
+    134.** Anis uploaded `input/Zugriffe je Artikel 2026.xlsx` - Normfest's
+    own real page-access-count export per Artikel (18,780 rows, ITEMID +
+    Anzahl Zugriffe, no duplicates/nulls/zeros, checked directly before
+    building anything). Confirmed the real match rate before touching
+    anything: 51.5% of distinct SKUs match our catalog directly (exact SKU
+    or the same pack-size-suffix-strip already proven for invoice matching,
+    §14 item 71), but **88.3% of real total access volume** falls on
+    matched products (684,710 of 775,512) - the biggest unmatched SKUs
+    (`0000-700-001`, `0000-900-001`, etc.) look like internal service/
+    placeholder codes, not real missing catalog products.
+
+    New `products.access_count_2026 integer` column (migration
+    `20260822010000_products_access_count.sql`) + `fn_bulk_set_access_count`
+    RPC (same real-UPDATE-not-PostgREST-upsert pattern as
+    `fn_bulk_set_image_path`/`fn_bulk_set_product_category`, §13 M4 - a
+    partial-column payload via PostgREST upsert trips NOT NULL on columns
+    not included). New `scripts/import-access-counts.mjs` (idempotent,
+    re-runnable whenever a refreshed export arrives).
+
+    **Real aggregation bug caught before trusting the first run**: matched
+    9,665 file rows but only 8,088 distinct products got written - several
+    real webshop SKU variants (different pack sizes of the same catalog
+    product) strip down to the same base catalog SKU, and the first version
+    let the last one silently overwrite the others instead of summing their
+    real, individually-distinct access counts. Fixed by aggregating
+    (`Map<productId, sum>`) before writing, re-verified: dry-run after the
+    fix reproduced the exact same 9,665→8,088 collapse, confirming it's
+    real, expected aggregation, not lost data.
+
+    `lib/enrichment/analyze.mjs`'s `matchCatalogProducts()`/`rankCandidates()`
+    (the Firmenbrief's Externe-Chancen matched-product ranking, §14 items
+    134/136) now ranks primarily by `access_count_2026` (descending), falling
+    back to the existing cross-sell-frequency proxy only when a candidate has
+    no real access count (only ~68% of catalog products are covered by the
+    export) - exactly the upgrade path that ranking step's own docstring had
+    flagged as the one place to change once real click data arrived.
+    `scripts/rerank-matched-products.mjs` (§14 items 134/136, zero LLM cost -
+    `catalog_category`/`search_terms` are already stored, only the matching/
+    ranking step re-runs) re-applied across the whole book:
+    **13,793 of 14,169 companies (97.3%) got a genuinely different
+    matched_products list.**
+
+    Verified thoroughly: a direct functional test (`matchCatalogProducts()`
+    called standalone against real "Bremsenreiniger"/"Bremsflüssigkeit"
+    terms) returned candidates in exactly descending real-access order;
+    re-checked the project's own showcase company ("Reiner Pförtner und
+    Andrej Bergen", §14 item 134) - its "Bremsenkomponenten" opportunity now
+    shows Bremsflüssigkeit DOT4 (670) → DOT4 Plus (221) → Hochleistungs-
+    Bremsflüssigkeit (72) → Tester (44) → two Bremsscheiben-Dickenmesser
+    (9, 8), an exact match to the real stored access counts, not just
+    plausible-looking; confirmed live in the real browser (throwaway admin
+    test account, deleted after) that `/firmen/[id]` renders that identical
+    order. Typecheck/lint clean, full suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
