@@ -8033,6 +8033,33 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     test account, deleted after) that `/firmen/[id]` renders that identical
     order. Typecheck/lint clean, full suite green (41/41).
 
+145. **Externe Chancen: pack-size/variant duplicates no longer pad out empty
+    slots — shipped (2026-08-22), same day as item 144.** Anis, after seeing
+    a real 6-slot "Reifenmontage-Zubehör" list where 3 of the 6 entries were
+    just different sizes of the same "Gummiventile für PKW und Motorrad"
+    product: "Also verschiedene Packungsgrössen werden nicht angezeigt?
+    damit dies keine slots nimmt." `rankCandidates()`'s existing name-dedup
+    (item 134's own "same-name variant" guard) only ever prioritized
+    distinct names FIRST but still padded any leftover slots with same-name
+    duplicates once the real distinct pool ran out - exactly the case here,
+    where the whole matched category only had 3 truly distinct product
+    names. Fixed by dropping the padding step entirely: `rankCandidates()`
+    now keeps only the first (highest-ranked, by the real access-count/
+    cross-sell sort) product per distinct name and returns however many
+    that is (up to `MATCHED_PRODUCTS_LIMIT`), never backfilling with
+    near-duplicates - a real, more honest opportunity list, even if that
+    means fewer than 6 items.
+
+    Verified directly against the real case that surfaced this: re-ran
+    `matchCatalogProducts()` standalone for the same "Reifenmontage" +
+    "Montagepaste"/"Ventile"/"Wuchtgewichte" combo that had produced the
+    padded 6-item list before - now correctly returns exactly 3 real
+    distinct products (Gummiventile ECO-Qualität, Ventileinsatz, Gummiventile
+    Standard), no size-variant repeats. Re-ran the free retroactive rerank
+    (`scripts/rerank-matched-products.mjs`, zero LLM cost) across all 14,169
+    analyzed companies: **6,704 (47.3%) got a genuinely shorter, dedup'd
+    matched_products list.** Typecheck/lint clean, full suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.
