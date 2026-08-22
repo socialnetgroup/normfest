@@ -7922,6 +7922,61 @@ explicitly labeled "laut Agent-Feedback", or says no data).
     genuinely separate rows, not just non-overlapping text by luck.
     Typecheck/lint clean.
 
+143. **Dialer daily snapshots: real "Erreicht" classification applied at capture
+    time, not just on the live page — shipped (2026-08-22).** Anis: "In
+    snapshots vom dialer nicht mehr schreiben (geschätzt) bei Erreicht, denn
+    wir ziehen jetzt echte statuse aus dem dialer." The real per-call
+    disposition classification (`classifyCallStatus`, §14 items 129-132) had
+    only ever been applied on the LIVE `/dialer`/`/bericht` pages - the daily
+    `dialer_daily_snapshots` cron (`app/api/cron/dialer-snapshot/route.ts`)
+    still only called `buildDialerAgentSummaries()` (the synthetic talk/
+    (talk+dispo)×totalCalls estimate) and stored that permanently, so every
+    stored snapshot's "Erreicht" was baked in as an estimate forever - even
+    though, at cron-run time (during the same day the snapshot is for),
+    `metrike.php`'s real CDR for that day was still fully available
+    (same-day-only retention, §14 item 122, is exactly "today," which is
+    when the cron always runs).
+
+    Fixed by moving the cron's existing `fetchDialerCallLog()` call (it was
+    already fetching this, just later and only for the separate
+    `company_daily_calls` sync, §14 item 120) earlier, applying
+    `mapExtensionsToAgentIds()` → `computeRealReachedByAgent()` →
+    `applyRealReachedToSummaries()` to `summaries` BEFORE the
+    `dialer_daily_snapshots` upsert - exactly the same real-classification
+    pipeline the live page already uses, just run once at capture time
+    instead of live on every page load. The `company_daily_calls` sync
+    below now reuses this same `callLog` fetch instead of calling
+    `metrike.php` a second time. `components/dialer-status-table.tsx`
+    already reads `reachedIsReal` per stored row/Gesamt to decide whether to
+    show "(geschätzt)" (§14 items 100/104) - no frontend change needed, the
+    fix is entirely in what gets written into the snapshot.
+
+    **Real limitation, unavoidable given already-captured history:** past
+    snapshots (10.08.-21.08.) were captured before this fix and can't be
+    retroactively corrected - their real CDR has since rolled off
+    `metrike.php`'s same-day-only retention, so they permanently keep
+    `reachedIsReal: false` and the "(geschätzt)" label. Only snapshots
+    captured from today's cron run onward get the real classification.
+
+    Verified: `fetchDialerCallLog()` never throws (returns `{data: null,
+    error}` internally on failure, confirmed by reading its source), so
+    moving the call outside the existing try/catch doesn't introduce a new
+    crash risk. Manually triggered the real cron route locally (real
+    `CRON_SECRET`) - ran cleanly end-to-end and wrote a real
+    `dialer_daily_snapshots` row, but today is a real Saturday (confirmed
+    `agents.php` returns `[]` - the dialer genuinely has zero weekend
+    activity, matching the already-known "not used on weekends" pattern,
+    §14 item 84), so there was no live call data to exercise the real
+    classification path against - deleted that empty test row afterward
+    rather than leave a stray Saturday snapshot in real history. Proved the
+    classification math itself correct via a standalone script calling the
+    real exported functions with fabricated-but-realistic input (3 calls,
+    statuses `N`/`CBHOLD`/`SALE` → 2/3 reached, `reachedEstimate` correctly
+    dropped from the synthetic 8 to the real 7, `reachedIsReal` flipped to
+    `true`) - full live confirmation (a real snapshot showing "Erreicht"
+    with no "(geschätzt)" suffix) will happen naturally on the next real
+    business day. Typecheck/lint clean, full suite green (41/41).
+
 ---
 
 ## 15. Glossary — as v2.2, plus: VIS LIST (customer master file, all fields incl.

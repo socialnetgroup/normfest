@@ -1,7 +1,14 @@
 import { NextResponse } from "next/server";
 
 import { buildPhoneSuffixMap, matchCallsToCompanies } from "@/lib/dialer/company-calls";
-import { buildDialerAgentSummaries, fetchDialerAgentStatuses, fetchDialerCallLog } from "@/lib/dialer/status";
+import {
+  applyRealReachedToSummaries,
+  buildDialerAgentSummaries,
+  computeRealReachedByAgent,
+  fetchDialerAgentStatuses,
+  fetchDialerCallLog,
+  mapExtensionsToAgentIds,
+} from "@/lib/dialer/status";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 // Daily dialer snapshot (Anis, 2026-08-06): "posto nemamo logove, da li te
@@ -79,10 +86,31 @@ export async function GET(request: Request) {
     if (!agentId) continue;
     positionsByAgentId.set(agentId, (positionsByAgentId.get(agentId) ?? 0) + 1);
   }
-  // Javilo se (procjena) (2026-08-18) is now computed inside
-  // buildDialerAgentSummaries directly from real agents.php fields - no
-  // separate CDR fetch needed for the daily snapshot either.
-  const summaries = buildDialerAgentSummaries(dialerRows, agents ?? [], salesByAgentId, positionsByAgentId);
+  let summaries = buildDialerAgentSummaries(dialerRows, agents ?? [], salesByAgentId, positionsByAgentId);
+
+  // Real "Erreicht" for the stored snapshot itself, not just the live page
+  // (Anis, 2026-08-21: "in snapshots vom dialer nicht mehr (geschätzt) bei
+  // Erreicht, denn wir ziehen jetzt echte statuse aus dem dialer"). The
+  // synthetic talk/(talk+dispo)×totalCalls estimate (§14 items 100/101) was
+  // only ever a stand-in for when no real per-call status data existed - at
+  // cron time, today's real CDR is still fully available (metrike.php's
+  // same-day-only retention, §14 item 122, means "today" is always in
+  // range), so the snapshot can carry the same real classification the live
+  // Dialer table already uses (§14 item 129) instead of baking the estimate
+  // in permanently. `callLog` is fetched once here and reused below for the
+  // company_daily_calls sync too, rather than fetching twice.
+  const { data: callLog, error: callLogError } = await fetchDialerCallLog(
+    new Date(`${todayStr}T00:00:00`),
+    new Date(),
+    20000,
+  );
+  if (callLogError || !callLog) {
+    console.error("[dialer-snapshot] real-reached classification skipped, using synthetic estimate:", callLogError);
+  } else {
+    const extensionToAgentId = mapExtensionsToAgentIds(dialerRows, agents ?? []);
+    const realReachedByAgentId = computeRealReachedByAgent(callLog, extensionToAgentId);
+    summaries = applyRealReachedToSummaries(summaries, realReachedByAgentId);
+  }
 
   const { error: upsertError } = await admin
     .from("dialer_daily_snapshots")
@@ -125,17 +153,14 @@ export async function GET(request: Request) {
   // "Koliko puta je neka firma nazvana?" (Anis, 2026-08-19) - real
   // per-company call counts for the Firmenprofil's Aktivität card, matched
   // from today's CDR (metrike.php) to companies by phone number
-  // (lib/dialer/company-calls.ts). Best-effort: a failure here shouldn't
-  // fail the whole cron run (the Live-Status snapshot above is the primary,
-  // already-logged concern) - logged to console only, not to
+  // (lib/dialer/company-calls.ts). Reuses the same `callLog` already
+  // fetched above for the snapshot's real-reached classification, instead
+  // of fetching metrike.php a second time. Best-effort: a failure here
+  // shouldn't fail the whole cron run (the Live-Status snapshot above is
+  // the primary, already-logged concern) - logged to console only, not to
   // dialer_snapshot_log, so it doesn't mask a real Live-Status failure.
   let companyCallsSynced = 0;
   try {
-    const { data: callLog, error: callLogError } = await fetchDialerCallLog(
-      new Date(`${todayStr}T00:00:00`),
-      new Date(),
-      20000,
-    );
     if (callLogError || !callLog) {
       console.error("[dialer-snapshot] company-call sync skipped:", callLogError);
     } else {
